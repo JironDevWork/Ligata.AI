@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { postStream, readAll } from '../gateway/src/stream.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, i, all) => (value.startsWith('--') ? [...pairs, [value.slice(2), all[i + 1]?.startsWith('--') || all[i + 1] === undefined ? 'true' : all[i + 1]]] : pairs), []));
 const url = args.url || 'http://127.0.0.1:1299';
@@ -36,29 +37,32 @@ async function json(pathname, body) {
 }
 const tokens = async text => (await json('/tokenize', { content: text })).tokens.length;
 
+const NL = String.fromCharCode(10);
 async function document(targetTokens) {
   seed = 42;
-  // ~19 tokens per fact; build, measure, then trim/extend to land close to the target.
-  const lines = [];
-  let count = 0, i = 0;
-  while (count < targetTokens) {
-    const batch = Array.from({ length: Math.max(1, Math.ceil((targetTokens - count) / 19)) }, () => fact(++i));
-    lines.push(...batch);
-    count = await tokens(lines.join('\n'));
+  // Measure tokens per fact once, then size the document and correct it with exact counts.
+  const sample = Array.from({ length: 200 }, (_, i) => fact(i + 1));
+  const perLine = (await tokens(sample.join(NL))) / sample.length;
+  seed = 42;
+  const lines = Array.from({ length: Math.max(1, Math.round(targetTokens / perLine)) }, (_, i) => fact(i + 1));
+  let count = await tokens(lines.join(NL));
+  while (Math.abs(count - targetTokens) > perLine * 4) {
+    const delta = Math.round((targetTokens - count) / perLine);
+    if (delta > 0) for (let i = 0; i < delta; i++) lines.push(fact(lines.length + 1)); else lines.splice(delta);
+    count = await tokens(lines.join(NL));
   }
-  while (count > targetTokens && lines.length > 1) { const drop = Math.max(1, Math.floor((count - targetTokens) / 19)); lines.splice(-drop, drop); count = await tokens(lines.join('\n')); }
-  const middle = Math.floor(lines.length / 2);
-  lines.splice(middle, 0, 'Record SECRET: The vault access code for the Ligata archive is PELICAN-7342.');
-  return lines.join('\n');
+  // Two linked facts far apart test reasoning across the whole window, not just lookup.
+  lines.splice(Math.floor(lines.length * 0.85), 0, "Record OMEGA: Mira Kessler's favourite number is 418.");
+  lines.splice(Math.floor(lines.length / 2), 0, 'Record SECRET: The vault access code for the Ligata archive is PELICAN-7342.');
+  lines.splice(Math.floor(lines.length * 0.12), 0, 'Record ALPHA: The founder of the Ligata archive is Mira Kessler.');
+  return lines.join(NL);
 }
 
 async function ask(messages, extra = {}) {
   const started = performance.now();
-  const response = await fetch(url + '/v1/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, stream: true, max_tokens: 64, temperature: 0, stream_options: { include_usage: true }, chat_template_kwargs: { enable_thinking: false }, ...extra }),
-  });
-  if (!response.ok) return { error: `${response.status} ${(await response.text()).slice(0, 400)}` };
+  // node:http instead of fetch: fetch gives up after 300 s without headers, and a 250k prefill takes longer.
+  const response = await postStream(url + '/v1/chat/completions', { messages, stream: true, max_tokens: 64, temperature: 0, stream_options: { include_usage: true }, chat_template_kwargs: { enable_thinking: false }, ...extra });
+  if (response.status !== 200) return { error: `${response.status} ${(await readAll(response.body)).slice(0, 400)}` };
   let text = '', firstToken = 0, timings = null, buffer = '';
   const decoder = new TextDecoder();
   for await (const chunk of response.body) {
@@ -89,13 +93,16 @@ for (const depth of depths) {
   const first = await ask(messages, args.image ? { max_tokens: 120 } : {});
   const afterFirst = memory();
   // Follow-up turn: must reuse the cached prefix (cache_n close to the previous prompt size).
-  const follow = first.error ? null : await ask([...messages, { role: 'assistant', content: first.text }, { role: 'user', content: 'Which town appears in Record 1? One word.' }]);
+  const follow = first.error ? null : await ask([...messages, { role: 'assistant', content: first.text }, { role: 'user', content: 'What is the favourite number of the person who founded the Ligata archive? Reply with the number only.' }]);
+  // Realistic answer length and sampling, where speculative decoding acceptance matters.
+  const long = first.error ? null : await ask([...messages, { role: 'assistant', content: first.text }, { role: 'user', content: 'In about 150 words, explain what kind of archive this is and give three example records in your own words.' }], { max_tokens: 320, temperature: 0.7 });
   const after = memory();
   const result = {
     label, depth, at: new Date().toISOString(), ok: !first.error && /PELICAN-7342/.test(first.text), answer: (first.text || first.error).slice(0, 200),
     prompt_n: first.timings?.prompt_n, prefill_tps: first.timings && Math.round(first.timings.prompt_per_second), gen_tps: first.timings && +first.timings.predicted_per_second.toFixed(1),
     draft_n: first.timings?.draft_n, draft_accepted: first.timings?.draft_n_accepted, first_token_ms: first.firstTokenMs,
-    followup_cache_n: follow?.timings?.cache_n, followup_prompt_n: follow?.timings?.prompt_n, followup_first_token_ms: follow?.firstTokenMs, followup_gen_tps: follow?.timings && +follow.timings.predicted_per_second.toFixed(1),
+    long_gen_tps: long?.timings && +long.timings.predicted_per_second.toFixed(1), long_tokens: long?.timings?.predicted_n, long_draft_acceptance: long?.timings?.draft_n ? +(long.timings.draft_n_accepted / long.timings.draft_n).toFixed(2) : undefined,
+    linked_ok: !!follow && /418/.test(follow.text), followup_cache_n: follow?.timings?.cache_n, followup_prompt_n: follow?.timings?.prompt_n, followup_first_token_ms: follow?.firstTokenMs, followup_gen_tps: follow?.timings && +follow.timings.predicted_per_second.toFixed(1),
     ws_mb: after.workingSetMB, vram_mb: after.processVramMB, shared_mb: after.sharedRamMB, spilling: after.spilling, ws_after_first_mb: afterFirst.workingSetMB,
   };
   console.log(JSON.stringify(result));

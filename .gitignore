@@ -13,3 +13,5 @@ model/results.local.jsonl
 **/umbraco/Logs/
 **/appsettings-schema*.json
 **/umbraco-package-schema.json
+tests/Ligata.AI.Tests/wwwroot/
+tests/Ligata.AI.Tests/umbraco/
