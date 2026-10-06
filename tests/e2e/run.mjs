@@ -14,8 +14,10 @@ mkdirSync(out, { recursive: true });
 const base = process.env.HOST || 'http://127.0.0.1:5310';
 const gateway = process.env.GATEWAY || 'http://127.0.0.1:1220';
 const key = readFileSync(process.env.KEY_FILE || path.join(runtime, 'gateway-dev', 'created.txt'), 'utf8').match(/lai_[A-Za-z0-9_-]+/)[0];
-const credentials = JSON.parse(readFileSync(path.join(runtime, 'ai-test-admin.json'), 'utf8'));
+const credentials = JSON.parse(readFileSync(process.env.CREDENTIALS || path.join(runtime, 'ai-test-admin.json'), 'utf8'));
 const only = process.argv.slice(2);
+const real = !!process.env.REAL; // real model: answers vary, so only their arrival and shape are checked
+const answerTimeout = real ? 240000 : 20000;
 const run = Date.now().toString(36); // unique values keep the suite repeatable on the same fixture database
 
 let passed = 0;
@@ -146,7 +148,9 @@ await check('preview chat answers through the gateway', async () => {
   const frame = page.frameLocator('ligata-ai-dashboard iframe');
   await frame.locator('textarea').fill('Hello from the backoffice preview');
   await frame.locator('textarea').press('Enter');
-  await frame.locator('.msg.bot .bubble', { hasText: 'mock' }).waitFor({ timeout: 20000 });
+  await frame.locator('.msg.bot').nth(1).waitFor({ timeout: answerTimeout });
+  await frame.locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
+  assert((await frame.locator('.msg.bot .bubble').nth(1).innerText()).trim().length > 0, 'preview answer has text');
   await shot(page, '05-preview-chat');
 });
 
@@ -178,12 +182,13 @@ await check('the bubble is injected into Umbraco pages automatically', async () 
 await check('a visitor asks a suggested question and gets a streamed answer', async () => {
   await widget().locator('.launcher').click();
   await widget().locator('.suggestions button', { hasText: 'What does a website cost?' }).click();
-  await widget().locator('.msg.bot .bubble', { hasText: 'mock' }).last().waitFor({ timeout: 20000 });
-  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 20000 });
+  await widget().locator('.msg.bot').nth(1).waitFor({ timeout: answerTimeout });
+  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
   const html = await widget().locator('.msg.bot').last().innerHTML();
-  assert(html.includes('<strong>mock</strong>') && html.includes('<li>') && html.includes('href="/kontakt/"'), 'markdown rendered safely');
+  if (!real) assert(html.includes('<strong>mock</strong>') && html.includes('<li>') && html.includes('href="/kontakt/"'), 'markdown rendered safely');
+  else console.log('  answer: ' + (await widget().locator('.msg.bot .bubble').nth(1).innerText()).replace(/\s+/g, ' ').slice(0, 200));
   const meter = await widget().locator('.meter-text').innerText();
-  assert(/\d/.test(meter) && meter.includes('/'), 'memory meter shows usage');
+  assert(/\d/.test(meter) && /free|frei/.test(meter), 'memory meter shows the free context: ' + meter);
   await shot(site, '07-site-answer');
 });
 
@@ -196,14 +201,15 @@ await check('the conversation survives a page change, attachments are not kept',
 await check('screenshots can be attached and are sent to the model', async () => {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
   writeFileSync(path.join(out, 'pixel.png'), png);
-  await widget().locator('input[type=file]').setInputFiles(path.join(out, 'pixel.png'));
+  await widget().locator('input[type=file]').setInputFiles(real ? path.join(runtime, 'screenshot-test.png') : path.join(out, 'pixel.png'));
   await widget().locator('.pending .file').waitFor();
   const answers = await widget().locator('.msg.bot').count();
-  await widget().locator('textarea').fill('What is in this screenshot?');
+  await widget().locator('textarea').fill(real ? 'What is the total amount on this invoice, and is there an error message?' : 'What is in this screenshot?');
   await widget().locator('textarea').press('Enter');
   await widget().locator('.msg.user .file').last().waitFor();
-  await widget().locator('.msg.bot').nth(answers).waitFor({ timeout: 20000 });
-  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 20000 }); // answer finished
+  await widget().locator('.msg.bot').nth(answers).waitFor({ timeout: answerTimeout });
+  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout }); // answer finished
+  if (real) console.log('  screenshot answer: ' + (await widget().locator('.msg.bot .bubble').nth(answers).innerText()).replace(/\s+/g, ' ').slice(0, 200));
 });
 
 await check('unsupported files are explained', async () => {
@@ -252,7 +258,7 @@ await check('a statically exported page on another origin works through CORS', a
     await p.locator('#ligata-ai .launcher').click();
     await p.locator('#ligata-ai textarea').fill('Hallo von der statischen Seite');
     await p.locator('#ligata-ai textarea').press('Enter');
-    await p.locator('#ligata-ai .msg.bot .bubble', { hasText: 'mock' }).last().waitFor({ timeout: 20000 }).catch(async e => { throw new Error(e.message.split(/\n/)[0] + ' | widget says: ' + (await p.locator('#ligata-ai .log').innerText()).replace(/\s+/g, ' ').slice(-300)); });
+    await p.locator('#ligata-ai .msg.bot').nth(1).waitFor({ timeout: answerTimeout }).catch(async e => { throw new Error(e.message.split(/\n/)[0] + ' | widget says: ' + (await p.locator('#ligata-ai .log').innerText()).replace(/\s+/g, ' ').slice(-300)); });
     assert((await p.locator('#ligata-ai .launcher').getAttribute('aria-label')).includes('Chat'), 'German interface on a German page');
     await p.close();
   } finally { server.close(); }

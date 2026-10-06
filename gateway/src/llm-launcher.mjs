@@ -1,7 +1,7 @@
 // Runs llama-server with the production profile (model/profile.json) and keeps it running.
 // PM2 runs this file as "ligata-ai-llm". Stopping PM2's process stops llama-server too.
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { gatewayRoot } from './config.mjs';
 import { buildArgs } from '../../model/llm-args.mjs';
@@ -10,6 +10,8 @@ const root = path.resolve(gatewayRoot, '..');
 const profile = JSON.parse(readFileSync(process.env.LIGATA_AI_PROFILE || path.join(root, 'model', 'profile.json'), 'utf8'));
 const runtime = path.resolve(root, profile.runtimeDir || 'runtime');
 const exe = path.join(runtime, 'llama.cpp', 'llama-server.exe');
+const slotSavePath = profile.slotSavePath ? path.resolve(root, profile.slotSavePath) : null;
+if (slotSavePath) mkdirSync(slotSavePath, { recursive: true });
 const log = (event, data = {}) => console.log(JSON.stringify({ at: new Date().toISOString(), event, ...data }));
 
 if (!existsSync(exe)) { log('missing_runtime', { exe }); process.exit(1); }
@@ -30,7 +32,7 @@ delete env.GGML_CUDA_ENABLE_UNIFIED_MEMORY;
 let child = null, stopping = false, restarts = 0;
 function start() {
   killStray();
-  const args = [...buildArgs({ ...profile, modelsDir: path.join(runtime, 'models') }), '--host', '127.0.0.1', '--port', String(profile.port), '--threads-http', '4'];
+  const args = [...buildArgs({ ...profile, slotSavePath, modelsDir: path.join(runtime, 'models') }), '--host', '127.0.0.1', '--port', String(profile.port), '--threads-http', '4'];
   log('starting', { model: profile.model, ctx: profile.ctx, kv: profile.kv, mtp: !!profile.mtp });
   const started = Date.now();
   child = spawn(exe, args, { cwd: runtime, env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });

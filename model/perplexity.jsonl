@@ -1,0 +1,2 @@
+{"label":"QAT UD-Q4_K_XL (Unsloth)","model":"gemma-4-12B-it-qat-UD-Q4_K_XL.gguf","kv":"f16","chunks":40,"ppl":1185.2531,"seconds":166}
+{"label":"QAT UD-Q4_K_XL, q8_0 KV","model":"gemma-4-12B-it-qat-UD-Q4_K_XL.gguf","kv":"q8_0","chunks":40,"ppl":1177.2653,"seconds":171}

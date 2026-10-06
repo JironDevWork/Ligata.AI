@@ -77,7 +77,7 @@ export function normalizeMessages(input, limits) {
   return { messages, images };
 }
 
-export function createServer({ config, keys, scheduler, llm, monitor, log = () => {} }) {
+export function createServer({ config, keys, scheduler, llm, monitor, slots, log = () => {} }) {
   const routes = {
     'GET /v1/health': async () => ({ status: 200, body: { ok: true, model: await llm.health() } }),
 
@@ -142,9 +142,15 @@ export function createServer({ config, keys, scheduler, llm, monitor, log = () =
         run: async signal => {
           const limit = AbortSignal.any([signal, AbortSignal.timeout(config.generation.maxSeconds * 1000)]);
           keys.take(key);
+          // Pin this website to a prompt-cache slot and make room in the shared KV pool if needed.
+          const fresh = await llm.props();
+          if (slots.epoch !== llm.epoch) { slots.reset(); slots.epoch = llm.epoch; }
+          slots.resize(fresh.slots); slots.contextTokens = fresh.contextTokens;
+          const slot = await slots.assign(key.id, promptTokens + maxTokens, id => llm.eraseSlot(id));
+          slots.record(slot, promptTokens);
           event('started', { promptTokens, contextTokens: contextLimit, waitedMs: Date.now() - started });
           let completion = 0, firstToken = 0;
-          for await (const part of llm.chat(messages, { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking }, limit)) {
+          for await (const part of llm.chat(messages, { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking, slot: slots.slots.length > 1 ? slot : undefined }, limit)) {
             if (part.type === 'progress') { if (part.total > 2048) event('progress', { processed: (part.cache || 0) + (part.processed || 0), total: part.total }); }
             else if (part.type === 'reasoning') event('thinking', {});
             else if (part.type === 'delta') { firstToken ||= Date.now(); event('delta', { text: part.text }); }
@@ -152,6 +158,7 @@ export function createServer({ config, keys, scheduler, llm, monitor, log = () =
               const prompt = part.usage?.prompt_tokens ?? promptTokens;
               completion = part.usage?.completion_tokens ?? part.timings?.predicted_n ?? 0;
               keys.record(key, part.timings?.prompt_n ?? prompt, completion);
+              slots.record(slot, prompt + completion);
               event('done', {
                 finishReason: part.finishReason,
                 usage: { promptTokens: prompt, completionTokens: completion, cachedTokens: part.timings?.cache_n ?? 0 },

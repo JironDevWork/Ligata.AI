@@ -16,6 +16,7 @@ export class Llm {
     this.requestTimeoutMs = requestTimeoutMs;
     this.cachedHealth = { at: 0, value: 'down' };
     this.cachedProps = null;
+    this.epoch = 0; // increases whenever llama-server comes back, so slot bookkeeping can reset
   }
 
   async health(maxAgeMs = 2000) {
@@ -26,6 +27,7 @@ export class Llm {
       value = response.ok ? 'ready' : response.status === 503 ? 'loading' : 'down';
     } catch { value = 'down'; }
     if (value !== 'ready') this.cachedProps = null; // a restarted server may use another profile
+    if (value === 'ready' && this.cachedHealth.value !== 'ready') this.epoch++;
     this.cachedHealth = { at: Date.now(), value };
     return value;
   }
@@ -38,6 +40,7 @@ export class Llm {
       vision: !!data.modalities?.vision,
       model: String(data.model_alias || data.model_path || '').split(/[\\/]/).pop(),
       build: data.build_info,
+      slots: data.total_slots || 1,
     };
     return this.cachedProps;
   }
@@ -53,6 +56,12 @@ export class Llm {
     if (response.status === 503) throw new LlmError('model_loading', 'The assistant model is starting. Please try again in a minute.', 503);
     if (!response.ok) throw new LlmError('model_failed', `The model rejected the request (${response.status}).`, 502, { body: (await response.text()).slice(0, 500) });
     return response.json();
+  }
+
+  /** Frees a slot's cached prompt in the shared KV pool. */
+  async eraseSlot(id) {
+    const response = await fetch(`${this.base}/slots/${id}?action=erase`, { method: 'POST', signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new LlmError('slot_erase_failed', 'Could not free a prompt cache slot.', 502);
   }
 
   async countText(text) {
@@ -82,6 +91,7 @@ export class Llm {
         messages, stream: true, stream_options: { include_usage: true }, cache_prompt: true, return_progress: true,
         max_tokens: options.maxTokens, temperature: options.temperature, top_p: options.topP, top_k: options.topK, min_p: 0,
         chat_template_kwargs: { enable_thinking: !!options.thinking }, reasoning_format: 'deepseek',
+        ...(options.slot !== undefined ? { id_slot: options.slot } : {}),
       }, signal);
     } catch (error) { if (signal?.aborted) throw signal.reason ?? error; throw unavailable(); }
     if (response.status !== 200) {

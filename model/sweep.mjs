@@ -49,8 +49,15 @@ for (const name of (arg('profiles') || 'q4xl-256k').split(',')) {
   }
   if (!ready) { console.log(JSON.stringify({ label: name, loaded: false, note: 'failed to load (see runtime/logs)' })); kill(); continue; }
   await new Promise(resolve => {
-    const bench = spawn(process.execPath, [path.join(here, 'bench.mjs'), '--url', `http://127.0.0.1:${port}`, '--depths', arg('depths') || '1000,32000,128000', '--label', name, ...(arg('image') ? ['--image', arg('image')] : [])], { stdio: 'inherit' });
-    bench.on('exit', resolve);
+    // --run accuracy.mjs,cache-test.mjs runs other measurements against the same server.
+    const scripts = (arg('run') || 'bench.mjs').split(',');
+    const next = () => {
+      const script = scripts.shift();
+      if (!script) return resolve();
+      const extra = script === 'bench.mjs' ? ['--depths', arg('depths') || '1000,32000,128000', ...(arg('image') ? ['--image', arg('image')] : [])] : [];
+      spawn(process.execPath, [path.join(here, script), '--url', `http://127.0.0.1:${port}`, '--label', name, ...extra], { stdio: 'inherit' }).on('exit', next);
+    };
+    next();
   });
   kill();
 }

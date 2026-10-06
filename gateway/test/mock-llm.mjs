@@ -9,6 +9,7 @@ export function startMockLlm() {
     tokens: ['Hello', ' from', ' the', ' mock', '.'],
     contextTokens: 8192,
     vision: true,
+    slots: 1, erased: [],
     active: 0, maxActive: 0, requests: 0, aborted: 0, lastBody: null,
   };
   const count = text => Math.ceil(String(text).length / 4);
@@ -20,7 +21,9 @@ export function startMockLlm() {
     if (state.mode === 'down') return request.socket.destroy();
     if (request.url === '/health') return state.mode === 'loading' ? json(503, { error: { message: 'Loading model' } }) : json(200, { status: 'ok' });
     if (state.mode === 'loading') return json(503, { error: { message: 'Loading model' } });
-    if (request.url === '/props') return json(200, { default_generation_settings: { n_ctx: state.contextTokens }, modalities: { vision: state.vision }, model_path: 'mock.gguf', build_info: 'mock' });
+    if (request.url === '/props') return json(200, { default_generation_settings: { n_ctx: state.contextTokens }, modalities: { vision: state.vision }, model_path: 'mock.gguf', build_info: 'mock', total_slots: state.slots });
+    const erase = /^\/slots\/(\d+)\?action=erase$/.exec(request.url);
+    if (erase) { state.erased.push(Number(erase[1])); return json(200, { id_slot: Number(erase[1]), n_erased: 1 }); }
     if (request.url === '/tokenize') return json(200, { tokens: Array.from({ length: count(body.content) }, (_, i) => i) });
     if (request.url === '/apply-template') return json(200, { prompt: body.messages.map(m => `<${m.role}>${m.content}`).join('\n') });
     if (request.url === '/v1/chat/completions') {

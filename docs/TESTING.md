@@ -1,0 +1,63 @@
+# Testing
+
+All checks use disposable data: a fixture Umbraco database under `.runtime/`, a generated fixture administrator (`.runtime/ai-test-admin.json`, never committed), synthetic pages and synthetic questions. Nothing touches a production site or database.
+
+## Repeatable checks
+
+```powershell
+# Gateway: 24 tests against a mock llama-server (no GPU needed)
+cd gateway; npm test
+
+# Package domain and security checks (no database): 47 assertions
+dotnet run --project tests/Ligata.AI.Tests -c Release
+
+# Real Umbraco 17 host: unattended install on SQLite, migration, section grant, store, knowledge, counters: 54 assertions
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
+
+# Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
+node gateway/test/mock-server.mjs 1298                                    # or a real llama-server
+$env:LIGATA_AI_DATA='C:/Code/Ligata.AI/.runtime/gateway-dev'; $env:LIGATA_AI_UPSTREAM='http://127.0.0.1:1298'; $env:LIGATA_AI_PORT=1220; $env:LIGATA_AI_ADMIN_PORT=1222; $env:LIGATA_AI_MEMORY_PROBE=0; node gateway/src/main.mjs
+node gateway/cli.mjs keys create "Test host" > .runtime/gateway-dev/created.txt    # with the same LIGATA_AI_DATA
+cd tests/e2e; npm ci; node run.mjs
+```
+
+The database mode refuses any path outside a `.runtime` folder or not named `ai-test.db`.
+
+### Installed-package check
+
+A project reference does not prove that NuGet assets work (the Forms package learned this the hard way). Pack a unique pre-release version, publish a copy of the test host that references the `.nupkg`, run it from the publish folder and point the browser suite at it:
+
+```powershell
+$v = "0.1.0-dev.$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+dotnet pack src/Ligata.AI -c Release -o artifacts -p:Version=$v
+# copy tests/Ligata.AI.Tests (without wwwroot) to .runtime/package-src, add a NuGet.Config pointing at artifacts/
+dotnet publish .runtime/package-src/Ligata.AI.Tests.csproj -c Release -p:UsePackage=true -p:LigataAIVersion=$v -o .runtime/package-host
+cd .runtime/package-host; dotnet Ligata.AI.Tests.dll --database C:/Code/Ligata.AI/.runtime/package/ai-test.db --serve --urls http://127.0.0.1:5320
+$env:HOST='http://127.0.0.1:5320'; $env:CREDENTIALS='C:/Code/Ligata.AI/.runtime/package/ai-test-admin.json'; node tests/e2e/run.mjs
+```
+
+### Model, memory and load
+
+```powershell
+node model/sweep.mjs --profiles q4xl-256k-mtp-q4kv --depths 1000,32000,120000,250000   # needle, linked facts, speed, memory
+node model/perplexity.mjs --chunks 40                                                 # quality per quantization / KV type
+node model/cache-test.mjs --url http://127.0.0.1:1211                                 # prefix reuse between visitors and sites
+node model/soak.mjs --gateway http://127.0.0.1:1210 --keys <keyA>,<keyB> --requests 60 --concurrency 4 --image .runtime/screenshot-test.png
+```
+
+Results are appended to `model/results.jsonl`, `model/perplexity.jsonl` and `model/soak.jsonl` and summarised in [model/README.md](../model/README.md).
+
+## What the suites cover
+
+**Gateway**: hashed keys and constant-time checks, revocation without restart, strict one-at-a-time FIFO across sites, queue positions and estimates, one question per visitor, per-site and global caps with `Retry-After`, queue timeouts, model offline/starting answers without queueing, streams breaking mid-answer (error event, queue continues), visitors leaving while queued or while answering (GPU work cancelled), answer time limit, context pre-check, message/role validation, image signature/size/count checks, llama-server message format, PDF text extraction (valid, not a PDF, no text), token counting, body size limits, daily quotas.
+
+**Package**: settings validation (colours, URLs, e-mail, budgets, display rules), the cacheable prompt order, guardrails, sanitised page context, HTML/Word/text extraction (scripts stripped, DTD/XXE refused), conversation validation (roles, injected system messages, lengths, attachment types/counts, switched-off uploads), encrypted key round trip and tamper rejection, pseudonymous visitor ids, one question per visitor, origin allowlist, untrusted Cloudflare header; database versioning conflicts, knowledge previews and cache invalidation, counters, section grant.
+
+**Browser**: login, section, connection (bad key format explained, key stored and only hinted), behaviour save and validation, website-page import, file upload with token counts, written knowledge and switching sources off, themes and the live preview using unsaved settings, a real preview chat, going live, automatic injection without secrets in the HTML, status dot, suggested question with streamed and safely rendered Markdown, the memory meter, conversation surviving page changes, screenshot attachment, unsupported files, same-visitor double submit refused, full-screen mobile layout without overflow, a static page on another origin through CORS (German interface), disallowed origins refused, offline state with contact options (with `STOP_GATEWAY_CMD`), and no script errors.
+
+## Notes from qualification
+
+- The Claude desktop app's embedded browser (Chromium 152) does not mount Umbraco 17.6.2 backoffice dashboards at all (also Umbraco's own); Microsoft Edge 154 renders everything. The browser suite therefore drives Edge through `playwright-core` (no browser download).
+- `fetch()` in Node gives up after 300 s without response headers; a 250k-token prompt takes about 10 minutes to process on the RTX 3060, so all streaming calls to llama-server use `node:http` without timeouts.
+- Reusing a keep-alive socket that llama-server already closed raised `ECONNRESET` after a successful answer; streaming requests use one connection each.
+- GPU-shared RAM is not a reliable spill signal on its own: llama.cpp pins 0.2–0.8 GB of host memory depending on the profile (MTP drafter, batch size). The monitor compares against the level right after load.

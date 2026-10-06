@@ -1,13 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><CompressionEnabled>false</CompressionEnabled></PropertyGroup>
-  <ItemGroup>
+  <!-- Default: project reference for development. -p:UsePackage=true -p:LigataAIVersion=x installs the packed .nupkg from artifacts/ instead. -->
+  <ItemGroup Condition="'$(UsePackage)' != 'true'">
     <ProjectReference Include="../../src/Ligata.AI/Ligata.AI.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsePackage)' == 'true'">
+    <PackageReference Include="Ligata.AI" Version="$(LigataAIVersion)" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Umbraco.Cms" Version="17.6.2" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" />
     <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="72.1.0.3" />
   </ItemGroup>
   <!-- A project reference does not install NuGet static assets; copy them like the package would. -->
-  <Target Name="CopyLigataAIAssets" BeforeTargets="Build">
+  <Target Name="CopyLigataAIAssets" BeforeTargets="Build" Condition="'$(UsePackage)' != 'true'">
     <ItemGroup>
       <LigataPlugin Include="../../src/Ligata.AI/App_Plugins/**/*" />
       <LigataPublic Include="../../src/Ligata.AI/PublicAssets/**/*" />

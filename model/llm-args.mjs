@@ -14,14 +14,18 @@ export function buildArgs(p) {
     '-b', String(Math.max(p.ubatch, 512)), '-ub', String(p.ubatch),
     '--cache-ram', '0',         // no host-RAM prompt cache (default would let RAM grow up to 8 GB)
     '--ctx-checkpoints', String(p.checkpoints ?? 2), // bounded SWA checkpoints so follow-ups reuse the prefix
-    '-np', '1',                 // one slot: the gateway serializes requests anyway
     '--jinja',
     '--no-webui',
   ];
+  // Several slots share ONE KV pool (-kvu): the gateway pins each website to a slot so its knowledge stays
+  // cached in VRAM, while any single conversation can still use the whole window.
+  args.push('-np', String(p.slots || 1), ...(p.slots > 1 ? ['-kvu'] : []));
   // llama.cpp keeps the 1B-parameter token-embedding table in host RAM by default. Force it into VRAM.
   if (p.embeddingsOnGpu) args.push('-ot', 'token_embd.weight=CUDA0');
   if (p.mmproj) args.push('--mmproj', file(p.mmproj));
   else args.push('--no-mmproj');
+  // Required by llama-server for slot actions; the gateway uses "erase" to free idle sites' caches.
+  if (p.slotSavePath) args.push('--slot-save-path', p.slotSavePath);
   if (p.mtp) args.push('--spec-type', 'draft-mtp', '--model-draft', file(p.mtp), '--spec-draft-n-max', String(p.draftMax ?? 3), '-ngld', 'all', '-ctkd', p.kv, '-ctvd', p.kv);
   return args;
 }

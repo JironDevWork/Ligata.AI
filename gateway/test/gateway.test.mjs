@@ -19,7 +19,7 @@ before(async () => {
   keyB = gateway.keys.create('Site B').key;
 });
 after(async () => { await gateway.stop(); await mock.close(); rmSync(dataDir, { recursive: true, force: true }); });
-beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, maxActive: 0, active: 0, aborted: 0, contextTokens: 8192, vision: true }); gateway.llm.cachedProps = null; });
+beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, maxActive: 0, active: 0, aborted: 0, contextTokens: 8192, vision: true, slots: 1, erased: [] }); gateway.llm.cachedProps = null; });
 
 const call = (route, key, body, method = body ? 'POST' : 'GET') => fetch(base + route, { method, headers: { ...(key ? { Authorization: 'Bearer ' + key } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
 
@@ -243,4 +243,20 @@ test('daily quota per key', async () => {
   assert.equal(result.error.code, 'daily_quota');
   gateway.keys.setLimits(idA, { requestsPerDay: 2000 });
   gateway.keys.reload();
+});
+
+test('websites are pinned to prompt-cache slots and idle caches are freed for big prompts', async () => {
+  mock.state.slots = 3; mock.state.contextTokens = 9000; gateway.llm.cachedProps = null;
+  const long = 'x'.repeat(6000); // ~1500 tokens per site in the mock tokenizer (4 characters per token)
+  await chat(keyA, { visitor: 's1', messages: [{ role: 'system', content: long }, { role: 'user', content: 'a' }], maxTokens: 64 });
+  const slotA = mock.state.lastBody.id_slot;
+  await chat(keyB, { visitor: 's2', messages: [{ role: 'system', content: long }, { role: 'user', content: 'b' }], maxTokens: 64 });
+  const slotB = mock.state.lastBody.id_slot;
+  assert.notEqual(slotA, slotB, 'two sites, two slots');
+  await chat(keyA, { visitor: 's3', messages: [{ role: 'system', content: long }, { role: 'user', content: 'c' }], maxTokens: 64 });
+  assert.equal(mock.state.lastBody.id_slot, slotA, 'site A returns to its warm slot');
+  assert.deepEqual(mock.state.erased, [], 'nothing erased while the pool has room');
+  const third = gateway.keys.create('Site C').key;
+  await chat(third, { visitor: 's4', messages: [{ role: 'system', content: 'y'.repeat(16000) }, { role: 'user', content: 'd' }], maxTokens: 64 });
+  assert.deepEqual(mock.state.erased, [slotB], 'the least recently used idle site is erased to make room');
 });

@@ -1,0 +1,2 @@
+{"label":"q4xl-256k-mtp-q4kv","at":"2026-10-06T22:49:52.863Z","facts":400,"accuracy":0.743,"right":52,"total":70,"byKind":{"lookup":{"right":40,"total":40},"compare":{"right":12,"total":15},"sum":{"right":0,"total":15}},"averageCachedTokens":9613}
+{"label":"q4xl-192k-mtp","at":"2026-10-06T22:51:23.282Z","facts":400,"accuracy":0.743,"right":52,"total":70,"byKind":{"lookup":{"right":40,"total":40},"compare":{"right":12,"total":15},"sum":{"right":0,"total":15}},"averageCachedTokens":9613}
