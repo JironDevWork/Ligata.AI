@@ -1,0 +1,15 @@
+# Local model runtime: llama.cpp binaries, GGUF weights, logs
+runtime/
+**/bin/
+**/obj/
+artifacts/
+.runtime/
+node_modules/
+gateway/data/
+model/results.local.jsonl
+**/appsettings.Local.json
+*.user
+**/umbraco/Data/
+**/umbraco/Logs/
+**/appsettings-schema*.json
+**/umbraco-package-schema.json
