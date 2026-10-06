@@ -1,0 +1,42 @@
+import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
+import { icon, number, compact } from './ui.js?v=0.1.0';
+
+export const insightsView = {
+  insightsView() {
+    const rows = this.stats || [];
+    const sum = key => rows.reduce((n, r) => n + (r[key] || 0), 0);
+    const answered = sum('answered');
+    const days = [];
+    for (let i = this.statsDays - 1; i >= 0; i--) {
+      const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      days.push(rows.find(r => r.day === day) || { day, answered: 0, failed: 0, busy: 0, offline: 0 });
+    }
+    const peak = Math.max(1, ...days.map(d => d.answered + d.failed + d.busy + d.offline));
+    const averageSeconds = answered ? sum('answerMs') / answered / 1000 : 0;
+    return html`<div class="grid">
+      <section class="card">
+        <header><div><h2>Usage</h2><p class="muted">Anonymous daily counters. No questions, answers or visitor data are stored.</p></div>
+          <div class="segmented">${[7, 30, 90].map(d => html`<button type="button" aria-pressed=${String(this.statsDays === d)} @click=${() => { this.statsDays = d; this.run(() => this.loadStats()); }}>${d} days</button>`)}</div></header>
+        <div class="stats">
+          <div class="stat"><b>${number(sum('conversations'))}</b><small>Conversations</small></div>
+          <div class="stat"><b>${number(sum('questions'))}</b><small>Questions</small></div>
+          <div class="stat"><b>${number(answered)}</b><small>Answered</small></div>
+          <div class="stat"><b>${averageSeconds ? averageSeconds.toFixed(1) + ' s' : '—'}</b><small>Average answer time (incl. waiting)</small></div>
+          <div class="stat"><b>${number(sum('attachments'))}</b><small>Attachments</small></div>
+          <div class="stat"><b>${number(sum('busy'))}</b><small>Turned away (busy)</small></div>
+          <div class="stat"><b>${number(sum('offline'))}</b><small>While offline</small></div>
+          <div class="stat"><b>${number(sum('failed'))}</b><small>Failed</small></div>
+          <div class="stat"><b>${compact(sum('promptTokens') + sum('completionTokens'))}</b><small>Tokens processed</small></div>
+        </div>
+      </section>
+      <section class="card">
+        <header><div><h2>Per day</h2></div><div class="row"><span class="pill" style="color:var(--c-chat)"><i></i>Answered</span><span class="pill" style="color:var(--c-answer)"><i></i>Busy / offline</span><span class="pill bad"><i></i>Failed</span></div></header>
+        ${rows.length ? html`<div class="chart" role="img" aria-label="Questions per day">${days.map(d => html`<div title="${d.day}: ${d.answered} answered, ${d.busy + d.offline} busy/offline, ${d.failed} failed">
+          <i class="answered" style="height:${d.answered / peak * 100}%"></i><i class="busy" style="height:${(d.busy + d.offline) / peak * 100}%"></i><i class="failed" style="height:${d.failed / peak * 100}%"></i></div>`)}</div>
+          <div class="row"><small class="grow">${days[0].day}</small><small>${days.at(-1).day}</small></div>`
+        : html`<div class="empty">${icon('chart')}<p>No questions yet in this period.</p></div>`}
+        ${sum('busy') > sum('questions') * 0.1 && sum('questions') > 20 ? html`<div class="notice warning">${icon('warn')}<div>More than 10% of questions were turned away because the shared AI was busy. Ask the gateway operator about capacity or a higher queue limit.</div></div>` : nothing}
+      </section>
+    </div>`;
+  },
+};

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <PackageId>Ligata.AI</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Ligata</Authors>
+    <Description>Website AI assistant for Umbraco 17: chat bubble, knowledge, appearance and a backoffice section, answered by a self-hosted Ligata AI gateway.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/JironDevWork/Ligata.AI</RepositoryUrl>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Umbraco.Cms.Api.Management" Version="[17.6.2,18.0.0)" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <Content Remove="App_Plugins/**" />
+    <None Remove="App_Plugins/**" />
+    <Content Include="App_Plugins/**" Pack="true" PackagePath="static/App_Plugins/%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Remove="PublicAssets/**" />
+    <Content Include="PublicAssets/**" Pack="true" PackagePath="static/assets/ligata-ai/%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Include="buildTransitive/Ligata.AI.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+</Project>

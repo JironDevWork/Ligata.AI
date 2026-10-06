@@ -1,0 +1,20 @@
+// Logs into the disposable test host and screenshots the AI Assistant section.
+import { chromium } from 'playwright-core';
+import { readFileSync } from 'node:fs';
+const base = process.env.HOST || 'http://127.0.0.1:5310';
+const credentials = JSON.parse(readFileSync(new URL('../../.runtime/ai-test-admin.json', import.meta.url)));
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+const errors = [];
+page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+page.on('console', m => m.type() === 'error' && errors.push('console: ' + m.text()));
+await page.goto(base + '/umbraco');
+await page.locator('input[type=email], input[name=username]').first().fill(credentials.email);
+await page.locator('input[type=password]').first().fill(credentials.password);
+await page.keyboard.press('Enter');
+await page.waitForURL(/section/, { timeout: 30000 });
+await page.goto(base + '/umbraco/section/ai-assistant');
+await page.waitForTimeout(6000);
+await page.screenshot({ path: '../../.runtime/probe.png' });
+console.log(JSON.stringify({ url: page.url(), defined: await page.evaluate(() => !!customElements.get('ligata-ai-dashboard')), errors: errors.slice(0, 8) }, null, 1));
+await browser.close();

@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)..\static\**\*" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

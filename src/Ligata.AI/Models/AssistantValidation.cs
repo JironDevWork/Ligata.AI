@@ -1,0 +1,93 @@
+using System.Text.RegularExpressions;
+
+namespace Ligata.AI.Models;
+
+public sealed class AssistantValidationException(Dictionary<string, string> errors) : Exception(string.Join(" ", errors.Values))
+{
+    public Dictionary<string, string> Errors { get; } = errors;
+}
+public sealed class AssistantConflictException(string message) : Exception(message);
+
+public static partial class AssistantValidation
+{
+    [GeneratedRegex("^#[0-9a-fA-F]{6}$")] private static partial Regex Color();
+    private static readonly string[] Themes = ["ligata", "midnight", "ocean", "forest", "sunset", "graphite", "custom"];
+    private static readonly string[] Schemes = ["light", "dark", "auto"];
+    private static readonly string[] Fonts = ["inherit", "system", "rounded", "serif", "mono"];
+    private static readonly string[] Icons = ["chat", "sparkle", "help", "wave", "avatar"];
+    private static readonly string[] Tones = ["friendly", "professional", "concise", "playful"];
+    private static readonly string[] Lengths = ["short", "balanced", "detailed"];
+    private static readonly string[] Languages = ["auto", "en", "de", "fr", "it"];
+    private static readonly string[] Modes = ["all", "include", "exclude", "manual"];
+
+    public static bool SafeUrl(string value, bool allowRelative = true) =>
+        value == "" || (allowRelative && value.StartsWith('/') && !value.StartsWith("//") && !value.Contains('\\')) ||
+        (Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http");
+
+    public static void Settings(AssistantSettings s)
+    {
+        var errors = new Dictionary<string, string>();
+        void Check(bool ok, string key, string message) { if (!ok) errors.TryAdd(key, message); }
+        void Length(string? value, int max, string key, string label) => Check((value ?? "").Length <= max, key, $"{label} can be at most {max} characters.");
+
+        var i = s.Identity; var b = s.Behaviour; var a = s.Appearance; var d = s.Display;
+        Check(!string.IsNullOrWhiteSpace(i.Name), "identity.name", "Give the assistant a name.");
+        Length(i.Name, 40, "identity.name", "The name");
+        Length(i.Greeting, 600, "identity.greeting", "The greeting");
+        Length(i.InputPlaceholder, 80, "identity.inputPlaceholder", "The placeholder");
+        Length(i.PrivacyNotice, 600, "identity.privacyNotice", "The privacy notice");
+        Length(i.FallbackMessage, 400, "identity.fallbackMessage", "The offline message");
+        Check(i.Suggestions.Count <= 6 && i.Suggestions.All(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 120), "identity.suggestions", "Use up to six suggested questions of at most 120 characters.");
+        Check(Languages.Contains(i.Language), "identity.language", "Choose a supported interface language.");
+        Check(SafeUrl(i.AvatarUrl) && i.AvatarUrl.Length <= 500, "identity.avatarUrl", "The avatar must be an http(s) or site-relative URL.");
+        Check(SafeUrl(i.PrivacyUrl) && i.PrivacyUrl.Length <= 500, "identity.privacyUrl", "The privacy link must be an http(s) or site-relative URL.");
+        Check(SafeUrl(i.FallbackUrl) && i.FallbackUrl.Length <= 500, "identity.fallbackUrl", "The contact link must be an http(s) or site-relative URL.");
+        Check(i.FallbackEmail == "" || (i.FallbackEmail.Length <= 200 && Regex.IsMatch(i.FallbackEmail, @"^[^@\s<>""]+@[^@\s<>""]+\.[^@\s<>""]+$")), "identity.fallbackEmail", "Enter a valid contact email address.");
+
+        Length(b.Instructions, 20000, "behaviour.instructions", "The instructions");
+        Length(b.SiteName, 120, "behaviour.siteName", "The website name");
+        Check(Tones.Contains(b.Tone), "behaviour.tone", "Choose a tone.");
+        Check(Lengths.Contains(b.AnswerLength), "behaviour.answerLength", "Choose an answer length.");
+        Check(b.Temperature is >= 0 and <= 1.5, "behaviour.temperature", "Creativity must be between 0 and 1.5.");
+        Check(b.MaxAnswerTokens is >= 128 and <= 4096, "behaviour.maxAnswerTokens", "Answer length limit must be between 128 and 4096 tokens.");
+        Check(b.ContextLimit is >= 4096 and <= 262144, "behaviour.contextLimit", "The conversation limit must be between 4,096 and 262,144 tokens.");
+        Check(b.KnowledgeBudget is >= 0 and <= 200000, "behaviour.knowledgeBudget", "The knowledge budget must be between 0 and 200,000 tokens.");
+        Check(b.KnowledgeBudget + b.MaxAnswerTokens + 2048 <= b.ContextLimit, "behaviour.knowledgeBudget", "Knowledge budget plus answer length must leave at least 2,048 tokens of the conversation limit for the chat itself.");
+
+        Check(Themes.Contains(a.Theme), "appearance.theme", "Choose a theme.");
+        Check(Schemes.Contains(a.ColorScheme), "appearance.colorScheme", "Choose light, dark or automatic.");
+        Check(a.Position is "left" or "right", "appearance.position", "The bubble sits bottom left or bottom right.");
+        foreach (var (key, value) in new[] { ("accent", a.Accent), ("accentText", a.AccentText), ("background", a.Background), ("surface", a.Surface), ("text", a.Text), ("mutedText", a.MutedText), ("userBubble", a.UserBubble), ("userText", a.UserText), ("assistantBubble", a.AssistantBubble), ("assistantText", a.AssistantText) })
+            Check(Color().IsMatch(value ?? ""), "appearance." + key, "Colours must be hex values like #2f5bff.");
+        Check(Fonts.Contains(a.Font), "appearance.font", "Choose a font style.");
+        Check(Icons.Contains(a.LauncherIcon), "appearance.launcherIcon", "Choose a bubble icon.");
+        Check(a.LauncherIcon != "avatar" || i.AvatarUrl != "", "appearance.launcherIcon", "The avatar icon needs an avatar image.");
+        Length(a.LauncherLabel, 30, "appearance.launcherLabel", "The bubble label");
+        Length(a.Teaser, 160, "appearance.teaser", "The teaser");
+        Check(a.Radius is >= 0 and <= 32, "appearance.radius", "Corner radius must be 0–32 px.");
+        Check(a.LauncherSize is >= 44 and <= 88, "appearance.launcherSize", "Bubble size must be 44–88 px.");
+        Check(a.PanelWidth is >= 320 and <= 560, "appearance.panelWidth", "Panel width must be 320–560 px.");
+        Check(a.PanelHeight is >= 420 and <= 900, "appearance.panelHeight", "Panel height must be 420–900 px.");
+        Check(a.OffsetX is >= 0 and <= 200 && a.OffsetY is >= 0 and <= 200, "appearance.offset", "Distance from the edge must be 0–200 px.");
+        Check(a.TeaserDelaySeconds is >= 0 and <= 120, "appearance.teaserDelaySeconds", "Teaser delay must be 0–120 seconds.");
+        Check(a.ZIndex is >= 1 and <= 2147483647, "appearance.zIndex", "Invalid stacking order.");
+
+        Check(Modes.Contains(d.Mode), "display.mode", "Choose where the assistant appears.");
+        Check(d.Paths.Count <= 50 && d.Paths.All(p => p.StartsWith('/') && p.Length <= 300 && !p.Contains("//")), "display.paths", "Paths must start with / (for example /contact/).");
+        Check(SafeUrl(s.GatewayUrl, allowRelative: false) && s.GatewayUrl.Length <= 300, "gatewayUrl", "The gateway URL must be an http(s) address.");
+        if (errors.Count > 0) throw new AssistantValidationException(errors);
+    }
+
+    public static bool ShowsOn(AssistantDisplay display, string path)
+    {
+        path = path.EndsWith('/') ? path : path + "/";
+        bool Matches(string prefix) => path.StartsWith(prefix.EndsWith('/') ? prefix : prefix + "/", StringComparison.OrdinalIgnoreCase) || (prefix == "/" && path == "/");
+        return display.Mode switch
+        {
+            "all" => true,
+            "include" => display.Paths.Any(Matches),
+            "exclude" => !display.Paths.Any(Matches),
+            _ => false,
+        };
+    }
+}

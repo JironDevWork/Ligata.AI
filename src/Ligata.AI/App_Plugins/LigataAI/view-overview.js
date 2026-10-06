@@ -1,0 +1,60 @@
+import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
+import { icon, number, compact } from './ui.js?v=0.1.0';
+
+export const overviewView = {
+  budgetCard(title = 'Context budget', compactView = false) {
+    const p = this.budgetParts;
+    const pct = v => `${Math.max(0, Math.min(100, (v / p.limit) * 100))}%`;
+    const b = this.settings.behaviour;
+    return html`<section class="card budget">
+      <header><div><h2>${title}</h2><p class="muted">How one conversation's ${number(p.limit)} tokens are shared${this.modelContext ? html` (model maximum ${compact(this.modelContext)})` : nothing}.${p.estimated ? ' Some numbers are estimates until the AI gateway counts them.' : ''}</p></div></header>
+      <div class="stack" role="img" aria-label="Context budget">
+        <i class="instructions" style="width:${pct(p.instructions)}"></i><i class="knowledge" style="width:${pct(p.knowledge)}"></i>
+        ${p.over ? html`<i class="over" style="width:${pct(p.instructions + p.knowledge + p.answer - p.limit)}"></i>` : html`<i class="chat" style="width:${pct(p.chat)}"></i><i class="answer" style="width:${pct(p.answer)}"></i>`}
+      </div>
+      <div class="legend">
+        <div><i style="background:var(--c-instructions)"></i><span><b>${number(p.instructions)}</b><small>Instructions & guardrails</small></span></div>
+        <div><i style="background:var(--c-knowledge)"></i><span><b>${number(p.knowledge)} <small>/ ${number(b.knowledgeBudget)}</small></b><small>Knowledge (budget)</small></span></div>
+        <div><i style="background:var(--c-chat)"></i><span><b>${number(p.chat)}</b><small>Free for the conversation & attachments</small></span></div>
+        <div><i style="background:var(--c-answer)"></i><span><b>${number(p.answer)}</b><small>Reserved for one answer</small></span></div>
+      </div>
+      ${p.over ? html`<div class="notice error">${icon('warn')}<div>Instructions, knowledge and the answer reserve exceed the conversation limit. Switch knowledge off or raise the limit under Behaviour.</div></div>` : nothing}
+      ${!compactView && p.chat < 4096 && !p.over ? html`<small class="muted">Less than 4,096 tokens remain for the conversation. Visitors may hit the limit after a few questions or one attachment.</small>` : nothing}
+      ${!compactView ? html`<small class="muted">Tip: the first question after a change processes everything once (roughly ${Math.max(1, Math.round((p.instructions + p.knowledge) / 900))} s on the shared GPU). Follow-up questions reuse that work and start almost instantly.</small>` : nothing}
+    </section>`;
+  },
+
+  overviewView() {
+    const s = this.status;
+    const ready = s?.ok && s.status.state === 'ready';
+    const hasKey = this.connection?.keySource && !['none', 'unreadable'].includes(this.connection.keySource);
+    const enabledKnowledge = this.knowledge.filter(k => k.enabled).length;
+    const steps = [
+      { done: hasKey, label: 'Connect to the Ligata AI gateway', detail: hasKey ? `Key ${this.connection.keyHint || ''} (${this.connection.keySource === 'configuration' ? 'from configuration' : 'stored encrypted'})` : 'Paste the API key under Connection.', tab: 'connection' },
+      { done: ready, label: 'AI gateway answers', detail: ready ? `${s.status.model || 'Model'} · ${compact(s.status.contextTokens)} tokens context${s.status.vision ? ' · reads screenshots' : ''}` : s?.message || 'Waiting for status…', tab: 'connection' },
+      { done: !!this.settings.behaviour.siteName && !!this.settings.behaviour.instructions, label: 'Describe your business', detail: 'Website name and instructions under Behaviour.', tab: 'behaviour' },
+      { done: enabledKnowledge > 0, label: 'Add knowledge', detail: enabledKnowledge ? `${enabledKnowledge} source${enabledKnowledge === 1 ? '' : 's'} active` : 'Upload documents or import your website pages.', tab: 'knowledge' },
+      { done: this.settings.enabled, label: 'Show it on the website', detail: this.settings.enabled ? `Mode: ${({ all: 'every page', include: 'selected pages', exclude: 'all but excluded pages', manual: 'manual placement' })[this.settings.display.mode]}` : 'Use the switch at the top when you are happy with the preview.', tab: null },
+    ];
+    return html`<div class="split">
+      <div class="grid">
+        <section class="card">
+          <header><div><h2>Getting started</h2><p class="muted">${steps.filter(x => x.done).length} of ${steps.length} done</p></div></header>
+          <ul class="checklist">${steps.map(step => html`<li class=${step.done ? 'done' : ''}><span class="mark">${step.done ? icon('check') : nothing}</span><div class="grow"><strong>${step.label}</strong><br><small>${step.detail}</small></div>${step.tab && !step.done ? html`<button class="btn small" @click=${() => { this.tab = step.tab; }}>Open</button>` : nothing}</li>`)}</ul>
+        </section>
+        ${this.budgetCard()}
+        <section class="card">
+          <header><div><h2>Shared AI server</h2><p class="muted">All Ligata websites share one GPU and answer one question at a time, in order.</p></div><button class="btn small" @click=${() => this.refreshStatus()}>${icon('refresh')}Refresh</button></header>
+          ${s?.ok ? html`<dl class="facts">
+            <dt>Model</dt><dd>${s.status.model || '—'} <span class="pill ${ready ? 'ok' : 'warn'}"><i></i>${s.status.state}</span></dd>
+            <dt>Context window</dt><dd>${number(s.status.contextTokens)} tokens</dd>
+            <dt>Queue</dt><dd>${s.status.queueRunning ? 'Answering' : 'Idle'}${s.status.queueWaiting ? ` · ${s.status.queueWaiting} waiting (≈ ${s.status.estimatedWaitSeconds} s)` : ''}</dd>
+            <dt>GPU memory</dt><dd>${s.status.gpuHealthy ? 'Healthy (everything in VRAM)' : 'Warning: VRAM overflowing into system RAM'}</dd>
+            <dt>Your usage today</dt><dd>${number(s.status.usage?.requests)} of ${number(s.status.limits?.requestsPerDay)} questions</dd>
+          </dl>` : html`<div class="notice ${s ? 'error' : ''}">${icon('info')}<div>${s ? s.message : 'Checking…'}</div></div>`}
+        </section>
+      </div>
+      ${this.previewPane()}
+    </div>`;
+  },
+};

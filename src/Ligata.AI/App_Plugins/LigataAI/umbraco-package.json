@@ -1,0 +1,17 @@
+{
+  "$schema": "../../umbraco-package-schema.json",
+  "name": "Ligata AI",
+  "version": "0.1.0",
+  "extensions": [
+    {
+      "type": "section", "alias": "Ligata.AI.Section", "name": "AI Assistant", "weight": 50,
+      "meta": { "label": "AI Assistant", "pathname": "ai-assistant" }
+    },
+    {
+      "type": "dashboard", "alias": "Ligata.AI.Dashboard", "name": "Ligata AI assistant",
+      "element": "/App_Plugins/LigataAI/dashboard.js?v=0.1.0", "weight": 100,
+      "meta": { "label": "Assistant", "pathname": "assistant" },
+      "conditions": [{ "alias": "Umb.Condition.SectionAlias", "match": "Ligata.AI.Section" }]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "ligata-ai-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser checks for the Ligata AI backoffice and chat widget (drives the installed Microsoft Edge).",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

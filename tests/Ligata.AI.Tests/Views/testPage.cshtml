@@ -1,0 +1,10 @@
+﻿@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@Model.Name</title>
+<style>body{font-family:Georgia,serif;margin:0;background:#faf8f4;color:#222}main{max-width:760px;margin:auto;padding:60px 24px}h1{font-size:44px}</style></head>
+<body>
+  <main><h1>@Model.Name</h1>@Html.Raw(Model.Value<string>("bodyText"))</main>
+</body>
+</html>
