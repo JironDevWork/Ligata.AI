@@ -27,6 +27,6 @@
     <!-- Privacy policy templates: the backoffice fills them in for the site's setup. -->
     <EmbeddedResource Include="../../docs/privacy/datenschutz-de.md" LogicalName="Ligata.AI.Privacy.de.md" />
     <EmbeddedResource Include="../../docs/privacy/privacy-policy-en.md" LogicalName="Ligata.AI.Privacy.en.md" />
-    <None Include="../../docs/privacy/*.md" Pack="true" PackagePath="docs/privacy/" />
+    <None Include="../../docs/privacy/*.md;../../docs/PRIVACY.md" Pack="true" PackagePath="docs/privacy/" />
   </ItemGroup>
 </Project>

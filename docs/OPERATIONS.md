@@ -8,8 +8,17 @@ LigataAI__Mode=api
 LigataAI__Claude__ApiKey=<key from console.anthropic.com>
 ```
 
-Then restart the site and check **AI Assistant → Settings → Connection → Test connection**. Set a monthly spend limit in the Anthropic Console as the final cost ceiling (the package also enforces `LigataAI:Claude:QuestionsPerDay`, default 1,500).
+Then restart the site and check **AI Assistant → Settings → Connection → Test connection**. Visitors are told that their messages go to Anthropic (USA) before they agree; the Privacy tab writes the matching privacy policy text. Set a monthly spend limit in the Anthropic Console as the final cost ceiling (the package also enforces `LigataAI:Claude:QuestionsPerDay`, default 1,500).
 
+
+## Privacy: running the GPU for other websites
+
+In GPU mode, visitors are told that their messages go to an AI server run by `LigataAI:Privacy:GpuOperator` (default "Ligata") in `GpuOperatorCountry`, and they agree before anything is sent. For every website you connect:
+- Set `"LigataAI": { "Privacy": { "GpuOperatorCountry": "CH" } }` (the country of this machine) in the website's configuration.
+- Sign a data processing agreement (Art. 28 GDPR) with the website owner: you process their visitors' messages on their behalf. [docs/PRIVACY.md](PRIVACY.md#technical-and-organisational-measures-software) lists the technical measures for its annex.
+- Keep the gateway reachable over HTTPS only (tunnel or reverse proxy); it listens on 127.0.0.1.
+
+The gateway keeps no message content: no disk storage, no content in logs, the context only in GPU memory until it is overwritten.
 
 ## On the AI machine (mini PC with the RTX 3060 eGPU)
 

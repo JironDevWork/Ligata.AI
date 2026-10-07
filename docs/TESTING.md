@@ -8,11 +8,11 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 33 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 91 assertions
+# Package domain and security checks (no database): 114 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
-# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling: 134 assertions in total
+# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records: 164 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
@@ -23,6 +23,31 @@ cd tests/e2e; npm ci; node run.mjs
 ```
 
 The database mode refuses any path outside a `.runtime` folder or not named `ai-test.db`. Email goes to an SMTP pickup folder next to the database (`.runtime/mail/*.eml`), never to a real mail server.
+
+### Privacy: consent, withdrawal, Cookiebot (browser)
+
+`tests/e2e/privacy.mjs` runs against the host above with any AI engine (mock gateway or mock Anthropic API). It reads the consent mode from the public config, so the same file covers both modes:
+
+```bash
+cd tests/e2e && node privacy.mjs                                            # default: consent in the chat (7 checks)
+LigataAI__Privacy__ConsentMode=cookiebot LigataAI__Privacy__CookiebotCategory=marketing bash restart-host.sh
+node privacy.mjs                                                            # Cookiebot mode (6 checks), Cookiebot replaced by a stub of its API
+```
+
+| Check | What is verified |
+| --- | --- |
+| Server | Questions and PDFs without a consent, with a malformed or unknown id are refused (`403 consent_required`); a consent to an old text is refused with the current version; the script tag carries `data-cookieconsent="ignore"` |
+| Consent request | Names the AI and the recipient (Anthropic, United States / the GPU operator), links the privacy policy, offers the team; no input or suggested questions before agreeing; `LigataAI.ask()` waits in the input; nothing is stored in the browser before use |
+| Without consent | Live chat and the email form open without recording a consent |
+| Agree and withdraw | German request on a German page; consent recorded (id, version, about a year); the answer arrives; the conversation list shows the consent; withdrawal forgets it in the browser, removes AI conversations and is refused by the server afterwards |
+| Stale consent | A consent the server does not know leads back to the request with an explanation, and the question waits in the input |
+| Backoffice | Consent counts, the German and English privacy policy text without template markup naming this setup's recipient, the preview asks too, *Ask all visitors again* changes the version |
+| Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself |
+
+Results (8 October 2026, version 0.4.0):
+- Privacy suite: 7/7 with the mock gateway, 7/7 in API mode, 6/6 in Cookiebot mode.
+- Regression with consent: AI suite 23/23, team suite 16/16, API suite 13/13.
+- Package checks: 114 domain and 164 total with the database.
 
 ### API mode: Claude through Anthropic (browser)
 
@@ -139,7 +164,7 @@ Results are appended to `model/results.jsonl`, `model/perplexity.jsonl` and `mod
 
 **Gateway**: hashed keys and constant-time checks, revocation without restart, strict one-at-a-time FIFO across sites, queue positions and estimates, one question per visitor, per-site and global caps with `Retry-After`, queue timeouts, model offline/starting answers without queueing, streams breaking mid-answer (error event, queue continues), visitors leaving while queued or while answering (GPU work cancelled), answer time limit, context pre-check, message/role validation, image signature/size/count checks, llama-server message format, PDF text extraction (valid, not a PDF, no text), token counting, body size limits, daily quotas.
 
-**Package**: settings validation (colours, URLs, e-mail, budgets, display rules), the cacheable prompt order, guardrails, sanitised page context, HTML/Word/text extraction (scripts stripped, DTD/XXE refused), conversation validation (roles, injected system messages, lengths, attachment types/counts, switched-off uploads), encrypted key round trip and tamper rejection, pseudonymous visitor ids, one question per visitor, origin allowlist, untrusted Cloudflare header; database versioning conflicts, knowledge previews and cache invalidation, counters, section grant.
+**Package**: consent versions (engine, revision, recipient), consent checks (unknown, withdrawn, expired, outdated), consent records (use, withdrawal without a stale cache, purge of unused and old records, no IP or content), the privacy policy templates (blocks, values, every setup), the Cookiebot exemption on the script tag, settings validation (colours, URLs, e-mail, budgets, display rules), the cacheable prompt order, guardrails, sanitised page context, HTML/Word/text extraction (scripts stripped, DTD/XXE refused), conversation validation (roles, injected system messages, lengths, attachment types/counts, switched-off uploads), encrypted key round trip and tamper rejection, pseudonymous visitor ids, one question per visitor, origin allowlist, untrusted Cloudflare header; database versioning conflicts, knowledge previews and cache invalidation, counters, section grant.
 
 **Browser**: login, section, connection (bad key format explained, key stored and only hinted), behaviour save and validation, website-page import, file upload with token counts, written knowledge and switching sources off, themes and the live preview using unsaved settings, a real preview chat, going live, automatic injection without secrets in the HTML, status dot, suggested question with streamed and safely rendered Markdown, the memory meter, conversation surviving page changes, screenshot attachment, unsupported files, same-visitor double submit refused, full-screen mobile layout without overflow, a static page on another origin through CORS (German interface), disallowed origins refused, offline state with contact options (with `STOP_GATEWAY_CMD`), and no script errors.
 

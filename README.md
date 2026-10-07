@@ -6,6 +6,8 @@ A website chat for **Umbraco 17.6 / .NET 10** with three features that work toge
 - **Live chat with your team**: when the AI cannot help, or a visitor asks for a person, the team answers in an **Inbox** inside Umbraco.
 - **Email form**: visitors leave a message that arrives in your mailbox and in the Inbox.
 
+Built for the GDPR (DSGVO): the AI reads nothing before a visitor agrees, every consent is recorded and can be withdrawn, Cookiebot is supported, and the backoffice writes the matching privacy policy text. See [Privacy](#privacy-gdpr--dsgvo).
+
 Like Ligata.Forms and Ligata.Cloudflare, it is a NuGet package: install it into any Umbraco site, open the new section, switch on what you need.
 
 ```
@@ -22,6 +24,7 @@ visitor ──► chat bubble ──► the site's Umbraco (this package) ─┬
 | Shared gateway | `gateway/` | [gateway/README.md](gateway/README.md) |
 | Model runtime and benchmarks | `model/` | [model/README.md](model/README.md) |
 | Plan and decisions | `docs/` | [docs/PLAN.md](docs/PLAN.md), [docs/SUPPORT.md](docs/SUPPORT.md) (team handoff, live chat, email) |
+| Privacy guide and policy texts | `docs/` | [docs/PRIVACY.md](docs/PRIVACY.md), [docs/privacy/](docs/privacy/) (German and English) |
 
 ## What editors get
 
@@ -45,7 +48,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
   - **Behaviour**:
     - name, avatar, greeting, suggested questions, language;
     - AI instructions, tone, answer length and limits;
-    - uploads, fallback contacts, privacy notice, and where the bubble appears.
+    - uploads, fallback contacts, and where the bubble appears.
   - **Team & email**:
     - feature switches for AI, live chat and the email form;
     - team name, when the AI offers the team, a permanent "Talk to a person" button, which visitor details to ask for (hidden/optional/required), email required when nobody is online;
@@ -55,12 +58,14 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
     - conversation lifetime (close after N days without messages, delete closed conversations after M days), spam protection and who answers.
   - **Knowledge**: upload PDF, Word, text, Markdown, CSV, JSON or HTML, write text, or import published pages; every source shows its token cost.
   - **Connection**: gateway address and API key (stored encrypted, never sent to browsers), live test. In API mode: the Claude model, whether the key is configured (never any part of it), a connection test and today's usage against the limits.
+  - **Privacy**: consent status (who receives the data, how long a consent lasts, how many visitors agreed, asked and withdrew), the wording of the consent request, *Ask all visitors again*, the notice under the input and the privacy policy link, what to declare in Cookiebot, and the **privacy policy text** for this site's setup in German or English (copy or download).
   - **Insights**: anonymous daily counters for the AI (questions, answer time, busy/offline, failures) and the team (chat requests, emails, replies, average first response, questions the AI could not answer).
 
 ## What visitors get
 
 A chat bubble (bottom left by default). Styles are isolated in Shadow DOM, and it is keyboard and screen-reader friendly, full screen on phones and available in English, German, French and Italian.
 
+- **Consent first**: before the first question the chat says that the assistant is an AI, which data goes where (Anthropic in the USA, or the operator of the AI server) and links the privacy policy. Nothing reaches the AI until the visitor agrees; withdrawing takes two clicks (*Conversations → Withdraw consent*). The team can be reached without agreeing.
 - **AI answers**:
   - streamed, with safe Markdown;
   - suggested questions;
@@ -79,12 +84,12 @@ A chat bubble (bottom left by default). Styles are isolated in Shadow DOM, and i
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.3.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.3.0 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.4.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.4.0 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
-- **Database**: the migrations create seven tables in the CMS database: settings, knowledge, counters, conversations, messages, team members and the email queue.
+- **Database**: the migrations create eight tables in the CMS database: settings, knowledge, counters, conversations, messages, team members, the email queue and consent records.
 - **Access**: the section is granted to the `admin` group, and to the agent groups for the Inbox.
 - **Files**: publish/restart once so the backoffice files (`App_Plugins/LigataAI`) and the widget (`/assets/ligata-ai/ligata-ai.js`) are copied.
 
@@ -149,7 +154,8 @@ Then, in the backoffice:
     "EditorGroups": ["admin"],
     "AgentGroups": ["admin", "editor"],
     "MessagesPerTenMinutes": 20,
-    "Support": { "OpenConversationsPerVisitor": 3, "ConversationsPerVisitorPerDay": 6, "EmailsPerVisitorPerHour": 3, "MaxOpenConversations": 500 }
+    "Support": { "OpenConversationsPerVisitor": 3, "ConversationsPerVisitorPerDay": 6, "EmailsPerVisitorPerHour": 3, "MaxOpenConversations": 500 },
+    "Privacy": { "RequireConsent": true, "ConsentMode": "explicit", "GpuOperator": "Ligata", "GpuOperatorCountry": "CH" }
   }
 }
 ```
@@ -161,12 +167,13 @@ Then, in the backoffice:
 - **Static exports** (e.g. Ligata.Cloudflare on Pages): set `PublicApiBase` to the CMS's public URL and list the public site in `AllowedOrigins`. Add `/assets/ligata-ai/ligata-ai.js` to the exporter's additional assets, and allow the widget's `data-api` CMS endpoint in its origin-leak check.
 - `LigataAI:GatewayUrl` / `LigataAI:ApiKey` (better: environment variable `LigataAI__ApiKey`) override the backoffice values (GPU mode).
 - **Manual placement**: set *Where it appears* to **Manual** and add `@await Component.InvokeAsync("LigataAssistant")` to a template.
-- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")`, `reset()`, `contact("chat" | "email")`.
+- **Privacy** decides how visitors agree before the AI reads their messages; see [Privacy](#privacy-gdpr--dsgvo) and [docs/PRIVACY.md](docs/PRIVACY.md).
+- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")` (waits in the input until the visitor agreed), `reset()`, `contact("chat" | "email")`.
 
 ## Security and privacy
 
 - **Traffic and keys.** Browsers only talk to their own Umbraco site. The site calls the gateway server-to-server with its API key (Data Protection-encrypted, or from configuration), or in API mode Anthropic with the key from its configuration.
-- **Public endpoints.** Exact-origin CORS allowlist (plus same host), per-IP and per-visitor limits, one AI question at a time per visitor, size limits, no cookies. Visitor IPs are HMAC-pseudonymised with a per-site secret.
+- **Public endpoints.** Exact-origin CORS allowlist (plus same host), per-IP and per-visitor limits, one AI question at a time per visitor, size limits, no cookies. Visitor IPs are HMAC-pseudonymised with a per-site secret. Questions and files need a recorded consent (`403 consent_required` otherwise).
 - **Team conversations.**
   - Reached only with a random 256-bit token, kept by the visitor's browser and stored as a SHA-256 hash; ids alone grant nothing.
   - Limits: open chats and requests per visitor, emails per hour, messages per minute and per conversation, open conversations site-wide, concurrent connections.
@@ -175,10 +182,25 @@ Then, in the backoffice:
 - **Team members.** They are identified to visitors only as they choose. The Umbraco user key is never exposed, and photos are served only while a team member shows them.
 - **AI conversations** are not stored on the server. Statistics are anonymous daily counters (including how often the AI could not answer, never the question). PDFs and screenshots are processed in memory.
 - **Escaping.** All visitor text is escaped in the widget, the backoffice and emails. Email subjects cannot carry line breaks.
-- **Your privacy policy** should mention the chat:
-  - AI processing on your own server, without storage, or in API mode by Anthropic (Claude);
-  - team conversations stored for your configured period;
-  - Google reCAPTCHA, if used.
+- **Your privacy policy** must mention the chat: copy the text from the Privacy tab (see below).
+
+## Privacy (GDPR / DSGVO)
+
+- **Consent before the AI.**
+  - The chat asks before the first question, names the recipient and links your privacy policy.
+  - The server records each consent (random id, text version, times; no IP, no content) and refuses questions and files without a valid one.
+  - Visitors withdraw in the chat; a new recipient or *Ask all visitors again* asks everyone again; consents expire after a year.
+- **Cookiebot.**
+  - The script tag is exempt from automatic blocking (`data-cookieconsent="ignore"`): the chat sets no cookies and asks itself.
+  - Declare its two local storage entries as *Necessary*.
+  - Optionally let a Cookiebot category give the AI consent (`"ConsentMode": "cookiebot"`).
+- **Privacy policy text.** The Privacy tab writes the sections for your setup in German or English (engine, features, periods, reCAPTCHA, Cookiebot). The templates are in [docs/privacy](docs/privacy/) and in the package.
+- **Your part.**
+  - Have the text reviewed.
+  - Sign a data processing agreement with the GPU server's operator, or keep Anthropic's DPA (API mode).
+  - Add the chat to your record of processing activities.
+
+  [docs/PRIVACY.md](docs/PRIVACY.md) has the details, a record template and the technical measures.
 
 ## Third-party components
 
@@ -189,11 +211,12 @@ Then, in the backoffice:
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 91 domain/security checks
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # + 43 database checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 114 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # + 50 database checks
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)
+node privacy.mjs                                                               # consent, withdrawal, Cookiebot, privacy policy text
 cd gateway; npm test                                                           # 33 gateway tests
 ```
 
