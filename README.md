@@ -138,7 +138,7 @@ Then, in the backoffice:
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 80 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 81 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # + 40 database checks
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite

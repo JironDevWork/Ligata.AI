@@ -8,11 +8,11 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 33 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 80 assertions
+# Package domain and security checks (no database): 81 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
-# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest: 120 assertions in total
+# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest: 121 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
@@ -66,6 +66,10 @@ $env:REAL=1; $env:GATEWAY='http://127.0.0.1:1210'; $env:KEY_FILE='../../.runtime
 node tests/e2e/edge.mjs
 node tests/e2e/gallery.mjs     # screenshots of themes, dark mode, mobile and the teaser for visual review
 ```
+
+Team features (7 October 2026): `support.mjs` 16/16 on the project-reference host in three consecutive runs, 16/16 with the **real Gemma 4 12B** behind the production gateway, and 16/16 on a host that installs the packed `.nupkg` (upgrading a 0.1 database); `support-noai.mjs` 5/5 with `Features:Assistant=false`; the AI suite `run.mjs` still 23/23. `model/handoff-check.mjs` against the real model with the package's own system prompt: **33/33** (offers the team for unknown business questions and requests for a person, answers known questions without it, declines off-topic requests, never mentions or leaks the marker).
+
+Bugs found by the team-feature runs and fixed: a sequence race could show a team message twice (the server now reports the highest sequence it sent, the widget ignores known ones); throttled status checks made the AI look offline (now the last known state is kept, and the per-IP read limit is configurable); email requests counted as open chats; the inbox could merge a message twice; the request repeated the visitor's question; the closed bar wrapped; untouched AI default texts appeared without AI.
 
 Real-model results (7 October 2026): 23/23 browser checks on both the project-reference host and the installed-package host, 4/4 edge cases, and the 60-question soak (4 concurrent visitors, 2 sites, knowledge prompts, screenshots, PDFs): 60 answered, 0 failed, RAM 1.52–1.80 GB without upward trend, VRAM constant at 10,784 MB, no spill.
 

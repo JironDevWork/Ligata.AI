@@ -1,5 +1,7 @@
 # Ligata.AI 0.2 — team handoff, live chat and email
 
+**Status: built and qualified (7 October 2026).** Everything below is implemented; see [TESTING.md](TESTING.md) for the browser suites (`support.mjs`, `support-noai.mjs`), the database checks and the real-model handoff measurement.
+
 The chat bubble becomes a complete contact point. The AI answers what it can. When it cannot answer, or the visitor asks for a person, it offers the team. The team handles requests in an **Inbox** inside Umbraco, with live chat, join/leave and their Umbraco profile. Visitors can also send an email through a short form. Each of the three features can be licensed on its own through appsettings, so a site can run live chat and email **without any AI**.
 
 ## 1. Feature flags (host configuration)

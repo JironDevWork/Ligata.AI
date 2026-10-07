@@ -55,6 +55,18 @@ Measured with `sweep.mjs` + `bench.mjs` (needle at the middle of a synthetic doc
 powershell -ExecutionPolicy Bypass -File model\check-memory.ps1 -Watch
 ```
 
+## Team handoff (measured)
+
+The AI offers the team by ending an answer with `[[team]]`, which the widget turns into buttons. `node model/handoff-check.mjs` sends 11 questions (plus one off-topic) with the system prompt the package builds (`dotnet Ligata.AI.Tests.dll --prompt`) through the real gateway, three times each:
+
+| Prompt version | Correct | Notes |
+| --- | --- | --- |
+| Rule in the guardrails only | 21/22 | "SEO audits in Japanese" was declined as off-topic |
+| + "related but not in the knowledge → team", "when unsure, treat it as related" | 31/33 | same question still missed sometimes |
+| + one-line reminder after the knowledge (in the per-request part, so the cached prefix is unchanged) | **33/33** | the marker is never mentioned or broken |
+
+Results are appended to `model/handoff.jsonl`.
+
 ## Files and downloads
 
 Not in Git: `runtime/llama.cpp` (llama.cpp **b11456**, Windows CUDA 13.4 build from ggml-org/llama.cpp releases, plus the CUDA 13 runtime DLLs) and `runtime/models`:

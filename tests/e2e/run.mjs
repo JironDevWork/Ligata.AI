@@ -52,7 +52,7 @@ await check('administrator logs in', async () => {
 });
 
 await check('AI Assistant section opens on the overview', async () => {
-  await page.goto(base + '/umbraco/section/ai-assistant');
+  await page.goto(base + '/umbraco/section/ai-assistant/dashboard/settings');
   await dash().locator('h1', { hasText: 'Website assistant' }).waitFor({ timeout: 20000 });
   await dash().locator('.checklist').waitFor();
 });

@@ -38,8 +38,8 @@ await check('the public API has no AI: chat answers 503 disabled', async () => {
 await check('the bubble opens a contact home: chat with the team or email, no AI parts', async () => {
   await page.goto(base + '/');
   await widget.locator('.launcher').click();
-  await widget.locator('.home .option', { hasText: 'Ligata Support' }).waitFor();
-  assert(await widget.locator('.home .option', { hasText: 'email' }).count() === 1, 'email option');
+  await widget.locator('.home .option[data-open-sheet=chat]').waitFor();
+  assert(await widget.locator('.home .option[data-open-sheet=email]').count() === 1, 'email option');
   assert(await widget.locator('.composer-form').isHidden() && await widget.locator('.meter').isHidden(), 'no AI composer or memory meter');
   assert(/Chat by Ligata/.test(await widget.locator('.brand').innerText()), 'branding without "AI"');
   await page.waitForTimeout(400);
@@ -47,7 +47,7 @@ await check('the bubble opens a contact home: chat with the team or email, no AI
 });
 
 await check('starting a chat from the home: request, then a live team thread', async () => {
-  await widget.locator('.home .option', { hasText: 'Ligata Support' }).click();
+  await widget.locator('.home .option[data-open-sheet=chat]').click();
   const sheet = widget.locator('.sheet');
   await sheet.waitFor();
   assert(await sheet.locator('textarea[name=message]').inputValue() === '', 'no prefilled AI question');
