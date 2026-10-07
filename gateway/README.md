@@ -20,11 +20,10 @@ Umbraco site ──HTTPS (API key)──► Cloudflare Tunnel ──► gateway 
 ## Run
 
 ```powershell
-cd C:\Code\Ligata.AI\gateway
-npm ci
-pm2 start ecosystem.config.cjs   # ligata-ai-llm + ligata-ai
-pm2 save
+powershell -ExecutionPolicy Bypass -File C:\Code\Ligata.AI\gateway\install-pm2.ps1
 ```
+
+It stops hand-started copies, runs `npm ci` if needed, `pm2 start ecosystem.config.cjs` (ligata-ai-llm + ligata-ai) and `pm2 save`, then prints the status.
 
 The model files and llama.cpp live in `C:\Code\Ligata.AI\runtime` (not in Git); see [model/README](../model/README.md) for the download and the chosen profile.
 

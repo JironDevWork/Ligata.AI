@@ -79,7 +79,7 @@ async function load() {
   $('vram').textContent = m.running ? fmt(m.processVramMB) + ' MB' : '–'; $('vram2').textContent = m.running ? 'GPU ' + fmt(m.gpuUsedMB) + ' / ' + fmt(m.gpuTotalMB) + ' MB' : '';
   $('shared').textContent = m.running ? fmt(m.sharedRamMB) + ' MB' : '–';
   $('spill').innerHTML = m.running ? (m.spilling ? '<span class="pill bad"><i></i>Spilling into RAM</span>' : '<span class="pill ok"><i></i>Everything in VRAM</span>') : '';
-  const h = s.memoryHistory || [];
+  const h = (s.memoryHistory || []).filter(x => x.ws > 0);
   if (h.length > 1) { const max = Math.max(...h.map(x => x.ws)) * 1.1, min = Math.min(...h.map(x => x.ws)) * .9; $('chart').innerHTML = '<polyline fill="none" stroke="#2f5bff" stroke-width="2" points="' + h.map((x, i) => (i / (h.length - 1) * 600).toFixed(1) + ',' + (80 - (x.ws - min) / (max - min || 1) * 76 - 2).toFixed(1)).join(' ') + '"/>'; $('chart2').textContent = 'Last ' + h.length + ' samples: ' + fmt(Math.min(...h.map(x => x.ws))) + '–' + fmt(Math.max(...h.map(x => x.ws))) + ' MB'; }
   const names = Object.fromEntries(s.keys.map(k => [k.id, k.name]));
   $('slots').innerHTML = s.slots.map(x => '<div class="slot"><b>Slot ' + x.id + '</b><div class="muted">' + (x.site ? esc(names[x.site] || x.site) + '<br>' + fmt(x.tokens) + ' tokens cached · idle ' + x.idleSeconds + ' s' : 'empty') + '</div></div>').join('');

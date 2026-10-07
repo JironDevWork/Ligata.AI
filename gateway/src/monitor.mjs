@@ -39,7 +39,7 @@ export class MemoryMonitor {
       if (!data) return;
       if (data.spilling && !this.latest?.spilling) this.log('memory_spill', data);
       this.latest = data;
-      this.history.push({ at: data.at, ws: data.workingSetMB, vram: data.processVramMB, shared: data.sharedRamMB });
+      if (data.running) this.history.push({ at: data.at, ws: data.workingSetMB, vram: data.processVramMB, shared: data.sharedRamMB });
       if (this.history.length > 2880) this.history.shift(); // one day at 30 s
     };
     tick();

@@ -6,14 +6,13 @@
 
 1. llama.cpp and the model files go into `C:\Code\Ligata.AI\runtime` (see [model/README.md](../model/README.md#files-and-downloads)).
 2. NVIDIA Control Panel → Manage 3D settings → Program Settings → `runtime\llama.cpp\llama-server.exe` → **CUDA – Sysmem Fallback Policy: Prefer No Sysmem Fallback**.
-3. Install and start the two PM2 processes, then save them for the boot task:
+3. Install and start the two PM2 processes and save them for the boot task. In your own PowerShell (as Server):
 
 ```powershell
-cd C:\Code\Ligata.AI\gateway
-npm ci
-pm2 start ecosystem.config.cjs
-pm2 save
+powershell -ExecutionPolicy Bypass -File C:\Code\Ligata.AI\gateway\install-pm2.ps1
 ```
+
+The script stops copies that were started by hand, runs `npm ci` if needed, then `pm2 start gateway/ecosystem.config.cjs` and `pm2 save`, waits for the model and prints the status. PM2's daemon runs in the boot task's session, which tools running in other sandboxes cannot reach, so do this step from your own shell.
 
 | PM2 name | What | Port |
 | --- | --- | --- |
