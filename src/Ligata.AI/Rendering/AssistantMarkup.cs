@@ -11,15 +11,15 @@ namespace Ligata.AI.Rendering;
 
 public static class AssistantMarkup
 {
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
     private const string RenderedKey = "Ligata.AI.Rendered";
 
     /// <summary>
     /// One deferred script tag. The settings snapshot lets the bubble render instantly, even on a
     /// statically exported page while the CMS is offline; live availability is fetched on open.
     /// </summary>
-    public static string Script(AssistantSettings settings, string apiBase, int baseTokens) =>
-        $"<script src=\"/assets/ligata-ai/ligata-ai.js?v={Version}\" defer data-ligata-ai data-api=\"{WebUtility.HtmlEncode(apiBase.TrimEnd('/'))}\" data-settings=\"{WebUtility.HtmlEncode(AssistantJson.Write(settings.Public(settings.Behaviour.ContextLimit, Controllers.PublicAssistantController.Limits(null), baseTokens)))}\"></script>";
+    public static string Script(AssistantSettings settings, string apiBase, int baseTokens, FeatureState features, RecaptchaSettings captcha) =>
+        $"<script src=\"/assets/ligata-ai/ligata-ai.js?v={Version}\" defer data-ligata-ai data-api=\"{WebUtility.HtmlEncode(apiBase.TrimEnd('/'))}\" data-settings=\"{WebUtility.HtmlEncode(AssistantJson.Write(settings.Public(settings.Behaviour.ContextLimit, Controllers.PublicAssistantController.Limits(null), baseTokens, features, captcha)))}\"></script>";
 
     public static string? Render(HttpContext context, AssistantStore store, AssistantOptions options, bool manual)
     {
@@ -28,10 +28,12 @@ public static class AssistantMarkup
         if (path.StartsWith("/umbraco", StringComparison.OrdinalIgnoreCase)) return null;
         AssistantSettings settings;
         try { settings = store.Settings().Settings; } catch { return null; } // never break page rendering
-        if (!settings.Enabled) return null;
+        var features = settings.Effective(options.Features);
+        if (!settings.Enabled || !features.Any) return null;
         if (!manual && (settings.Display.Mode == "manual" || !AssistantValidation.ShowsOn(settings.Display, path))) return null;
         context.Items[RenderedKey] = true;
-        return Script(settings, options.PublicApiBase, Controllers.PublicAssistantController.BaseTokens(settings, store));
+        var captcha = context.RequestServices.GetRequiredService<IOptions<RecaptchaSettings>>().Value;
+        return Script(settings, options.PublicApiBase, Controllers.PublicAssistantController.BaseTokens(settings, store, features), features, captcha);
     }
 }
 

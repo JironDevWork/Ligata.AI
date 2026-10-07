@@ -44,7 +44,10 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
         return true;
     }
 
-    /// <summary>kind: read (config/status), ask (questions), file (attachment processing).</summary>
+    /// <summary>
+    /// kind: read (config/status), ask (AI questions), file (attachment processing), contact (team requests
+    /// and emails), say (visitor chat messages), poll (live chat long polls), typing, avatar.
+    /// </summary>
     public bool Allow(HttpContext context, string kind)
     {
         var key = kind + ":" + Address(context);
@@ -52,8 +55,14 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
         {
             "ask" => (Math.Clamp(options.Value.MessagesPerTenMinutes, 1, 500), TimeSpan.FromMinutes(10)),
             "file" => (20, TimeSpan.FromMinutes(10)),
+            "contact" => (10, TimeSpan.FromMinutes(10)),
+            "say" => (Math.Clamp(options.Value.Support.VisitorMessagesPerMinute, 1, 120), TimeSpan.FromMinutes(1)),
+            "poll" => (900, TimeSpan.FromMinutes(10)),
+            "typing" => (400, TimeSpan.FromMinutes(10)),
+            "avatar" => (300, TimeSpan.FromMinutes(10)),
             _ => (240, TimeSpan.FromMinutes(10)),
         };
+        var global = kind switch { "read" => 5000, "poll" => 30000, "typing" => 10000, "avatar" => 5000, _ => 1000 };
         lock (gate)
         {
             bool Take(string bucket, int max, TimeSpan window)
@@ -61,7 +70,7 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
                 if (!limits.TryGetValue<Counter>(bucket, out var count)) limits.Set(bucket, count = new Counter(), new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = window, Size = 1 });
                 return ++count!.Value <= max;
             }
-            return Take("global:" + kind, kind == "read" ? 5000 : 1000, TimeSpan.FromMinutes(1)) && Take(key, maximum, period);
+            return Take("global:" + kind, global, TimeSpan.FromMinutes(1)) && Take(key, maximum, period);
         }
     }
 

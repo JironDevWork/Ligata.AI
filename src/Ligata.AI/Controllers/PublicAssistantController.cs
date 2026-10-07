@@ -5,6 +5,7 @@ using Ligata.AI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace Ligata.AI.Controllers;
 
@@ -13,7 +14,8 @@ public sealed record AttachmentRequest(string? Name, string? Data);
 /// <summary>Anonymous API for the chat bubble. Allowlisted origins only; no cookies or visitor storage.</summary>
 [ApiController, AllowAnonymous, Route("api/ligata-ai")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class PublicAssistantController(AssistantStore store, GatewayClient gateway, RequestGuard guard, ChatRelay relay, IMemoryCache cache) : ControllerBase
+public sealed class PublicAssistantController(AssistantStore store, GatewayClient gateway, RequestGuard guard, ChatRelay relay, IMemoryCache cache, SupportHub hub,
+    IOptions<AssistantOptions> options, IOptions<RecaptchaSettings> captcha) : ControllerBase
 {
     private IActionResult? Check(string kind, bool requireOrigin)
     {
@@ -36,24 +38,32 @@ public sealed class PublicAssistantController(AssistantStore store, GatewayClien
     {
         var denied = Check("read", false); if (denied != null) return denied;
         var (settings, version) = store.Settings();
-        return Ok(Build(settings, version, settings.Enabled ? await Status(token) : null, store, ignoreEnabled: false));
+        var features = settings.Effective(options.Value.Features);
+        return Ok(Build(settings, version, settings.Enabled && features.Assistant ? await Status(token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: false));
     }
 
-    public static object Build(AssistantSettings settings, int version, GatewayStatus? status, AssistantStore store, bool ignoreEnabled)
+    /// <summary>
+    /// state describes the AI (ready, busy, starting, degraded, offline) or, without AI, the contact
+    /// channels (ready). team.online is the number of team members in the Inbox right now.
+    /// </summary>
+    public static object Build(AssistantSettings settings, int version, GatewayStatus? status, AssistantStore store, FeatureState features, RecaptchaSettings captcha, int online, bool ignoreEnabled)
     {
-        var state = !settings.Enabled && !ignoreEnabled ? "disabled" : status == null ? "offline" : status.State == "ready" ? status.GpuHealthy ? status.QueueWaiting > 3 ? "busy" : "ready" : "degraded" : status.State == "loading" ? "starting" : "offline";
+        var state = (!settings.Enabled && !ignoreEnabled) || !features.Any ? "disabled"
+            : !features.Assistant ? "ready"
+            : status == null ? "offline" : status.State == "ready" ? status.GpuHealthy ? status.QueueWaiting > 3 ? "busy" : "ready" : "degraded" : status.State == "loading" ? "starting" : "offline";
         var contextLimit = Math.Min(settings.Behaviour.ContextLimit, status?.ContextTokens is > 0 ? status.ContextTokens : settings.Behaviour.ContextLimit);
         return new
         {
             version, state, queue = status == null ? null : new { waiting = status.QueueWaiting, running = status.QueueRunning, estimatedWaitSeconds = status.EstimatedWaitSeconds },
             vision = status?.Vision ?? false,
-            settings = settings.Public(contextLimit, Limits(status), BaseTokens(settings, store)),
+            team = features.Team ? new { online } : null,
+            settings = settings.Public(contextLimit, Limits(status), BaseTokens(settings, store, features), features, captcha),
         };
     }
 
     /// <summary>Approximate tokens used before the first question: instructions plus enabled knowledge.</summary>
-    public static int BaseTokens(AssistantSettings settings, AssistantStore store) =>
-        (int)Math.Ceiling(PromptBuilder.Guardrails(settings).Length / 3.6) + 120 + store.Knowledge().Where(k => k.Enabled).Sum(k => k.Tokens);
+    public static int BaseTokens(AssistantSettings settings, AssistantStore store, FeatureState features) =>
+        (int)Math.Ceiling(PromptBuilder.Guardrails(settings, PromptBuilder.Handoff(settings, features)).Length / 3.6) + 120 + store.Knowledge().Where(k => k.Enabled).Sum(k => k.Tokens);
 
     public static object Limits(GatewayStatus? status)
     {
@@ -91,7 +101,7 @@ public sealed class PublicAssistantController(AssistantStore store, GatewayClien
     {
         var denied = Check("file", true); if (denied != null) return denied;
         var (settings, _) = store.Settings();
-        if (!settings.Enabled || !settings.Behaviour.AllowPdfs) return StatusCode(415, Error("documents_disabled", "Documents are not accepted here."));
+        if (!settings.Enabled || !settings.Effective(options.Value.Features).Assistant || !settings.Behaviour.AllowPdfs) return StatusCode(415, Error("documents_disabled", "Documents are not accepted here."));
         byte[] bytes;
         try { bytes = Convert.FromBase64String(request.Data ?? ""); } catch (FormatException) { return BadRequest(Error("invalid_document", "The file could not be read.")); }
         try

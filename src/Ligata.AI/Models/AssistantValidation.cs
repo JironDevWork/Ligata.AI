@@ -19,6 +19,12 @@ public static partial class AssistantValidation
     private static readonly string[] Lengths = ["short", "balanced", "detailed"];
     private static readonly string[] Languages = ["auto", "en", "de", "fr", "it"];
     private static readonly string[] Modes = ["all", "include", "exclude", "manual"];
+    private static readonly string[] Fields = ["hidden", "optional", "required"];
+    public static readonly string[] AgentDisplays = ["full", "name", "alias", "anonymous"];
+
+    [GeneratedRegex(@"^[^@\s<>"",;:]+@[^@\s<>"",;:]+\.[^@\s<>"",;:]+$")] private static partial Regex EmailPattern();
+    public static bool Email(string? value) => value is { Length: > 2 and <= 200 } && EmailPattern().IsMatch(value);
+    private static bool SingleLine(string value) => !value.Contains('\n') && !value.Contains('\r');
 
     public static bool SafeUrl(string value, bool allowRelative = true) =>
         value == "" || (allowRelative && value.StartsWith('/') && !value.StartsWith("//") && !value.Contains('\\')) ||
@@ -42,7 +48,7 @@ public static partial class AssistantValidation
         Check(SafeUrl(i.AvatarUrl) && i.AvatarUrl.Length <= 500, "identity.avatarUrl", "The avatar must be an http(s) or site-relative URL.");
         Check(SafeUrl(i.PrivacyUrl) && i.PrivacyUrl.Length <= 500, "identity.privacyUrl", "The privacy link must be an http(s) or site-relative URL.");
         Check(SafeUrl(i.FallbackUrl) && i.FallbackUrl.Length <= 500, "identity.fallbackUrl", "The contact link must be an http(s) or site-relative URL.");
-        Check(i.FallbackEmail == "" || (i.FallbackEmail.Length <= 200 && Regex.IsMatch(i.FallbackEmail, @"^[^@\s<>""]+@[^@\s<>""]+\.[^@\s<>""]+$")), "identity.fallbackEmail", "Enter a valid contact email address.");
+        Check(i.FallbackEmail == "" || Email(i.FallbackEmail), "identity.fallbackEmail", "Enter a valid contact email address.");
 
         Length(b.Instructions, 20000, "behaviour.instructions", "The instructions");
         Length(b.SiteName, 120, "behaviour.siteName", "The website name");
@@ -75,6 +81,28 @@ public static partial class AssistantValidation
         Check(Modes.Contains(d.Mode), "display.mode", "Choose where the assistant appears.");
         Check(d.Paths.Count <= 50 && d.Paths.All(p => p.StartsWith('/') && p.Length <= 300 && !p.Contains("//")), "display.paths", "Paths must start with / (for example /contact/).");
         Check(SafeUrl(s.GatewayUrl, allowRelative: false) && s.GatewayUrl.Length <= 300, "gatewayUrl", "The gateway URL must be an http(s) address.");
+
+        var t = s.Support; var c = s.Contact; var n = s.Notifications;
+        Length(t.TeamName, 60, "support.teamName", "The team name");
+        Check(Fields.Contains(t.NameField), "support.nameField", "Choose whether the name is hidden, optional or required.");
+        Check(Fields.Contains(t.EmailField), "support.emailField", "Choose whether the email is hidden, optional or required.");
+        Length(t.WaitingMessage, 400, "support.waitingMessage", "The waiting message");
+        Length(t.OfflineMessage, 400, "support.offlineMessage", "The offline message");
+        Length(t.PrivacyNotice, 400, "support.privacyNotice", "The storage notice");
+        Check(AgentDisplays.Contains(t.AgentDisplay), "support.agentDisplay", "Choose how team members appear.");
+        Check(t.InactivityDays is >= 1 and <= 30, "support.inactivityDays", "Conversations close after 1–30 days without activity.");
+        Check(t.RetentionDays is >= 1 and <= 365, "support.retentionDays", "Closed conversations are kept 1–365 days.");
+        Length(c.Title, 80, "contact.title", "The form title");
+        Length(c.Intro, 400, "contact.intro", "The introduction");
+        Check(Fields.Contains(c.NameField), "contact.nameField", "Choose whether the name is hidden, optional or required.");
+        Length(c.SuccessMessage, 400, "contact.successMessage", "The success message");
+        Length(c.ConfirmationSubject, 150, "contact.confirmationSubject", "The confirmation subject");
+        Length(c.ConfirmationText, 4000, "contact.confirmationText", "The confirmation text");
+        Check(SingleLine(c.ConfirmationSubject), "contact.confirmationSubject", "The subject must be a single line.");
+        Check(n.Recipients.Count <= 10 && n.Recipients.All(Email), "notifications.recipients", "Use up to ten valid email addresses.");
+        Check(n.ReplyTo == "" || Email(n.ReplyTo), "notifications.replyTo", "Enter a valid reply-to address.");
+        Length(n.SubjectPrefix, 40, "notifications.subjectPrefix", "The subject prefix");
+        Check(SingleLine(n.SubjectPrefix), "notifications.subjectPrefix", "The subject prefix must be a single line.");
         if (errors.Count > 0) throw new AssistantValidationException(errors);
     }
 

@@ -5,6 +5,7 @@ using Ligata.AI.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Ligata.AI.Services;
 
@@ -22,7 +23,7 @@ public sealed class ChatValidationException(string code, string message, int sta
 /// Turns a visitor conversation into a gateway request (system prompt + knowledge + history) and relays
 /// the gateway's event stream to the browser. Nothing about the conversation is stored.
 /// </summary>
-public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ILogger<ChatRelay> logger)
+public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, IOptions<AssistantOptions> options, ILogger<ChatRelay> logger)
 {
     public const int MaxMessages = 120, MaxUserCharacters = 8000, MaxAssistantCharacters = 24000, MaxDocumentCharacters = 600_000, MaxImageBase64 = 7_400_000;
 
@@ -69,10 +70,12 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ILogg
     public async Task RunAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string visitor, bool countStats = true)
     {
         var token = http.RequestAborted;
+        var features = settings.Effective(options.Value.Features);
+        if (!features.Assistant) { await Json(http, 503, "disabled", "The AI assistant is switched off."); return; }
         List<object> messages;
         try
         {
-            var system = PromptBuilder.System(settings, store.EnabledKnowledge(), request.PageTitle, request.PagePath, DateTime.Now);
+            var system = PromptBuilder.System(settings, store.EnabledKnowledge(), request.PageTitle, request.PagePath, DateTime.Now, PromptBuilder.Handoff(settings, features));
             messages = Messages(request, settings, system);
         }
         catch (ChatValidationException e) { await Json(http, e.Status, e.Code, e.Message); return; }
@@ -103,6 +106,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ILogg
             http.Response.Headers.CacheControl = "no-store";
             http.Response.Headers["X-Accel-Buffering"] = "no";
             string? currentEvent = null; var finished = false;
+            var answer = new StringBuilder();
             try
             {
                 await using var stream = await response.Content.ReadAsStreamAsync(token);
@@ -110,10 +114,13 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ILogg
                 while (await reader.ReadLineAsync(token) is { } line)
                 {
                     if (line.StartsWith("event: ")) currentEvent = line[7..];
+                    else if (line.StartsWith("data: ") && currentEvent == "delta" && countStats && answer.Length < 200_000) answer.Append(Delta(line[6..]));
                     else if (line.StartsWith("data: ") && currentEvent is "done" or "error")
                     {
                         finished = true;
                         if (countStats) Record(currentEvent, line[6..]);
+                        // Questions the AI could not answer: a useful signal for missing knowledge (only counted, never stored).
+                        if (countStats && currentEvent == "done" && answer.ToString().Contains(PromptBuilder.TeamMarker)) store.Count(s => s.Suggested++);
                     }
                     await http.Response.WriteAsync(line + "\n", token);
                     if (line.Length == 0 || line.StartsWith(':')) await http.Response.Body.FlushAsync(token);
@@ -133,6 +140,12 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ILogg
                 try { await http.Response.WriteAsync("event: error\ndata: {\"code\":\"gateway_unavailable\",\"message\":\"The connection to the assistant was interrupted.\"}\n\n", token); } catch { }
             }
         }
+    }
+
+    private static string Delta(string json)
+    {
+        try { using var document = JsonDocument.Parse(json); return document.RootElement.TryGetProperty("text", out var text) ? text.GetString() ?? "" : ""; }
+        catch (JsonException) { return ""; }
     }
 
     private void Record(string kind, string json)

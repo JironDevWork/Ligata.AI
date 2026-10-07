@@ -33,7 +33,8 @@ public sealed record BudgetRequest(AssistantSettings Settings);
 [ApiVersion("1.0"), Route("umbraco/management/api/v{version:apiVersion}/ligata-ai")]
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(AssistantEditorFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, ApiKeyVault vault, ContentKnowledge content, ChatRelay relay, IOptions<AssistantOptions> options, IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache) : ManagementApiControllerBase
+public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, ApiKeyVault vault, ContentKnowledge content, ChatRelay relay, IOptions<AssistantOptions> options,
+    IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore) : ManagementApiControllerBase
 {
     private static object Problem(string message, Dictionary<string, string>? errors = null) => new { message, errors };
 
@@ -49,11 +50,39 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         };
     }
 
+    /// <summary>What the host allows and what is set up: shown in the backoffice so editors understand locked options.</summary>
+    private object Platform()
+    {
+        var c = captcha.Value;
+        return new
+        {
+            licensed = new { options.Value.Features.Assistant, options.Value.Features.LiveChat, options.Value.Features.Email },
+            captcha = new { ready = c.Ready, source = c.Source, siteKey = c.SiteKey.Length > 10 ? c.SiteKey[..6] + "…" + c.SiteKey[^4..] : c.SiteKey, consentMode = c.ConsentMode, cookiebotCategory = c.CookiebotCategory, hostnames = c.AllowedHostnames, minimumScore = c.MinimumScore },
+            email = new { ready = mailer.Ready, licensed = mailer.Licensed, backofficeUrl = mailer.Backoffice() },
+            agentGroups = options.Value.AgentGroups, editorGroups = options.Value.EditorGroups, online = hub.OnlineAgents(), limits = options.Value.Support,
+        };
+    }
+
     [HttpGet]
     public IActionResult Overview()
     {
         var (settings, version) = store.Settings();
-        return Ok(new { settings, version, connection = Connection(), knowledge = store.Knowledge(), defaults = new AssistantSettings() });
+        return Ok(new { settings, version, connection = Connection(), knowledge = store.Knowledge(), defaults = new AssistantSettings(), platform = Platform() });
+    }
+
+    /// <summary>Queues a test email to the given (or saved) team addresses and tries to send it at once.</summary>
+    [HttpPost("test-email")]
+    public async Task<IActionResult> TestEmail([FromBody] TestEmailRequest request, CancellationToken token)
+    {
+        if (!mailer.Licensed) return BadRequest(Problem("Email is not included in this installation (LigataAI:Features:Email)."));
+        var (settings, _) = store.Settings();
+        var to = (request.Recipients?.Count > 0 ? request.Recipients : settings.Notifications.Recipients).Where(AssistantValidation.Email).Take(10).ToList();
+        if (to.Count == 0) return BadRequest(Problem("Add at least one valid team email address first."));
+        if (!mailer.Ready) return BadRequest(Problem("SMTP is not configured on this server (Umbraco:CMS:Global:Smtp). Ask your developer to add it; emails wait in the queue until then."));
+        mailer.Test(request.Settings ?? settings, to);
+        await SupportWorker.SendAsync(HttpContext.RequestServices, token);
+        var last = supportStore.RecentEmails(1).FirstOrDefault();
+        return Ok(new { state = last?.State, error = last?.LastError, to });
     }
 
     [HttpPost("settings")]
@@ -109,7 +138,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     [HttpPost("budget")]
     public async Task<IActionResult> Budget([FromBody] BudgetRequest request, CancellationToken token)
     {
-        var instructions = PromptBuilder.Guardrails(request.Settings) + PromptBuilder.Context(request.Settings, "A page title of typical length here", "/a/typical/page/path/", DateTime.Now);
+        var instructions = PromptBuilder.Guardrails(request.Settings, PromptBuilder.Handoff(request.Settings, request.Settings.Effective(options.Value.Features))) + PromptBuilder.Context(request.Settings, "A page title of typical length here", "/a/typical/page/path/", DateTime.Now);
         var (tokens, estimated) = await Count(instructions, token);
         return Ok(new { instructionTokens = tokens + 16, estimated });
     }
@@ -227,7 +256,8 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     public async Task<IActionResult> PreviewConfig(CancellationToken token)
     {
         var (settings, version) = store.Settings();
-        return Ok(PublicAssistantController.Build(settings, version, await PublicAssistantController.CachedStatus(cache, gateway, token), store, ignoreEnabled: true));
+        var features = settings.Effective(options.Value.Features);
+        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, gateway, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true));
     }
 
     [HttpPost("attachments"), RequestSizeLimit(16_000_000)]
@@ -258,3 +288,4 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
 }
 
 public sealed record PreviewRequest(ChatRequest Chat, AssistantSettings? Settings);
+public sealed record TestEmailRequest(List<string>? Recipients, AssistantSettings? Settings);

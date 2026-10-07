@@ -13,6 +13,7 @@ using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Services;
 using Umbraco.Cms.Core.Strings;
+using Ligata.AI.Rendering;
 
 var assertions = 0;
 void Assert(bool condition, string message) { assertions++; if (!condition) throw new Exception("FAILED: " + message); }
@@ -105,6 +106,66 @@ using (var guard = new RequestGuard(Options.Create(new AssistantOptions { Allowe
     Assert(guard.Address(forwarded)!.ToString() == "127.0.0.1", "Cloudflare header is ignored unless trusted.");
 }
 static bool Dispose(IDisposable value) { value.Dispose(); return true; }
+
+// ---------- features, handoff and support settings ----------
+var allOn = new FeatureOptions();
+var withTeam = defaults with { Features = new() { Assistant = true, LiveChat = true, Email = true } };
+Assert(defaults.Effective(allOn) is { Assistant: true, LiveChat: false, Email: false }, "Live chat and email are off until an editor switches them on (safe upgrade).");
+Assert(withTeam.Effective(new FeatureOptions { LiveChat = false }) is { Assistant: true, LiveChat: false, Email: true, Team: true }, "Unlicensed features stay off whatever the editor chose.");
+Assert(withTeam.Effective(new FeatureOptions { Assistant = false }) is { Assistant: false, Team: true, Any: true }, "Live chat and email run without AI.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Support = defaults.Support with { AgentDisplay = "photo-only" } }), "Agent display must be known.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Support = defaults.Support with { InactivityDays = 0 } }), "Inactivity days bounded.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Support = defaults.Support with { RetentionDays = 999 } }), "Retention bounded.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Notifications = defaults.Notifications with { Recipients = ["team@example.ch", "nope"] } }), "Recipients must be email addresses.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Notifications = defaults.Notifications with { SubjectPrefix = "[Web]\nBcc: x@y.z" } }), "No header injection through the subject prefix.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Contact = defaults.Contact with { NameField = "maybe" } }), "Field modes are hidden/optional/required.");
+Assert(!AssistantValidation.Email("a@b.c\r\nBcc: x@y.z") && !AssistantValidation.Email("a,b@c.d") && AssistantValidation.Email("anna.muster@example.ch"), "Email validation refuses header injection and lists.");
+var publicJson = JsonSerializer.Serialize((withTeam with { Notifications = new() { Recipients = ["secret-team@example.ch"], ReplyTo = "reply@example.ch" } }).Public(65536, new { }, 100, withTeam.Effective(allOn), new RecaptchaSettings { SiteKey = "site", SecretKey = "SECRET-KEY", AllowedHostnames = ["x"] }), AssistantJson.Options);
+Assert(!publicJson.Contains("secret-team") && !publicJson.Contains("reply@example") && !publicJson.Contains("SECRET-KEY") && publicJson.Contains("\"siteKey\":\"site\""), "Public settings never contain recipients or the reCAPTCHA secret.");
+Assert(JsonSerializer.Serialize(defaults.Public(65536, new { }, 100, defaults.Effective(allOn), new RecaptchaSettings()), AssistantJson.Options).Contains("\"team\":null"), "No team settings are published while live chat and email are off.");
+Assert(PromptBuilder.Guardrails(withTeam, true).Contains(PromptBuilder.TeamMarker) && !PromptBuilder.Guardrails(withTeam, false).Contains(PromptBuilder.TeamMarker), "The handoff marker is only requested when a team channel exists.");
+Assert(PromptBuilder.Handoff(withTeam, withTeam.Effective(allOn)) && !PromptBuilder.Handoff(withTeam with { Support = withTeam.Support with { SuggestWhenUnsure = false } }, withTeam.Effective(allOn)) && !PromptBuilder.Handoff(defaults, defaults.Effective(allOn)), "Handoff follows the setting and the channels.");
+
+// ---------- reCAPTCHA (shared with Ligata.Forms settings) ----------
+var captchaConfig = new RecaptchaSettings { SiteKey = "s", SecretKey = "k", AllowedHostnames = ["www.example.ch"], MinimumScore = 0.5 };
+var now = DateTimeOffset.UtcNow;
+RecaptchaResponse Google(double score = 0.9, string action = RecaptchaVerifier.Action, string host = "www.example.ch", int ageSeconds = 5, string[]? errors = null) => new(true, score, action, host, now.AddSeconds(-ageSeconds), errors);
+Assert(RecaptchaVerifier.Accept(Google(), captchaConfig, now), "A good token is accepted.");
+Assert(!RecaptchaVerifier.Accept(Google(score: 0.3), captchaConfig, now), "Low scores are refused.");
+Assert(!RecaptchaVerifier.Accept(Google(action: "ligata_form_submit"), captchaConfig, now), "A Forms token cannot be replayed against the chat (different action).");
+Assert(!RecaptchaVerifier.Accept(Google(host: "evil.example"), captchaConfig, now), "Foreign hostnames are refused.");
+Assert(!RecaptchaVerifier.Accept(Google(ageSeconds: 600), captchaConfig, now), "Stale tokens are refused.");
+Assert(!RecaptchaVerifier.Accept(Google(errors: ["timeout-or-duplicate"]), captchaConfig, now), "Tokens with errors are refused.");
+
+// ---------- conversation tokens, emails, hub ----------
+var (visitorToken, tokenHash) = SupportStore.NewToken();
+var tokenRow = new ConversationRow { TokenHash = tokenHash };
+Assert(visitorToken.Length >= 43 && !tokenHash.Contains(visitorToken) && SupportStore.Verify(tokenRow, visitorToken), "Tokens are random, stored hashed and verifiable.");
+Assert(!SupportStore.Verify(tokenRow, visitorToken[..^1] + (visitorToken[^1] == 'A' ? 'B' : 'A')) && !SupportStore.Verify(tokenRow, null) && !SupportStore.Verify(tokenRow, tokenHash), "Wrong tokens, missing tokens and the hash itself are refused.");
+var mail = EmailTemplate.Render(defaults, "Hi <b>there</b>", "Line one\n\n<script>alert(1)</script>", [("Name", "<img src=x onerror=alert(1)>")], [("Message", "\"quoted\" & <tags>")], [("Visitor", "<a href='javascript:x'>x</a>")], ("Open", "https://cms.example.ch/umbraco"));
+Assert(!mail.Contains("<script>") && !mail.Contains("<img src=x") && !mail.Contains("<a href='javascript") && mail.Contains("&lt;script&gt;") && mail.Contains("&quot;quoted&quot; &amp; &lt;tags&gt;"), "Emails encode every visitor value.");
+Assert(AgentDirectory.Initials("Anna Muster-Keller") == "AM" && AgentDirectory.Initials("") == "", "Initials.");
+var hub = new SupportHub();
+var conversationId = Guid.NewGuid();
+var pulse = hub.For(conversationId);
+var waiting = pulse.WaitAsync(pulse.Version, TimeSpan.FromSeconds(5), CancellationToken.None);
+hub.Changed(conversationId);
+Assert(await waiting == 1, "A change wakes the waiting poll.");
+var watch = System.Diagnostics.Stopwatch.StartNew();
+Assert(await pulse.WaitAsync(1, TimeSpan.FromMilliseconds(150), CancellationToken.None) == 1 && watch.ElapsedMilliseconds >= 120, "Without changes the poll times out.");
+Assert(await pulse.WaitAsync(0, TimeSpan.FromSeconds(5), CancellationToken.None) == 1, "A missed change answers at once.");
+hub.Typing(conversationId, "visitor", true);
+Assert(hub.TypingIn(conversationId).Contains("visitor") && pulse.Version == 2, "Typing is visible and wakes the other side.");
+hub.Typing(conversationId, "visitor", false);
+Assert(hub.TypingIn(conversationId).Count == 0, "Typing stops.");
+var agentKey = Guid.NewGuid();
+hub.AgentSeen(agentKey, away: false);
+Assert(hub.OnlineAgents() == 1, "An agent with the inbox open is online.");
+hub.AgentSeen(agentKey, away: true);
+Assert(hub.OnlineAgents() == 0, "Away agents do not count as online.");
+using (var first = hub.BeginPoll("203.0.113.1", 2)) using (var second = hub.BeginPoll("203.0.113.1", 2))
+    Assert(first != null && second != null && hub.BeginPoll("203.0.113.1", 2) == null, "Concurrent polls per address are capped.");
+Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "Poll slots are released.");
 Console.WriteLine($"Domain/security checks passed: {assertions} assertions.");
 
 // ---------- Umbraco host (database integration and browser fixture) ----------
@@ -116,7 +177,10 @@ Directory.CreateDirectory(Path.GetDirectoryName(db)!);
 var credentialsFile = Path.Combine(Path.GetDirectoryName(db)!, "ai-test-admin.json");
 if (!System.IO.File.Exists(credentialsFile)) System.IO.File.WriteAllText(credentialsFile, JsonSerializer.Serialize(new { email = "admin@ligata-ai.test", password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(18)) + "aA1!" }));
 var credentials = JsonDocument.Parse(System.IO.File.ReadAllText(credentialsFile)).RootElement;
-var builder = WebApplication.CreateBuilder(args.Where(a => a != "--database" && a != db && a != "--serve").ToArray());
+var mailFolder = Path.Combine(Path.GetDirectoryName(db)!, "mail");
+Directory.CreateDirectory(mailFolder);
+var fakeCaptcha = args.Contains("--fake-captcha");
+var builder = WebApplication.CreateBuilder(args.Where(a => a != "--database" && a != db && a != "--serve" && a != "--fake-captcha").ToArray());
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
     ["ConnectionStrings:umbracoDbDSN"] = "Data Source=" + db + ";Cache=Shared;Foreign Keys=True;Pooling=True",
@@ -132,8 +196,23 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["Umbraco:CMS:Security:AllowConcurrentLogins"] = "true",
     ["LigataAI:AllowedOrigins:0"] = "http://127.0.0.1:5311",
     ["LigataAI:MessagesPerTenMinutes"] = "200",
+    ["LigataAI:BackofficeUrl"] = "http://127.0.0.1:5310",
+    // Test SMTP: messages are written as .eml files into .runtime/mail.
+    ["Umbraco:CMS:Global:Smtp:From"] = "chat@ligata-ai.test",
+    ["Umbraco:CMS:Global:Smtp:DeliveryMethod"] = "SpecifiedPickupDirectory",
+    ["Umbraco:CMS:Global:Smtp:PickupDirectoryLocation"] = mailFolder,
 });
+if (fakeCaptcha)
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        // Shaped like a Ligata.Forms configuration, so the shared settings are exercised.
+        ["LigataForms:Recaptcha:SiteKey"] = "test-site-key", ["LigataForms:Recaptcha:SecretKey"] = "test-secret",
+        ["LigataForms:Recaptcha:AllowedHostnames:0"] = "127.0.0.1", ["LigataForms:Recaptcha:ConsentMode"] = "explicit",
+    });
 builder.CreateUmbracoBuilder().AddBackOffice().AddWebsite().AddComposers().Build();
+// Tokens from the stubbed Google script start with "pass"; anything else is refused like a failed check.
+if (fakeCaptcha) builder.Services.AddSingleton<IContactCaptcha>(new FakeCaptcha());
+SupportWorker.Interval = TimeSpan.FromSeconds(2);
 var app = builder.Build();
 await app.BootUmbracoAsync();
 using (var scope = app.Services.CreateScope())
@@ -157,6 +236,126 @@ using (var scope = app.Services.CreateScope())
     Assert(store.Stats(1).Sum(s => s.Questions) >= 1, "Anonymous daily counters.");
     var groups = services.GetRequiredService<IUserGroupService>();
     Assert((await groups.GetAsync("admin"))!.AllowedSections.Contains(AssistantInstaller.SectionAlias), "The AI Assistant section is granted to administrators on install.");
+    Assert((await groups.GetAsync("editor"))!.AllowedSections.Contains(AssistantInstaller.SectionAlias), "The section is granted to agent groups (editors) for the Inbox.");
+
+    // ---------- team conversations ----------
+    var support = services.GetRequiredService<SupportService>();
+    var supportStore = services.GetRequiredService<SupportStore>();
+    var supportHub = services.GetRequiredService<SupportHub>();
+    var admin = Constants.Security.SuperUserKey;
+    var (baseSettings, baseVersion) = store.Settings();
+    var teamSettings = baseSettings with
+    {
+        Enabled = true, Features = new() { Assistant = true, LiveChat = true, Email = true },
+        Notifications = new() { Recipients = ["team@ligata-ai.test"] }, Contact = baseSettings.Contact with { SendConfirmation = true },
+    };
+    var teamVersion = store.Save(teamSettings, baseVersion);
+    var visitorA = "visitor-a-" + Guid.NewGuid().ToString("N")[..8];
+    CreateConversationRequest Request(string kind, string? name, string? email, string message, List<HistoryMessage>? history = null, string? captcha = null) =>
+        new(kind, name, email, message, history, "Prices", "/prices/", "de", captcha, Guid.NewGuid().ToString("N"));
+    var (chat, chatToken) = await support.CreateAsync(Request("chat", "Anna", "anna@example.test", "Can I talk to someone?", [new("user", "What does hosting cost per day?"), new("assistant", "I could not find that. [[team]]")]), visitorA, default);
+    Assert(chat is { State: "open", Kind: "chat", Name: "Anna" } && chat.LastVisitorSeq == chat.LastSeq && chat.NeedsReply, "A chat request starts open and needs a reply.");
+    var teamView = supportStore.Messages(chat.Id, 0, team: true);
+    Assert(teamView.Count(m => m.Kind == "history") == 2 && teamView.Any(m => m.Kind == "request") && teamView.Any(m => m.Author == "ai"), "The AI conversation before the request is attached for the team.");
+    Assert(supportStore.RecentEmails(10).Any(e => e.Kind == "team-chat" && e.ToAddress == "team@ligata-ai.test" && e.ReplyTo == "anna@example.test" && e.Body.Contains("/umbraco/section/ai-assistant/dashboard/inbox?conversation=" + chat.Id)), "The team is emailed (reply-to the visitor, link from trusted configuration).");
+    Rejects<SupportException>(() => support.VisitorMessage(chat.Id, "wrong-token-wrong-token-wrong-token-xx", "hi", null), "A wrong token gets nothing.");
+    var sent = support.VisitorMessage(chat.Id, chatToken, "Hello?", "client-1");
+    Assert(support.VisitorMessage(chat.Id, chatToken, "Hello?", "client-1").Seq == sent.Seq, "A retried send is stored once.");
+    Rejects<SupportException>(() => support.AgentMessage(chat.Id, admin, "Hi", note: false), "Team members join before writing to the visitor.");
+    support.AgentMessage(chat.Id, admin, "Internal: VIP customer", note: true);
+    var joined = support.Join(chat.Id, admin);
+    Assert(joined.State == "active" && joined.AgentKeys.Contains(admin), "Joining makes the conversation active.");
+    support.Join(chat.Id, admin);
+    Assert(supportStore.Messages(chat.Id, 0, team: true).Count(m => m.Kind == "join") == 1, "Joining twice adds one join line.");
+    support.AgentMessage(chat.Id, admin, "Hi Anna, hosting is CHF 25 per month.", note: false);
+    var answered = supportStore.Find(chat.Id)!;
+    Assert(!answered.NeedsReply && answered.FirstResponseUtc != null, "A reply clears 'needs reply' and records the first response.");
+    var visitorEvents = supportStore.Messages(chat.Id, 0, team: false);
+    Assert(visitorEvents.All(m => m.Kind is not ("note" or "history")) && visitorEvents.Any(m => m.Kind == "join") && visitorEvents.Any(m => m.Author == "agent" && m.Text.Contains("CHF 25")), "Visitors see joins and replies, never internal notes.");
+    var visitorJson = JsonSerializer.Serialize(support.VisitorView(answered, 0, store.Settings().Settings), AssistantJson.Options);
+    Assert(visitorJson.Contains("Fixture Admin") && !visitorJson.Contains(admin.ToString()) && !visitorJson.Contains("VIP customer"), "The visitor sees the team member's name, not their Umbraco key or notes.");
+    var agentRow = supportStore.Agent(admin);
+    agentRow.Display = "anonymous"; supportStore.SaveAgent(agentRow);
+    services.GetRequiredService<AgentDirectory>().Forget(admin, store.Settings().Settings);
+    var anonymousJson = JsonSerializer.Serialize(support.VisitorView(answered, 0, store.Settings().Settings), AssistantJson.Options);
+    Assert(!anonymousJson.Contains("Fixture Admin") && !anonymousJson.Contains(agentRow.PublicId.ToString()), "Anonymous team members show neither name nor id.");
+    agentRow.Display = "default"; supportStore.SaveAgent(agentRow);
+    services.GetRequiredService<AgentDirectory>().Forget(admin, store.Settings().Settings);
+    Assert(support.Leave(chat.Id, admin).State == "open", "Leaving returns the conversation to open.");
+    Assert(support.Close(chat.Id, admin).State == "closed", "The team can close a conversation.");
+    Rejects<SupportException>(() => support.VisitorMessage(chat.Id, chatToken, "still there?", null), "Closed conversations accept no messages.");
+    Assert(support.Reopen(chat.Id, admin).State == "open", "Closed conversations can be reopened.");
+
+    // limits per visitor
+    await support.CreateAsync(Request("chat", null, "x@example.test", "Second"), visitorA, default);
+    await support.CreateAsync(Request("chat", null, "x@example.test", "Third"), visitorA, default);
+    try { await support.CreateAsync(Request("chat", null, "x@example.test", "Fourth"), visitorA, default); Assert(false, "A fourth open conversation is refused."); }
+    catch (SupportException e) { Assert(e.Code == "too_many_open", "A fourth open conversation is refused: " + e.Code); }
+    try { await support.CreateAsync(Request("email", "Bob", null, "Please call me"), "visitor-b", default); Assert(false, "Email requests need an address."); }
+    catch (SupportException e) { Assert(e.Code == "invalid_email", "Email requests need an address."); }
+    var (emailConversation, _) = await support.CreateAsync(Request("email", "Bob", "bob@example.test", "Please call me back."), "visitor-b", default);
+    Assert(emailConversation.Kind == "email", "Email request stored for the team.");
+    var queued = supportStore.RecentEmails(20);
+    Assert(queued.Any(e => e.Kind == "team-email" && e.ReplyTo == "bob@example.test") && queued.Any(e => e.Kind == "visitor-confirmation" && e.ToAddress == "bob@example.test" && e.Body.Contains("Deine Nachricht")), "Email request: team notification plus a confirmation in the visitor's language.");
+    Rejects<SupportException>(() => support.AgentMessage(emailConversation.Id, admin, "hi", note: false), "Email requests are answered by email, not chat.");
+    support.EmailReply(emailConversation.Id, admin, "Hi Bob, we call you tomorrow.");
+    Assert(supportStore.RecentEmails(5).Any(e => e.Kind == "reply" && e.ToAddress == "bob@example.test" && e.Subject.StartsWith("Re: ")), "Email replies go to the visitor.");
+
+    // spam protection
+    var strict = new SupportService(supportStore, store, supportHub, services.GetRequiredService<SupportMailer>(), services.GetRequiredService<AgentDirectory>(), new FakeCaptcha(), services.GetRequiredService<IOptions<AssistantOptions>>());
+    try { await strict.CreateAsync(Request("email", null, "c@example.test", "spam?", captcha: "bot-token"), "visitor-c", default); Assert(false, "A failed spam check is refused."); }
+    catch (SupportException e) { Assert(e.Code == "captcha_failed", "A failed spam check is refused."); }
+    Assert((await strict.CreateAsync(Request("email", null, "c@example.test", "real person", captcha: "pass-123"), "visitor-c", default)).Row.Kind == "email", "A passed spam check is accepted.");
+
+    // switched-off channels
+    store.Save(store.Settings().Settings with { Features = new() { Assistant = true, LiveChat = false, Email = true } }, store.Settings().Version);
+    try { await support.CreateAsync(Request("chat", null, "d@example.test", "hello"), "visitor-d", default); Assert(false, "Live chat switched off."); }
+    catch (SupportException e) { Assert(e.Code == "channel_disabled", "A switched-off channel refuses requests."); }
+    store.Save(store.Settings().Settings with { Features = new() { Assistant = true, LiveChat = true, Email = true } }, store.Settings().Version);
+
+    // lifecycle: inactivity, retention, ghost team members
+    using (var scope2 = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+    {
+        scope2.Database.Execute("UPDATE LigataAIConversation SET UpdatedUtc=@0 WHERE Id=@1", DateTime.UtcNow.AddDays(-10), chat.Id);
+        scope2.Complete();
+    }
+    support.Maintain();
+    Assert(supportStore.Find(chat.Id) is { State: "closed", ClosedReason: "inactive" }, "Conversations without activity close automatically.");
+    using (var scope3 = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+    {
+        scope3.Database.Execute("UPDATE LigataAIConversation SET ClosedUtc=@0 WHERE Id=@1", DateTime.UtcNow.AddDays(-400), chat.Id);
+        scope3.Complete();
+    }
+    support.Maintain();
+    Assert(supportStore.Find(chat.Id) == null && supportStore.Messages(chat.Id, 0, team: true).Count == 0, "Closed conversations and their messages are deleted after the retention period.");
+    var ghost = (await support.CreateAsync(Request("chat", null, "g@example.test", "ghost test"), "visitor-g", default)).Row;
+    support.Join(ghost.Id, admin);
+    supportHub.AgentGone(admin);
+    support.Maintain();
+    Assert(supportStore.Find(ghost.Id)!.State == "active", "A team member who just left the backoffice is not removed at once.");
+
+    // outgoing mail through Umbraco SMTP (pickup folder)
+    var before = Directory.GetFiles(mailFolder, "*.eml").Length;
+    await SupportWorker.SendAsync(services, default);
+    Assert(Directory.GetFiles(mailFolder, "*.eml").Length > before && supportStore.RecentEmails(30).All(e => e.State == "sent"), "Queued emails are delivered through the host's SMTP settings.");
+
+    // dynamic backoffice manifest
+    var manifests = await new AssistantManifestReader(services.GetRequiredService<IOptions<AssistantOptions>>(), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync();
+    var manifestJson = JsonSerializer.Serialize(manifests);
+    var adminGroup = await groups.GetAsync("admin");
+    Assert(manifestJson.Contains("Ligata.AI.Inbox") && manifestJson.Contains("Ligata.AI.HeaderApp") && manifestJson.Contains("Umb.Condition.CurrentUser.GroupId") && manifestJson.Contains(adminGroup!.Key.ToString()), "The manifest adds Inbox, badge and group conditions for licensed features.");
+    var aiOnly = await new AssistantManifestReader(Options.Create(new AssistantOptions { Features = new() { LiveChat = false, Email = false } }), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync();
+    Assert(!JsonSerializer.Serialize(aiOnly).Contains("Ligata.AI.Inbox"), "Without live chat and email there is no Inbox.");
+    var supportOnly = JsonSerializer.Serialize(await new AssistantManifestReader(Options.Create(new AssistantOptions { Features = new() { Assistant = false } }), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync());
+    Assert(supportOnly.Contains("\"Support\"") && !supportOnly.Contains("AI Assistant"), "Without AI the section is called Support.");
+
+    // leave the fixture in a clean state for the browser tests
+    using (var scope4 = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+    {
+        scope4.Database.Execute("DELETE FROM LigataAIMessage"); scope4.Database.Execute("DELETE FROM LigataAIConversation"); scope4.Database.Execute("DELETE FROM LigataAIEmail");
+        scope4.Complete();
+    }
+    store.Save(baseSettings, store.Settings().Version);
     Console.WriteLine($"Database integration checks passed: {assertions} total assertions.");
 }
 if (!args.Contains("--serve")) return;
@@ -190,4 +389,13 @@ static async Task SeedAsync(IServiceProvider services)
         page.SetValue("bodyText", body); page.TemplateId = template.Id;
         content.Save(page); content.Publish(page, ["*"]);
     }
+}
+
+
+/// <summary>Stands in for Google in tests: tokens starting with "pass" succeed, everything else fails the check.</summary>
+sealed class FakeCaptcha : IContactCaptcha
+{
+    public bool Ready => true;
+    public Task<CaptchaResult> VerifyAsync(string? token, CancellationToken cancellationToken) =>
+        Task.FromResult(token?.StartsWith("pass") == true ? CaptchaResult.Accepted : CaptchaResult.Rejected);
 }
