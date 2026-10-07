@@ -14,11 +14,13 @@ Start-Sleep -Seconds 2
 
 # Runs a native tool. Windows PowerShell turns anything a tool writes to stderr (PM2 and npm print
 # notices there) into an error that 'Stop' would make fatal, so only the exit code decides.
+# Node tools write UTF-8; read it as such, or PM2's table borders turn into "Γöé".
 function Invoke-Tool([string]$exe, [string[]]$arguments, [switch]$AllowFailure) {
-  $previous = $ErrorActionPreference
+  $previous = $ErrorActionPreference, [Console]::OutputEncoding
   $ErrorActionPreference = 'Continue'
+  [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
   try { & $exe @arguments 2>&1 | ForEach-Object { "$_" } }
-  finally { $ErrorActionPreference = $previous }
+  finally { $ErrorActionPreference, [Console]::OutputEncoding = $previous }
   if ($LASTEXITCODE -ne 0 -and -not $AllowFailure) { throw "$(Split-Path $exe -Leaf) $($arguments -join ' ') failed (exit code $LASTEXITCODE)." }
 }
 
