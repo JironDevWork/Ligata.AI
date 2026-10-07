@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact } from './ui.js?v=0.1.0';
+import { number, compact } from './ui.js?v=0.2.0';
 
 export const behaviourView = {
   behaviourView() {
@@ -23,7 +23,7 @@ export const behaviourView = {
           </div>
         </section>
 
-        <section class="card">
+        ${this.licensedFeatures().assistant ? html`<section class="card">
           <header><div><h2>Instructions</h2><p class="muted">Tell the assistant about your business and how to behave. Ligata adds safety guardrails automatically.</p></div>${this.budget ? html`<span class="pill info" title="Instructions incl. guardrails">${number(this.budget.instructionTokens)} tokens${this.budget.estimated ? ' (est.)' : ''}</span>` : nothing}</header>
           ${this.text('behaviour.instructions', 'Your instructions', { rows: 12, max: 20000, placeholder: 'Example:\nWe are a web studio in Zurich. We build Umbraco websites for SMEs.\n- Recommend booking a free 30-minute call for project questions.\n- Prices start at CHF 4,800; never quote a final price.\n- Opening hours: Mon–Fri 8–17.' })}
           <div class="grid two section">
@@ -36,9 +36,9 @@ export const behaviourView = {
             ${this.toggle('behaviour.useMarkdown', 'Formatted answers', 'Lists, bold text and links.')}
             ${this.toggle('behaviour.thinking', 'Think before answering', 'More careful answers for complex questions, but noticeably slower for everyone sharing the GPU.')}
           </div>
-        </section>
+        </section>` : nothing}
 
-        <section class="card">
+        ${this.licensedFeatures().assistant ? html`<section class="card">
           <header><div><h2>Memory & limits</h2><p class="muted">Bigger limits allow longer chats and documents, but the first answer takes longer.</p></div></header>
           <div class="grid">
             ${this.range('behaviour.contextLimit', 'Conversation limit', 8192, maxContext, 4096, v => `${compact(v)} tokens`, `Everything the assistant keeps in mind at once: instructions, knowledge, the chat and attachments. The AI server allows up to ${compact(maxContext)}.`)}
@@ -51,10 +51,10 @@ export const behaviourView = {
             ${this.toggle('behaviour.allowPdfs', 'Visitors can attach PDFs', 'Text is extracted in memory for the conversation and never stored.')}
           </div>
           <div class="section">${this.budgetCard('Context budget', true)}</div>
-        </section>
+        </section>` : nothing}
 
         <section class="card">
-          <header><div><h2>When the assistant can’t help</h2><p class="muted">Shown when the AI is offline or busy, and suggested inside answers.</p></div></header>
+          <header><div><h2>When the assistant can’t help</h2><p class="muted">${this.licensedFeatures().liveChat || this.licensedFeatures().email ? 'Used when live chat and the email form are off: shown when the AI is offline and suggested inside answers.' : 'Shown when the AI is offline or busy, and suggested inside answers.'}</p></div></header>
           <div class="grid two">
             ${this.text('identity.fallbackEmail', 'Contact email', { type: 'email', placeholder: 'info@example.ch' })}
             ${this.text('identity.fallbackUrl', 'Contact page', { placeholder: '/kontakt/' })}
@@ -66,7 +66,7 @@ export const behaviourView = {
           <header><div><h2>Privacy</h2></div></header>
           ${this.text('identity.privacyNotice', 'Notice under the input', { rows: 2, max: 600 })}
           <div class="section">${this.text('identity.privacyUrl', 'Privacy policy link', { placeholder: '/datenschutz/' })}</div>
-          <small class="muted">Conversations are never stored. Visitors' IP addresses are pseudonymised before they reach the AI server and are only used to allow one question at a time per visitor. Mention the assistant in your privacy policy.</small>
+          <small class="muted">Conversations with the AI are never stored on the server. Conversations with your team are stored for the period set under Team &amp; email and then deleted. Visitors' IP addresses are pseudonymised and only used for limits. Mention the chat in your privacy policy.</small>
         </section>
 
         <section class="card">

@@ -15,6 +15,24 @@ using Umbraco.Cms.Core.Services;
 using Umbraco.Cms.Core.Strings;
 using Ligata.AI.Rendering;
 
+// --prompt: print the system prompt the package builds for the fixture site (with the team handoff), for real-model checks.
+if (args.Contains("--prompt"))
+{
+    var site = new AssistantSettings() with
+    {
+        Features = new() { Assistant = true, LiveChat = true, Email = true },
+        Behaviour = new AssistantBehaviour { SiteName = "Ligata Test Studio", Instructions = "We are a small web studio. Recommend booking a free 30-minute call for project questions." },
+    };
+    var pages = new List<KnowledgeRow>
+    {
+        new() { Title = "Ligata Test Studio", Kind = "page", Source = "/", Text = "We are a small web studio in Dielsdorf near Zurich. We build fast Umbraco websites for small businesses.\nOur office is open Monday to Friday, 8:00 to 17:00." },
+        new() { Title = "Prices", Kind = "page", Source = "/prices/", Text = "A small business website starts at CHF 4,800. Hosting costs CHF 25 per month. A free 30-minute call can be booked at /kontakt/." },
+        new() { Title = "Contact", Kind = "page", Source = "/contact/", Text = "Email: hello@ligata-test.example. Phone: +41 44 000 00 00." },
+    };
+    Console.Write(PromptBuilder.System(site, pages, "Ligata Test Studio", "/", DateTime.Now, team: true));
+    return;
+}
+
 var assertions = 0;
 void Assert(bool condition, string message) { assertions++; if (!condition) throw new Exception("FAILED: " + message); }
 void Rejects<T>(Action action, string message) where T : Exception { try { action(); } catch (T) { assertions++; return; } throw new Exception("FAILED (no " + typeof(T).Name + "): " + message); }
@@ -208,7 +226,7 @@ if (supportFixture)
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     {
         ["LigataAI:Support:OpenConversationsPerVisitor"] = "100", ["LigataAI:Support:ConversationsPerVisitorPerDay"] = "1000",
-        ["LigataAI:Support:EmailsPerVisitorPerHour"] = "500", ["LigataAI:Support:ContactRequestsPerTenMinutes"] = "1000", ["LigataAI:Support:VisitorMessagesPerMinute"] = "120",
+        ["LigataAI:Support:EmailsPerVisitorPerHour"] = "500", ["LigataAI:Support:ContactRequestsPerTenMinutes"] = "1000", ["LigataAI:Support:VisitorMessagesPerMinute"] = "120", ["LigataAI:ReadsPerTenMinutes"] = "20000",
     });
 if (fakeCaptcha)
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -256,8 +274,12 @@ using (var scope = app.Services.CreateScope())
     {
         Enabled = true, Features = new() { Assistant = true, LiveChat = true, Email = true },
         Notifications = new() { Recipients = ["team@ligata-ai.test"] }, Contact = baseSettings.Contact with { SendConfirmation = true },
+        Support = baseSettings.Support with { AgentDisplay = "full", AgentsChoose = true },
     };
     var teamVersion = store.Save(teamSettings, baseVersion);
+    // Browser runs may have left the fixture administrator with another display: start from the site default.
+    var resetAgent = services.GetRequiredService<SupportStore>().Agent(Constants.Security.SuperUserKey);
+    resetAgent.Display = "default"; resetAgent.Away = false; services.GetRequiredService<SupportStore>().SaveAgent(resetAgent);
     var visitorA = "visitor-a-" + Guid.NewGuid().ToString("N")[..8];
     CreateConversationRequest Request(string kind, string? name, string? email, string message, List<HistoryMessage>? history = null, string? captcha = "pass-fixture") =>
         new(kind, name, email, message, history, "Prices", "/prices/", "de", captcha, Guid.NewGuid().ToString("N"));
@@ -375,6 +397,15 @@ using (var scope = app.Services.CreateScope())
             Notifications = new() { Recipients = ["team@ligata-ai.test"] }, Contact = baseSettings.Contact with { SendConfirmation = true },
             Identity = baseSettings.Identity with { PrivacyUrl = "/privacy/" },
         }, store.Settings().Version);
+    // A profile picture for the fixture administrator, set through Umbraco's normal upload path.
+    if (supportFixture && string.IsNullOrEmpty((await services.GetRequiredService<IUserService>().GetAsync(admin))?.Avatar))
+    {
+        var upload = Guid.NewGuid();
+        var portrait = FixtureAvatar();
+        await services.GetRequiredService<ITemporaryFileService>().CreateAsync(new Umbraco.Cms.Core.Models.TemporaryFile.CreateTemporaryFileModel { Key = upload, FileName = "fixture-admin.png", OpenReadStream = () => new MemoryStream(portrait) });
+        var avatar = await services.GetRequiredService<IUserService>().SetAvatarAsync(admin, upload);
+        if (avatar != Umbraco.Cms.Core.Services.OperationStatus.UserOperationStatus.Success) throw new Exception("Setting the fixture avatar failed: " + avatar);
+    }
     Console.WriteLine($"Database integration checks passed: {assertions} total assertions.");
 }
 if (!args.Contains("--serve")) return;
@@ -410,6 +441,47 @@ static async Task SeedAsync(IServiceProvider services)
     }
 }
 
+
+/// <summary>A small RGB portrait (PNG) for the fixture administrator's profile picture.</summary>
+static byte[] FixtureAvatar()
+{
+    const int size = 128;
+    var stride = size * 3 + 1;
+    var raw = new byte[size * stride];
+    for (var y = 0; y < size; y++)
+        for (var x = 0; x < size; x++)
+        {
+            var i = y * stride + 1 + x * 3;
+            var face = (x - 64) * (x - 64) + (y - 52) * (y - 52) < 25 * 25;
+            var hair = (x - 64) * (x - 64) + (y - 44) * (y - 44) < 29 * 29 && y < 44;
+            var body = (x - 64) * (x - 64) / 2.2 + (y - 132) * (y - 132) < 46 * 46;
+            (byte r, byte g, byte b) colour = hair ? ((byte)70, (byte)48, (byte)36) : face ? ((byte)238, (byte)198, (byte)168) : body ? ((byte)14, (byte)124, (byte)134) : ((byte)(214 - y / 4), (byte)(228 - y / 5), (byte)236);
+            (raw[i], raw[i + 1], raw[i + 2]) = colour;
+        }
+    using var png = new MemoryStream();
+    png.Write([137, 80, 78, 71, 13, 10, 26, 10]);
+    void Chunk(string type, byte[] data)
+    {
+        var typed = Encoding.ASCII.GetBytes(type).Concat(data).ToArray();
+        png.Write(BitConverter.GetBytes(System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(data.Length)));
+        png.Write(typed);
+        uint crc = 0xFFFFFFFF;
+        foreach (var b in typed) { crc ^= b; for (var k = 0; k < 8; k++) crc = (crc & 1) != 0 ? 0xEDB88320 ^ (crc >> 1) : crc >> 1; }
+        png.Write(BitConverter.GetBytes(System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(~crc)));
+    }
+    var header = new byte[13];
+    System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, size);
+    System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4), size);
+    header[8] = 8; header[9] = 2;
+    Chunk("IHDR", header);
+    using (var compressed = new MemoryStream())
+    {
+        using (var zlib = new ZLibStream(compressed, CompressionLevel.Optimal, true)) zlib.Write(raw);
+        Chunk("IDAT", compressed.ToArray());
+    }
+    Chunk("IEND", []);
+    return png.ToArray();
+}
 
 /// <summary>Stands in for Google in tests: tokens starting with "pass" succeed, everything else fails the check.</summary>
 sealed class FakeCaptcha : IContactCaptcha

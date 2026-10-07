@@ -131,7 +131,8 @@ public sealed class SupportService(SupportStore store, AssistantStore settingsSt
         var typing = hub.TypingIn(row.Id).Where(w => w != "visitor").Select(w => Guid.TryParse(w, out var k) ? directory.Card(k, settings).Name ?? "" : "").ToList();
         return new
         {
-            id = row.Id, kind = row.Kind, state = row.State, seq = row.LastSeq,
+            // Messages are read after the row: a message written in between is included, so report the highest sequence actually sent.
+            id = row.Id, kind = row.Kind, state = row.State, seq = Math.Max(row.LastSeq, events.Count > 0 ? events[^1].Seq : 0),
             agents = row.AgentKeys.Select(k => directory.Card(k, settings).Public()).ToList(),
             typing, online = hub.OnlineAgents(),
             events = events.Select(m => new { m.Seq, m.Kind, m.Author, text = m.Kind is "message" or "email" ? m.Text : null, at = DateTime.SpecifyKind(m.CreatedUtc, DateTimeKind.Utc), agent = m.Author == "agent" ? Agent(m.AgentKey) : null, m.ClientId }),

@@ -138,7 +138,8 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     [HttpPost("budget")]
     public async Task<IActionResult> Budget([FromBody] BudgetRequest request, CancellationToken token)
     {
-        var instructions = PromptBuilder.Guardrails(request.Settings, PromptBuilder.Handoff(request.Settings, request.Settings.Effective(options.Value.Features))) + PromptBuilder.Context(request.Settings, "A page title of typical length here", "/a/typical/page/path/", DateTime.Now);
+        var team = PromptBuilder.Handoff(request.Settings, request.Settings.Effective(options.Value.Features));
+        var instructions = PromptBuilder.Guardrails(request.Settings, team) + PromptBuilder.Context(request.Settings, "A page title of typical length here", "/a/typical/page/path/", DateTime.Now, team);
         var (tokens, estimated) = await Count(instructions, token);
         return Ok(new { instructionTokens = tokens + 16, estimated });
     }

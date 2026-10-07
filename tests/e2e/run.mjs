@@ -276,10 +276,9 @@ await check('when the AI gateway is down, visitors see the offline message and c
   execSync(gatewayDown, { stdio: 'ignore' });
   await site.goto(base + '/');
   await widget().locator('.launcher').click();
-  await widget().locator('[data-action=new]').click().catch(() => {});
-  site.once('dialog', d => d.accept());
+  await site.evaluate(() => window.LigataAI.reset()); // a fresh AI conversation
   await widget().locator('.notice', { hasText: 'not available' }).waitFor({ timeout: 15000 });
-  assert(await widget().locator('a.chip[href^="mailto:"]').count() === 1, 'email fallback offered');
+  assert(await widget().locator('.notice a.chip[href^="mailto:"], .notice [data-open-sheet]').count() >= 1, 'a way to reach a person (the team when live chat/email are on, else the fallback email)');
   assert(await widget().locator('textarea').isDisabled(), 'input disabled while offline');
   await shot(site, '09-offline');
   if (process.env.START_GATEWAY_CMD) execSync(process.env.START_GATEWAY_CMD, { stdio: 'ignore' });

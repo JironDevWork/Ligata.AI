@@ -1,11 +1,17 @@
 # Ligata.AI
 
-A website assistant for **Umbraco 17.6 / .NET 10**, answered by a self-hosted **Gemma 4 12B** on the Ligata mini PC. Like Ligata.Forms and Ligata.Cloudflare, it is a NuGet package: install it into any Umbraco site, open the new **AI Assistant** section, connect it with an API key and switch it on.
+A website chat for **Umbraco 17.6 / .NET 10** with three features that work together or on their own:
+
+- **AI assistant** answered by a self-hosted **Gemma 4 12B** on the Ligata mini PC.
+- **Live chat with your team**: when the AI cannot help, or a visitor asks for a person, the team answers in an **Inbox** inside Umbraco.
+- **Email form**: visitors leave a message that arrives in your mailbox and in the Inbox.
+
+Like Ligata.Forms and Ligata.Cloudflare, it is a NuGet package: install it into any Umbraco site, open the new section, switch on what you need.
 
 ```
 visitor ──► chat bubble ──► the site's Umbraco (this package) ──► Ligata AI gateway ──► Gemma 4 12B on the RTX 3060
             Shadow DOM      settings, knowledge, secret key,       API keys, one answer      weights, KV cache and
-            widget          visitor limits, prompt building        at a time, streaming      vision all in VRAM
+            widget          Inbox, email queue, visitor limits     at a time, streaming      vision all in VRAM
 ```
 
 | Part | Where | Docs |
@@ -13,70 +19,130 @@ visitor ──► chat bubble ──► the site's Umbraco (this package) ──
 | Umbraco package | `src/Ligata.AI` | this file |
 | Shared gateway | `gateway/` | [gateway/README.md](gateway/README.md) |
 | Model runtime and benchmarks | `model/` | [model/README.md](model/README.md) |
-| Plan and decisions | `docs/` | [docs/PLAN.md](docs/PLAN.md) |
+| Plan and decisions | `docs/` | [docs/PLAN.md](docs/PLAN.md), [docs/SUPPORT.md](docs/SUPPORT.md) (team handoff, live chat, email) |
 
 ## What editors get
 
-**AI Assistant** is a new top-level section (administrators get it automatically on install):
+A new top-level section, **AI Assistant** (or **Support** when the AI is not licensed). Administrators get it on install; editors get the Inbox.
 
-- **Overview**: getting-started checklist, live status of the shared AI server, and a **context budget** bar showing how a conversation's tokens are split between instructions, knowledge, the chat and the answer.
-- **Appearance**: six themes (Ligata, Midnight, Ocean, Forest, Sunset, Graphite) plus ten editable colours, light/dark/automatic mode, bottom-left or bottom-right, bubble icon/size/label, teaser message, window size, corners, font, memory meter, queue position, animations, branding. A **live preview** on a sample page (desktop/mobile, light/dark page) uses the unsaved settings and answers real questions.
-- **Behaviour**: name, avatar, greeting, suggested questions, interface language, your own instructions (with token count), tone, answer length, stay-on-topic, page awareness, formatting, optional thinking mode, creativity, conversation limit, knowledge budget, longest answer, screenshot/PDF uploads, offline message and contact options, privacy notice, and where the bubble appears (every page, only on…, everywhere except…, or manual).
-- **Knowledge**: upload PDF, Word (.docx), text, Markdown, CSV, JSON or HTML; write text; or **import published website pages** in one click. Every source shows its exact token cost, can be switched off and reordered, and the knowledge budget is enforced.
-- **Connection**: gateway address and API key (stored encrypted, never shown again, never sent to browsers), live test.
-- **Insights**: anonymous daily counters: conversations, questions, answered, average answer time, attachments, turned away while busy/offline, failures.
+- **Inbox** (live):
+  - conversations that need a reply, active chats, mine, all open and closed, with search and chat/email filters;
+  - the visitor's conversation with the AI before the request;
+  - join and leave, replies, internal notes, email replies, close/reopen/delete;
+  - the visitor's typing and whether they are on the website now;
+  - sound and desktop notifications, and an Available/Away switch.
+  - **How I appear** lets each team member choose what visitors see: name and photo from their Umbraco profile, name only, a nickname, or anonymous (team name only).
+- **Header badge**: a chat icon in the Umbraco header counts conversations that need a reply, from anywhere in the backoffice.
+- **Settings**, organised in tabs:
+  - **Overview**: getting-started checklist per feature, team inbox numbers, AI server status and the **context budget**.
+  - **Appearance**:
+    - six themes and ten editable colours, light/dark/automatic mode, position;
+    - bubble icon, size and label, teaser, window size, corners, font;
+    - memory meter, queue position, animations, a chime for team replies and branding.
+    - A **live preview** uses unsaved settings, answers real AI questions and simulates team requests.
+  - **Behaviour**:
+    - name, avatar, greeting, suggested questions, language;
+    - AI instructions, tone, answer length and limits;
+    - uploads, fallback contacts, privacy notice, and where the bubble appears.
+  - **Team & email**:
+    - feature switches for AI, live chat and the email form;
+    - team name, when the AI offers the team, a permanent "Talk to a person" button, which visitor details to ask for (hidden/optional/required), email required when nobody is online;
+    - waiting/offline texts, how team members appear and whether they may choose;
+    - email form texts and an optional visitor confirmation;
+    - team notification addresses, reply-to and subject prefix, with a test email;
+    - conversation lifetime (close after N days without messages, delete closed conversations after M days), spam protection and who answers.
+  - **Knowledge**: upload PDF, Word, text, Markdown, CSV, JSON or HTML, write text, or import published pages; every source shows its token cost.
+  - **Connection**: gateway address and API key (stored encrypted, never sent to browsers), live test.
+  - **Insights**: anonymous daily counters for the AI (questions, answer time, busy/offline, failures) and the team (chat requests, emails, replies, average first response, questions the AI could not answer).
 
 ## What visitors get
 
-A chat bubble (bottom left by default) that streams answers with safe Markdown, suggested questions, screenshot and PDF attachments (paste, drag and drop or pick), a **memory meter** showing how much of the conversation's context is used, their **place in line** when the shared GPU is busy, progress while a long document is read, a stop button, copy buttons, and clear offline/busy messages with contact options. It is keyboard and screen-reader friendly, respects reduced motion, opens full screen on phones, and isolates its styles in Shadow DOM so the host site's CSS cannot break it. The conversation text survives page changes within the tab (sessionStorage); attachments are never kept. Interface languages: English, German, French, Italian; the assistant answers in the visitor's language.
+A chat bubble (bottom left by default). Styles are isolated in Shadow DOM, and it is keyboard and screen-reader friendly, full screen on phones and available in English, German, French and Italian.
+
+- **AI answers**:
+  - streamed, with safe Markdown;
+  - suggested questions;
+  - screenshot and PDF attachments;
+  - a **memory meter**;
+  - their **place in line** while the shared GPU is busy, with reading progress for long documents.
+- **Talk to a person**: when the AI cannot answer, a card offers *Chat with our team* or *Send us an email*. A person icon in the header does the same at any time.
+  - **The form**: name and email per the settings, the message prefilled with their question, and a storage notice. Spam protection only after consent.
+  - **The live chat**: it continues in the same thread. The visitor sees who joins (name/photo as the team member chose), typing indicators, replies live, and when someone leaves or closes.
+  - **When they're away**: a reply that arrives while the chat is closed shows an unread badge and a teaser with the reply, plus an optional chime.
+- **Email form**: name (optional), email and message, with a confirmation in the thread (and by email if enabled).
+- **Several conversations**: a list of AI, team and email threads on this device, with status, unread markers and the option to remove or end them. Threads survive page changes and reloads, and are forgotten after the configured inactivity period. Attachments are never kept.
+- **Without AI**: the bubble opens a contact page with *Chat with our team* (showing whether someone is online) and *Send us an email*.
 
 ## Install
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.1.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.1.0 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.2.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.2.0 --source C:/path/to/feed
 ```
 
-Normal `.AddComposers()` discovers everything. The migration creates three tables (`LigataAISettings`, `LigataAIKnowledge`, `LigataAIStat`) in the CMS database and grants the section to the `admin` group. Publish/restart once so the backoffice files (`App_Plugins/LigataAI`) and the widget (`/assets/ligata-ai/ligata-ai.js`) are copied.
+Normal `.AddComposers()` discovers everything.
+- **Database**: the migrations create seven tables in the CMS database: settings, knowledge, counters, conversations, messages, team members and the email queue.
+- **Access**: the section is granted to the `admin` group, and to the agent groups for the Inbox.
+- **Files**: publish/restart once so the backoffice files (`App_Plugins/LigataAI`) and the widget (`/assets/ligata-ai/ligata-ai.js`) are copied.
 
-Then, in the backoffice: **AI Assistant → Connection** → gateway address and the key from `node cli.mjs keys create "Site name"` on the gateway machine → **Save & test** → add knowledge → preview → **Show on website**.
+Then, in the backoffice:
+- **For the AI**: **Settings → Connection** → gateway address and the key from `node cli.mjs keys create "Site name"` on the gateway machine → add knowledge.
+- **For the team**: **Settings → Team & email** → switch on live chat and/or the email form, then add team email addresses.
+- Check the preview, then use **Show on website**.
 
-## Host configuration (optional)
+## Host configuration
 
 ```json
 {
   "LigataAI": {
+    "Features": { "Assistant": true, "LiveChat": true, "Email": true },
     "PublicApiBase": "https://cms.example.ch/api/ligata-ai",
     "AllowedOrigins": ["https://www.example.ch"],
+    "BackofficeUrl": "https://cms.example.ch",
     "TrustCloudflareLoopbackHeader": true,
-    "MessagesPerTenMinutes": 20,
     "EditorGroups": ["admin"],
-    "AutoInject": true
+    "AgentGroups": ["admin", "editor"],
+    "MessagesPerTenMinutes": 20,
+    "Support": { "OpenConversationsPerVisitor": 3, "ConversationsPerVisitorPerDay": 6, "EmailsPerVisitorPerHour": 3, "MaxOpenConversations": 500 }
   }
 }
 ```
 
-- Pages rendered by this Umbraco need no configuration: the bubble is added before `</body>` automatically (any template using the MVC tag helpers), and requests from the same host are accepted.
-- **Static exports** (e.g. Ligata.Cloudflare on Pages): set `PublicApiBase` to the CMS's public URL and list the public site in `AllowedOrigins`. The exported HTML contains only public appearance settings, never prompts, knowledge or keys. Add `/assets/ligata-ai/ligata-ai.js` to the exporter's additional assets, and allow the widget's `data-api` CMS endpoint in its origin-leak check like the Forms endpoint. When the CMS is unreachable, the static bubble still opens and shows the offline message with your contact options.
+- **Features** decide what this installation includes, for example when a customer only books live chat. Editors can switch included features off, never on. Without `Assistant` there is no AI, no gateway connection and no Knowledge/Connection tabs; the bubble is a contact point for the team.
+- **Email** uses the site's normal Umbraco SMTP settings (`Umbraco:CMS:Global:Smtp`, like Ligata.Forms). Emails wait in a queue (5 retries) until SMTP works. Links to the Inbox in team emails use `BackofficeUrl`, an absolute `PublicApiBase` or `Umbraco:CMS:WebRouting:UmbracoApplicationUrl`, never the request's host name.
+- **Spam protection** reuses the Ligata.Forms reCAPTCHA v3 settings (`LigataForms:Recaptcha`: site key, secret, hostnames, minimum score, consent mode explicit/Cookiebot), so nothing is configured twice; `LigataAI:Recaptcha` (same shape) overrides them. The chat uses its own action (`ligata_ai_contact`), so a Forms token cannot be replayed against it.
+- **Pages rendered by this Umbraco** need no configuration: the bubble is added before `</body>` automatically, and same-host requests are accepted.
+- **Static exports** (e.g. Ligata.Cloudflare on Pages): set `PublicApiBase` to the CMS's public URL and list the public site in `AllowedOrigins`. Add `/assets/ligata-ai/ligata-ai.js` to the exporter's additional assets, and allow the widget's `data-api` CMS endpoint in its origin-leak check.
 - `LigataAI:GatewayUrl` / `LigataAI:ApiKey` (better: environment variable `LigataAI__ApiKey`) override the backoffice values.
-- Manual placement: set *Where it appears* to **Manual** and add `@await Component.InvokeAsync("LigataAssistant")` to a template. JavaScript API: `LigataAI.open()`, `LigataAI.close()`, `LigataAI.ask("…")`, `LigataAI.reset()`.
+- **Manual placement**: set *Where it appears* to **Manual** and add `@await Component.InvokeAsync("LigataAssistant")` to a template.
+- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")`, `reset()`, `contact("chat" | "email")`.
 
 ## Security and privacy
 
-- Browsers only talk to their own Umbraco site. The site calls the gateway server-to-server with its API key (Data Protection-encrypted in the database, or from configuration).
-- Public endpoints: exact-origin CORS allowlist (plus same host), per-IP rate limits, **one question at a time per visitor**, size limits on messages and attachments, no cookies. Visitor IPs are HMAC-pseudonymised with a per-site secret before leaving the server.
-- No conversation content is stored, by the package or the gateway. Statistics are anonymous daily counters. PDFs are converted to text in memory; screenshots are downscaled in the browser and processed in memory.
-- The system prompt contains Ligata's guardrails (stay on topic, no invented prices/promises, attachments are information not instructions, don't reveal instructions) before the owner's instructions and the knowledge. Visitors cannot send system messages.
-- Mention the assistant in your privacy policy (processing on your own server, no storage, purpose: answering questions).
+- **Traffic and keys.** Browsers only talk to their own Umbraco site. The site calls the gateway server-to-server with its API key (Data Protection-encrypted, or from configuration).
+- **Public endpoints.** Exact-origin CORS allowlist (plus same host), per-IP and per-visitor limits, one AI question at a time per visitor, size limits, no cookies. Visitor IPs are HMAC-pseudonymised with a per-site secret.
+- **Team conversations.**
+  - Reached only with a random 256-bit token, kept by the visitor's browser and stored as a SHA-256 hash; ids alone grant nothing.
+  - Limits: open chats and requests per visitor, emails per hour, messages per minute and per conversation, open conversations site-wide, concurrent connections.
+  - Closed after N days without messages and deleted M days later.
+  - Internal notes are never sent to visitors.
+- **Team members.** They are identified to visitors only as they choose. The Umbraco user key is never exposed, and photos are served only while a team member shows them.
+- **AI conversations** are not stored on the server. Statistics are anonymous daily counters (including how often the AI could not answer, never the question). PDFs and screenshots are processed in memory.
+- **Escaping.** All visitor text is escaped in the widget, the backoffice and emails. Email subjects cannot carry line breaks.
+- **Your privacy policy** should mention the chat:
+  - AI processing on your own server, without storage;
+  - team conversations stored for your configured period;
+  - Google reCAPTCHA, if used.
 
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 47 domain/security checks
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]
-cd tests/e2e; npm ci; node run.mjs                                             # 23 browser checks in Microsoft Edge
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 80 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # + 40 database checks
+cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
+node support.mjs                                                               # team handoff, inbox and email browser suite
 cd gateway; npm test                                                           # 33 gateway tests
 ```
 
-The database mode installs a disposable Umbraco 17 site (SQLite under `.runtime/`, generated fixture admin), seeds three pages and checks the store, versioning, knowledge and section grant; `--serve` keeps it running for the browser suite. See [docs/TESTING.md](docs/TESTING.md).
+See [docs/TESTING.md](docs/TESTING.md).

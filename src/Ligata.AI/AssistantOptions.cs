@@ -19,6 +19,8 @@ public sealed class AssistantOptions
     public bool TrustCloudflareLoopbackHeader { get; set; }
     /// <summary>Questions one visitor IP may ask per ten minutes.</summary>
     public int MessagesPerTenMinutes { get; set; } = 20;
+    /// <summary>Status checks per IP per ten minutes (open chats check every 30 s; offices share one IP).</summary>
+    public int ReadsPerTenMinutes { get; set; } = 600;
     /// <summary>Injects the chat bubble into every rendered page with a body tag. Disable to place it manually.</summary>
     public bool AutoInject { get; set; } = true;
     /// <summary>Address of this CMS for links in team emails, e.g. https://cms.example.ch. Falls back to an absolute PublicApiBase or WebRouting:UmbracoApplicationUrl.</summary>

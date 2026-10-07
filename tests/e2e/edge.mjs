@@ -44,7 +44,7 @@ const open = async (host, name) => {
   const widget = page.locator('#ligata-ai');
   await widget.locator('.launcher').click();
   await widget.locator('textarea').waitFor();
-  await widget.locator('[data-action=new]').click().catch(() => {});
+  await page.evaluate(() => window.LigataAI.reset()); // a fresh AI conversation
   page.on('dialog', d => d.accept());
   return { page, widget, name };
 };

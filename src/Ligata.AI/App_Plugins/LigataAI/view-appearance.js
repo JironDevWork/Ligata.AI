@@ -1,6 +1,6 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon } from './ui.js?v=0.1.0';
-import { themes, colorFields } from './themes.js?v=0.1.0';
+import { icon } from './ui.js?v=0.2.0';
+import { themes, colorFields } from './themes.js?v=0.2.0';
 
 export const appearanceView = {
   appearanceView() {
@@ -48,6 +48,7 @@ export const appearanceView = {
             ${this.toggle('appearance.showContextMeter', 'Show the memory meter', 'A slim bar showing how much of the conversation memory is used.')}
             ${this.toggle('appearance.showQueuePosition', 'Show queue position', 'When the shared AI is busy, visitors see their place in line and the expected wait.')}
             ${this.toggle('appearance.animations', 'Animations', 'Visitors who prefer reduced motion never see animations.')}
+            ${this.licensedFeatures().liveChat ? this.toggle('appearance.sound', 'Chime when the team replies', 'A soft sound when a team member answers while the chat is closed or the tab is in the background.') : nothing}
             ${this.toggle('appearance.showBranding', 'Show “Private AI by Ligata”')}
           </div>
           <details class="section"><summary><strong>Advanced</strong></summary>

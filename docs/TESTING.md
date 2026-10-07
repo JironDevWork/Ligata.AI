@@ -8,10 +8,11 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 33 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 47 assertions
+# Package domain and security checks (no database): 80 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
-# Real Umbraco 17 host: unattended install on SQLite, migration, section grant, store, knowledge, counters: 54 assertions
+# Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
+# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest: 120 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
@@ -21,7 +22,33 @@ node gateway/cli.mjs keys create "Test host" > .runtime/gateway-dev/created.txt 
 cd tests/e2e; npm ci; node run.mjs
 ```
 
-The database mode refuses any path outside a `.runtime` folder or not named `ai-test.db`.
+The database mode refuses any path outside a `.runtime` folder or not named `ai-test.db`. Email goes to an SMTP pickup folder next to the database (`.runtime/mail/*.eml`), never to a real mail server.
+
+### Team handoff, live chat and email (browser)
+
+```bash
+bash tests/e2e/restart-host.sh          # host on :5310 with --support-fixture (all features on, team address) and --fake-captcha
+node gateway/test/mock-server.mjs 1298   # plus the dev gateway on :1220 as above
+cd tests/e2e && node support.mjs         # visitor and team member side by side, 16 checks, screenshots in .runtime/e2e/support
+bash restart-host.sh --LigataAI:Features:Assistant=false && node support-noai.mjs   # live chat and email without AI
+```
+
+`--fake-captcha` adds reCAPTCHA settings shaped like a Ligata.Forms configuration and a verifier that accepts tokens starting with `pass`; the browser suite replaces Google's script with a stub, so no request leaves the machine. `--support-fixture` raises the per-visitor limits because every test browser shares 127.0.0.1 (the limits themselves are covered by the database checks). The mock model answers questions about a "person" or something "unknown" with the handoff marker, split across stream chunks.
+
+| Check | What is verified |
+| --- | --- |
+| Handoff | An AI answer it cannot give shows the *talk to our team* card; the `[[team]]` marker is never visible, even while streaming |
+| Request form | Message prefilled with the question; email required while nobody is online; reCAPTCHA only after consent; validation messages |
+| Notification | The team email arrives through Umbraco SMTP with the visitor as reply-to and an Inbox link from trusted configuration |
+| Conversations | Waiting team chat and a new AI chat side by side in the list |
+| Email form | German interface, confirmation in the thread |
+| Inbox | Header badge count, search, AI history above the request, visitor presence |
+| Live chat | Join shows the member's name to the visitor; typing indicators both ways; messages both ways without reloading; internal notes stay internal; *anonymous* display shows only the team name |
+| Resilience | Reload keeps the conversation and its live connection; a reply while the chat is closed shows a badge and a teaser |
+| Leave/close | The visitor sees both and gets *New conversation* |
+| Phone | Full-screen panel without horizontal scrolling; team online makes email optional; a failed spam check is shown and can be retried; the visitor ends the chat and the team sees it |
+| Email reply | Answering an email request from the Inbox sends `Re: …` to the visitor |
+| Settings | Team & email tab with three features, display choice saved, test email sent |
 
 ### Against the real GPU
 

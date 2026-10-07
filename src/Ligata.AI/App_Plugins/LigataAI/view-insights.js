@@ -1,7 +1,12 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.1.0';
+import { icon, number, compact } from './ui.js?v=0.2.0';
 
 export const insightsView = {
+  duration(ms) {
+    const minutes = ms / 60000;
+    return minutes < 1 ? `${Math.round(ms / 1000)} s` : minutes < 90 ? `${Math.round(minutes)} min` : `${(minutes / 60).toFixed(1)} h`;
+  },
+
   insightsView() {
     const rows = this.stats || [];
     const sum = key => rows.reduce((n, r) => n + (r[key] || 0), 0);
@@ -29,6 +34,17 @@ export const insightsView = {
           <div class="stat"><b>${compact(sum('promptTokens') + sum('completionTokens'))}</b><small>Tokens processed</small></div>
         </div>
       </section>
+      ${this.licensedFeatures().liveChat || this.licensedFeatures().email ? html`<section class="card">
+        <header><div><h2>Team</h2><p class="muted">Requests for a person and how quickly your team answered.</p></div></header>
+        <div class="stats">
+          <div class="stat"><b>${number(sum('chatRequests'))}</b><small>Chat requests</small></div>
+          <div class="stat"><b>${number(sum('emailRequests'))}</b><small>Email messages</small></div>
+          <div class="stat"><b>${number(sum('agentReplies'))}</b><small>Team replies</small></div>
+          <div class="stat"><b>${sum('responses') ? this.duration(sum('firstResponseMs') / sum('responses')) : '—'}</b><small>Average first response</small></div>
+          ${this.licensedFeatures().assistant ? html`<div class="stat"><b>${number(sum('suggested'))}</b><small>AI could not answer (offered the team)</small></div>` : nothing}
+        </div>
+        ${this.licensedFeatures().assistant && sum('suggested') > 5 ? html`<small class="muted">Questions the AI could not answer are a good hint for missing knowledge. Only the count is kept, never the question.</small>` : nothing}
+      </section>` : nothing}
       <section class="card">
         <header><div><h2>Per day</h2></div><div class="row"><span class="pill" style="color:var(--c-chat)"><i></i>Answered</span><span class="pill" style="color:var(--c-answer)"><i></i>Busy / offline</span><span class="pill bad"><i></i>Failed</span></div></header>
         ${rows.length ? html`<div class="chart" role="img" aria-label="Questions per day">${days.map(d => html`<div title="${d.day}: ${d.answered} answered, ${d.busy + d.offline} busy/offline, ${d.failed} failed">

@@ -291,7 +291,7 @@
   .icon-btn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--lai-muted);flex:none;transition:background .15s,color .15s}.icon-btn:hover:not(:disabled){background:var(--lai-bg);color:var(--lai-text)}
   .send{background:var(--lai-accent);color:var(--lai-on-accent)}.send:hover:not(:disabled){background:var(--lai-accent);color:var(--lai-on-accent);filter:brightness(1.08)}
   .icon-btn:disabled{opacity:.4;cursor:not-allowed}
-  .closed-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--lai-surface);font-size:13px;color:var(--lai-muted)}
+  .closed-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--lai-surface);font-size:13px;color:var(--lai-muted)}.closed-bar .chip{white-space:nowrap;flex:none}
   .footer{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:11px;color:var(--lai-muted);line-height:1.4}
   .footer a{color:inherit}.footer .brand{white-space:nowrap;opacity:.8}
   .privacy-link{display:inline-flex;align-items:center;gap:3px;margin-left:2px;white-space:nowrap;text-decoration:none;font-weight:600;color:var(--lai-text)!important;opacity:.72;transition:opacity .15s}
@@ -418,7 +418,7 @@
               <button type="submit" class="icon-btn send" title="${t.send}" aria-label="${t.send}">${svg('send')}</button>
             </div>
           </form>
-          <div class="closed-bar hidden"><span></span><button type="button" class="chip" data-action="new">${svg('plus')}${t.startNew}</button></div>
+          <div class="closed-bar hidden"><span></span><button type="button" class="chip" data-action="new">${svg('plus')}${t.newChat}</button></div>
           <div class="footer"><span class="privacy"><span class="privacy-text">${escape(settings.privacyNotice || '')}</span>${settings.privacyUrl ? ` <a class="privacy-link" href="${escape(safeHref(settings.privacyUrl) || '#')}" target="_blank" rel="noopener">${svg('shield')}<span>${t.privacy}</span></a>` : ''}</span>${look.showBranding ? `<span class="brand">${F.ai ? t.poweredBy : t.poweredByTeam}</span>` : ''}</div>
         </div>
       </div>
@@ -770,6 +770,7 @@
     state.lastConfig = Date.now();
     try {
       const response = await request('config', { signal: AbortSignal.timeout(10000) });
+      if (response.status === 429) { updateMeter(); return; } // throttled: keep the last known state, a busy network is not an outage
       if (!response.ok) throw new Error(String(response.status));
       const data = await response.json();
       if (data.settings) {
@@ -1125,6 +1126,7 @@
   // ---------- live chat with the team ----------
   function handleEvent(c, ev, initial) {
     const at = Date.parse(ev.at) || Date.now();
+    if (c.messages.some(m => m.seq === ev.seq)) return null; // already shown (a response can overlap the next one)
     if (ev.kind === 'message' && ev.author === 'visitor') {
       const mine = ev.clientId && c.messages.find(m => m.role === 'user' && m.clientId === ev.clientId);
       if (mine) { mine.pending = false; mine.failed = false; mine.seq = ev.seq; return null; }
@@ -1161,7 +1163,7 @@
       const message = handleEvent(c, ev, initial);
       if (message) added.push(message);
     }
-    c.team.seq = Math.max(c.team.seq || 0, view.seq || 0);
+    c.team.seq = Math.max(c.team.seq || 0, view.seq || 0, ...(view.events || []).map(e => e.seq));
     const changed = added.length || before !== JSON.stringify([c.team.state, c.team.agents, c.team.typing]);
     if (!changed) return;
     if (added.length) touch(c);
@@ -1173,6 +1175,7 @@
         if (!added.length) { const typing = typingRow(c); if (typing) { log.append(typing); scrollDown(); } }
       }
       updateComposer();
+      if (c.team.state === 'closed') scrollDown(true); // the closed bar replaced the composer: keep the last event in view
     } else if (state.view === 'list') renderList();
     renderHeader();
     persist();

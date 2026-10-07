@@ -61,7 +61,13 @@ Download the new build/model into `runtime`, adjust `model/profile.json`, check 
 
 ## On a client website (Umbraco)
 
-- Install the `Ligata.AI` NuGet package, publish, open **AI Assistant**.
-- Backups: settings, knowledge and counters are three tables in the CMS database, so the site's normal database backups include them. The API key is stored encrypted with the site's Data Protection keys; after restoring onto another server, paste the key again.
-- Upgrading the package: publish the site; the migration is versioned and idempotent. Raise the widget version query string (`?v=`) with every release so browsers fetch the new script.
-- Static hosting (Ligata.Cloudflare): add `/assets/ligata-ai/ligata-ai.js` to `AdditionalAssets`, set `LigataAI:PublicApiBase` and `AllowedOrigins`, and allow the widget's `data-api` endpoint in the exporter's origin check (like the Forms endpoint).
+- Install the `Ligata.AI` NuGet package, publish, open **AI Assistant** (or **Support** without the AI feature).
+- **What the customer booked**: set `LigataAI:Features` (`Assistant`, `LiveChat`, `Email`). Editors can switch included features off, never on. Live chat and the email form start switched off after an upgrade from 0.1, so no site suddenly promises a team that is not there.
+- **Email** (notifications, the email form, replies from the Inbox) uses the site's `Umbraco:CMS:Global:Smtp` settings, like Ligata.Forms. Without SMTP, emails wait in the queue; *Settings → Team & email* shows the state and has a test button. Set `LigataAI:BackofficeUrl` (or an absolute `PublicApiBase`) so team emails link to the Inbox.
+- **reCAPTCHA**: nothing to do when the site already has `LigataForms:Recaptcha`; the chat reuses it (own action `ligata_ai_contact`). Register the public hostnames in Google's console as for Forms.
+- **Who answers**: members of `LigataAI:AgentGroups` (default admin, editor) see the Inbox and the header badge; `EditorGroups` (default admin) also see the settings. Each member's name and photo come from their Umbraco profile; *How I appear* in the Inbox lets them show less.
+- **Online status**: visitors see the team as online while at least one member who is *Available* has the backoffice open in a browser tab (the header badge keeps the connection). Members who close Umbraco leave their chats automatically after 15 minutes.
+- **Keep the site running** (IIS: *AlwaysRunning* / no idle timeout) so the background worker closes inactive conversations, deletes old ones and sends queued email even without traffic.
+- **Backups**: settings, knowledge, counters, conversations and the email queue are tables in the CMS database, so the site's normal database backups include them. Conversations are deleted after the retention period you set, which also bounds what backups contain. The API key is stored encrypted with the site's Data Protection keys; after restoring onto another server, paste the key again.
+- **Upgrading the package**: publish the site; the migrations are versioned and idempotent (0.1 → 0.2 adds four tables and new counters). The widget URL carries the package version, so browsers fetch the new script.
+- **Static hosting** (Ligata.Cloudflare): add `/assets/ligata-ai/ligata-ai.js` to `AdditionalAssets`, set `LigataAI:PublicApiBase` and `AllowedOrigins`, and allow the widget's `data-api` endpoint in the exporter's origin check (like the Forms endpoint). Live chat works from static pages too: it only needs the CMS API to be reachable.
