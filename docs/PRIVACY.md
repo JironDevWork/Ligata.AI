@@ -55,7 +55,7 @@ Everything that decides the legal setup lives in the site's configuration, so ed
 | `CookiebotCategory` | `preferences`, `statistics` or `marketing`. |
 | `ConsentDays` | How long a consent is valid (1 to 400). |
 | `KeepConsentRecordsDays` | How long consent records are kept as proof. Records never followed by a question are deleted after one day. |
-| `GpuOperator`, `GpuOperatorCountry` | GPU mode: who runs the AI server and where (ISO code such as `CH` or `DE`). Shown to visitors before they agree and used in the privacy policy text. |
+| `GpuOperator`, `GpuOperatorCountry` | GPU mode: who runs the AI server and where, as an ISO code. Defaults: `Ligata` and `CH` (the Ligata GPU in Switzerland). Shown to visitors before they agree and used in the privacy policy text. In API mode the recipient is always Anthropic in the USA. |
 | `CookiebotIgnore` | Adds `data-cookieconsent="ignore"` to the chat's script tag (see Cookiebot). |
 
 In the backoffice (**Privacy** tab) editors can change the wording of the consent request (empty uses the translated default that names the recipient), the notice under the input, the privacy policy link, and ask everyone again. The tab also shows how many visitors agreed, asked and withdrew in the last 30 days.
@@ -85,7 +85,7 @@ The chat works with Cookiebot in both consent modes.
 - The operator of the GPU server processes visitors' messages on the website owner's behalf.
 - Conclude a data processing agreement (Art. 28 GDPR; in Switzerland a contract under Art. 9 DSG) between the website owner (controller) and the operator (processor).
 - The technical measures below can serve as its annex.
-- Set `GpuOperatorCountry`. If the server is outside the EU/EEA and Switzerland, add the transfer basis to the privacy policy (the generated text marks the spot).
+- `GpuOperatorCountry` is `CH` by default. Switzerland has an EU adequacy decision, so no transfer clause is needed. If the server is ever moved outside the EU/EEA and Switzerland, add the transfer basis to the privacy policy (the generated text marks the spot).
 
 **API mode (Claude).**
 - Anthropic's Data Processing Addendum, including the EU Standard Contractual Clauses, is part of Anthropic's Commercial Terms for the API.

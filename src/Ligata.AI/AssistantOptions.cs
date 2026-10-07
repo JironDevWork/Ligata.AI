@@ -59,8 +59,8 @@ public sealed class PrivacyOptions
     public int KeepConsentRecordsDays { get; set; } = 1095;
     /// <summary>Who runs the AI server in GPU mode. Visitors are told this name before they agree.</summary>
     public string GpuOperator { get; set; } = "Ligata";
-    /// <summary>Country of the AI server in GPU mode, in English (e.g. Switzerland). Shown to visitors and in the privacy policy text.</summary>
-    public string GpuOperatorCountry { get; set; } = "";
+    /// <summary>Country of the AI server in GPU mode as an ISO code (the Ligata GPU runs in Switzerland). Shown to visitors and in the privacy policy text.</summary>
+    public string GpuOperatorCountry { get; set; } = "CH";
     /// <summary>Adds data-cookieconsent="ignore" to the script tag so Cookiebot's automatic blocking leaves the chat alone (it handles consent itself and sets no cookies).</summary>
     public bool CookiebotIgnore { get; set; } = true;
 

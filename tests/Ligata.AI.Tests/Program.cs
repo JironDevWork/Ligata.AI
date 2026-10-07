@@ -130,6 +130,8 @@ var aiOn = new AssistantFeatures { Assistant = true, LiveChat = true, Email = tr
 var aiSettings = defaults with { Enabled = true, Features = aiOn };
 var aiFeatures = aiSettings.Effective(new FeatureOptions());
 Assert(new PrivacyOptions().RequireConsent && new PrivacyOptions().ConsentMode == "explicit" && new PrivacyOptions().CookiebotIgnore, "Consent is required by default, asked in the chat.");
+Assert(new PrivacyOptions() is { GpuOperator: "Ligata", GpuOperatorCountry: "CH" } && VisitorConsent.Version(aiSettings, new AssistantOptions()) == VisitorConsent.Version(aiSettings, gpuSite), "The Ligata GPU in Switzerland is the default recipient in GPU mode.");
+Assert(JsonSerializer.Serialize(VisitorConsent.Public(aiSettings, new AssistantOptions(), aiFeatures), AssistantJson.Options).Contains("\"country\":\"CH\"") && PrivacyPolicy.Generate("de", aiSettings, new AssistantOptions(), new RecaptchaSettings()).Contains("Server von Ligata in der Schweiz"), "Visitors and the privacy policy name Switzerland without extra configuration.");
 var gpuVersion = VisitorConsent.Version(aiSettings, gpuSite);
 Assert(gpuVersion.StartsWith("gpu.1.") && VisitorConsent.Version(aiSettings, apiSite).StartsWith("api.1."), "The consent version names the engine and the revision.");
 Assert(VisitorConsent.Version(aiSettings, new AssistantOptions { Privacy = new() { GpuOperator = "Other GmbH", GpuOperatorCountry = "CH" } }) != gpuVersion
@@ -161,7 +163,7 @@ Assert(policyDe.Contains("KI-Server von Ligata") && policyDe.Contains("in der Sc
 Assert(!policyDe.Contains("<!--") && !policyDe.Contains("{{") && !policyDe.Contains("Für Website-Betreiber") && !policyDe.Contains("reCAPTCHA"), "No template markup, notes or switched-off services remain.");
 var policyEn = PrivacyPolicy.Generate("en", aiSettings with { Features = new() { Assistant = true } }, apiSite, new RecaptchaSettings());
 Assert(policyEn.Contains("Anthropic, PBC") && policyEn.Contains("Claude Haiku 5.5") && policyEn.Contains("Standard Contractual Clauses") && !policyEn.Contains("Chat with our team") && !policyEn.Contains("AI server run by"), "English policy for the Claude API without team features.");
-var withCaptcha = PrivacyPolicy.Generate("de", aiSettings, new AssistantOptions { Privacy = new() { ConsentMode = "cookiebot", CookiebotCategory = "statistics" } }, new RecaptchaSettings { SiteKey = "k", SecretKey = "s", AllowedHostnames = ["x"], ConsentMode = "cookiebot", CookiebotCategory = "marketing" });
+var withCaptcha = PrivacyPolicy.Generate("de", aiSettings, new AssistantOptions { Privacy = new() { ConsentMode = "cookiebot", CookiebotCategory = "statistics", GpuOperatorCountry = "" } }, new RecaptchaSettings { SiteKey = "k", SecretKey = "s", AllowedHostnames = ["x"], ConsentMode = "cookiebot", CookiebotCategory = "marketing" });
 Assert(withCaptcha.Contains("Google reCAPTCHA") && withCaptcha.Contains("„Marketing“") && withCaptcha.Contains("„Statistiken“") && withCaptcha.Contains("[Land]"), "reCAPTCHA, Cookiebot categories and a missing server country are spelled out.");
 var noConsent = PrivacyPolicy.Generate("en", aiSettings, new AssistantOptions { Privacy = new() { RequireConsent = false } }, new RecaptchaSettings());
 Assert(noConsent.Contains("[please add") && !noConsent.Contains("Proof of your consent"), "Without consent the legal basis is left for the operator.");

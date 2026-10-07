@@ -13,8 +13,8 @@ Then restart the site and check **AI Assistant → Settings → Connection → T
 
 ## Privacy: running the GPU for other websites
 
-In GPU mode, visitors are told that their messages go to an AI server run by `LigataAI:Privacy:GpuOperator` (default "Ligata") in `GpuOperatorCountry`, and they agree before anything is sent. For every website you connect:
-- Set `"LigataAI": { "Privacy": { "GpuOperatorCountry": "CH" } }` (the country of this machine) in the website's configuration.
+In GPU mode, visitors are told that their messages go to an AI server run by `LigataAI:Privacy:GpuOperator` (default "Ligata") in `GpuOperatorCountry` (default `CH`, where this machine runs), and they agree before anything is sent. For every website you connect:
+- Nothing to configure while the GPU stays in Switzerland. If it moves, set `"LigataAI": { "Privacy": { "GpuOperatorCountry": "…" } }` on every website (visitors are then asked again).
 - Sign a data processing agreement (Art. 28 GDPR) with the website owner: you process their visitors' messages on their behalf. [docs/PRIVACY.md](PRIVACY.md#technical-and-organisational-measures-software) lists the technical measures for its annex.
 - Keep the gateway reachable over HTTPS only (tunnel or reverse proxy); it listens on 127.0.0.1.
 
