@@ -14,7 +14,7 @@ public sealed record AttachmentRequest(string? Name, string? Data);
 /// <summary>Anonymous API for the chat bubble. Allowlisted origins only; no cookies or visitor storage.</summary>
 [ApiController, AllowAnonymous, Route("api/ligata-ai")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class PublicAssistantController(AssistantStore store, GatewayClient gateway, RequestGuard guard, ChatRelay relay, IMemoryCache cache, SupportHub hub,
+public sealed class PublicAssistantController(AssistantStore store, AssistantEngine engine, RequestGuard guard, ChatRelay relay, IMemoryCache cache, SupportHub hub,
     IOptions<AssistantOptions> options, IOptions<RecaptchaSettings> captcha) : ControllerBase
 {
     private IActionResult? Check(string kind, bool requireOrigin)
@@ -39,25 +39,25 @@ public sealed class PublicAssistantController(AssistantStore store, GatewayClien
         var denied = Check("read", false); if (denied != null) return denied;
         var (settings, version) = store.Settings();
         var features = settings.Effective(options.Value.Features);
-        return Ok(Build(settings, version, settings.Enabled && features.Assistant ? await Status(token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: false));
+        return Ok(Build(settings, version, settings.Enabled && features.Assistant ? await Status(token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: false, engine.Mode));
     }
 
     /// <summary>
     /// state describes the AI (ready, busy, starting, degraded, offline) or, without AI, the contact
     /// channels (ready). team.online is the number of team members in the Inbox right now.
     /// </summary>
-    public static object Build(AssistantSettings settings, int version, GatewayStatus? status, AssistantStore store, FeatureState features, RecaptchaSettings captcha, int online, bool ignoreEnabled)
+    public static object Build(AssistantSettings settings, int version, GatewayStatus? status, AssistantStore store, FeatureState features, RecaptchaSettings captcha, int online, bool ignoreEnabled, string engine)
     {
         var state = (!settings.Enabled && !ignoreEnabled) || !features.Any ? "disabled"
             : !features.Assistant ? "ready"
-            : status == null ? "offline" : status.State == "ready" ? status.GpuHealthy ? status.QueueWaiting > 3 ? "busy" : "ready" : "degraded" : status.State == "loading" ? "starting" : "offline";
+            : status == null ? "offline" : status.State == "busy" ? "busy" : status.State == "ready" ? status.GpuHealthy ? status.QueueWaiting > 3 ? "busy" : "ready" : "degraded" : status.State == "loading" ? "starting" : "offline";
         var contextLimit = Math.Min(settings.Behaviour.ContextLimit, status?.ContextTokens is > 0 ? status.ContextTokens : settings.Behaviour.ContextLimit);
         return new
         {
             version, state, queue = status == null ? null : new { waiting = status.QueueWaiting, running = status.QueueRunning, estimatedWaitSeconds = status.EstimatedWaitSeconds },
             vision = status?.Vision ?? false,
             team = features.Team ? new { online } : null,
-            settings = settings.Public(contextLimit, Limits(status), BaseTokens(settings, store, features), features, captcha),
+            settings = settings.Public(contextLimit, Limits(status, engine), BaseTokens(settings, store, features), features, captcha, engine),
         };
     }
 
@@ -65,20 +65,20 @@ public sealed class PublicAssistantController(AssistantStore store, GatewayClien
     public static int BaseTokens(AssistantSettings settings, AssistantStore store, FeatureState features) =>
         (int)Math.Ceiling(PromptBuilder.Guardrails(settings, PromptBuilder.Handoff(settings, features)).Length / 3.6) + 120 + store.Knowledge().Where(k => k.Enabled).Sum(k => k.Tokens);
 
-    public static object Limits(GatewayStatus? status)
+    public static object Limits(GatewayStatus? status, string engine = "gpu")
     {
         int Read(string name, int fallback) => status?.Limits.ValueKind == JsonValueKind.Object && status.Limits.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) ? number : fallback;
-        return new { maxImages = Read("maxImages", 8), maxImageBytes = Read("maxImageBytes", 5 * 1024 * 1024), maxPdfBytes = Read("maxPdfBytes", 10 * 1024 * 1024), maxPdfPages = Read("maxPdfPages", 80), maxAttachments = 4, maxMessageCharacters = ChatRelay.MaxUserCharacters };
+        return new { maxImages = Read("maxImages", 8), maxImageBytes = Read("maxImageBytes", 5 * 1024 * 1024), maxPdfBytes = Read("maxPdfBytes", 10 * 1024 * 1024), maxPdfPages = Read("maxPdfPages", 80), maxAttachments = 4, maxMessageCharacters = ChatRelay.MaxUserCharacters, imageTokens = Read("imageTokens", engine == "api" ? 1600 : 280) };
     }
 
     // Many open pages poll availability; a short cache keeps that off the gateway.
-    private Task<GatewayStatus?> Status(CancellationToken token) => CachedStatus(cache, gateway, token);
+    private Task<GatewayStatus?> Status(CancellationToken token) => CachedStatus(cache, engine, token);
 
-    public static async Task<GatewayStatus?> CachedStatus(IMemoryCache cache, GatewayClient gateway, CancellationToken token) =>
+    public static async Task<GatewayStatus?> CachedStatus(IMemoryCache cache, AssistantEngine engine, CancellationToken token) =>
         await cache.GetOrCreateAsync("Ligata.AI.Status", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5);
-            try { return await gateway.StatusAsync(token); } catch (GatewayException) { return null; }
+            try { return await engine.StatusAsync(token); } catch (GatewayException) { return null; }
         });
 
     [HttpPost("chat"), RequestSizeLimit(40_000_000), Consumes("application/json")]
@@ -106,7 +106,7 @@ public sealed class PublicAssistantController(AssistantStore store, GatewayClien
         try { bytes = Convert.FromBase64String(request.Data ?? ""); } catch (FormatException) { return BadRequest(Error("invalid_document", "The file could not be read.")); }
         try
         {
-            var document = await gateway.ExtractPdfAsync(bytes, token);
+            var document = await engine.ExtractPdfAsync(bytes, token);
             return Ok(new { name = Path.GetFileName(request.Name ?? "document.pdf"), document.Text, document.Pages, document.PagesRead, document.Truncated, document.Tokens });
         }
         catch (GatewayException e)

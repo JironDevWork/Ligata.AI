@@ -103,6 +103,26 @@ Rejects<ChatValidationException>(() => ChatRelay.Messages(Chat(Enumerable.Range(
 var nine = Enumerable.Range(0, 3).Select(_ => new ChatMessage("user", "x", [new("image", "a.png", "AAAA", null), new("image", "b.png", "AAAA", null), new("image", "c.png", "AAAA", null)])).ToArray();
 Rejects<ChatValidationException>(() => ChatRelay.Messages(Chat(nine), defaults, "S"), "At most eight images per conversation.");
 
+// ---------- API mode (Claude) ----------
+Assert(ClaudeEngine.DisplayName("claude-haiku-5-5") == "Claude Haiku 5.5" && ClaudeEngine.DisplayName("claude-opus-5") == "Claude Opus 5", "Model names are readable.");
+Assert(new AssistantOptions { Mode = " API " }.UsesApi && !new AssistantOptions().UsesApi && !new AssistantOptions { Mode = "gpu" }.UsesApi, "The GPU gateway stays the default; api must be chosen.");
+Assert(!new ClaudeOptions().Configured && new ClaudeOptions().Model == "claude-haiku-5-5" && new ClaudeOptions().MaxContextTokens <= 100_000, "No key by default; Haiku 5.5 within its lower price tier.");
+var claudeMessages = ClaudeEngine.Messages(Chat(
+    new ChatMessage("user", "Look at this", [new("image", "s.png", "iVBORw0KGgoAAAA", null), new("image", "s.jpg", "/9j/4AAQSkZJRg", null), new("document", "offer.pdf", null, "--- Page 1 ---\nOffer")]),
+    new ChatMessage("assistant", "Sorry, I do not know.\n[[team]]", null),
+    new ChatMessage("assistant", "  ", null),
+    new ChatMessage("user", "Thanks", null)));
+var claudeWire = JsonSerializer.Serialize(claudeMessages);
+Assert(claudeMessages.Count == 3, "Empty (stopped) answers are left out: " + claudeMessages.Count);
+Assert(claudeWire.Contains("image/png") && claudeWire.Contains("image/jpeg") && claudeWire.Contains("text/plain") && claudeWire.Contains("offer.pdf"), "Screenshots and PDF text become image and document blocks: " + claudeWire[..Math.Min(400, claudeWire.Length)]);
+Assert(!claudeWire.Contains("[[team]]") && claudeWire.Contains("Sorry, I do not know."), "The handoff marker is not sent back to the model.");
+var pdf = PdfText.Extract(FixturePdf("Opening hours Monday to Friday"), CancellationToken.None);
+Assert(pdf.Text.Contains("Opening hours Monday to Friday") && pdf.Text.StartsWith("--- Page 1 ---") && pdf.Pages == 1 && !pdf.Truncated, "PDF text is read on this server in API mode: " + pdf.Text);
+Assert(Throws(() => PdfText.Extract(Encoding.ASCII.GetBytes("<html>not a pdf</html>"), CancellationToken.None)) == "invalid_pdf", "Non-PDF files are refused.");
+Assert(Throws(() => PdfText.Extract(FixturePdf(""), CancellationToken.None)) == "pdf_no_text", "Scanned or empty PDFs are explained.");
+Assert(Throws(() => PdfText.Extract(new byte[PdfText.MaxBytes + 1], CancellationToken.None)) == "pdf_too_large", "PDF size limit.");
+static string? Throws(Action action) { try { action(); return null; } catch (GatewayException e) { return e.Code; } }
+
 // ---------- secrets and visitors ----------
 var vault = new ApiKeyVault(new EphemeralDataProtectionProvider());
 var key = "lai_0123456789ab_" + new string('A', 43);
@@ -409,6 +429,15 @@ using (var scope = app.Services.CreateScope())
         var avatar = await services.GetRequiredService<IUserService>().SetAvatarAsync(admin, upload);
         if (avatar != Umbraco.Cms.Core.Services.OperationStatus.UserOperationStatus.Success) throw new Exception("Setting the fixture avatar failed: " + avatar);
     }
+
+    // API mode: the daily ceiling and the local status (no network call for the widget's checks).
+    ClaudeEngine Claude(ClaudeOptions claude) => new(new ClaudeGate(Options.Create(new AssistantOptions { Mode = "api", Claude = claude })), store, Microsoft.Extensions.Logging.Abstractions.NullLogger<ClaudeEngine>.Instance);
+    store.Count(s => s.Questions++);
+    Assert(Claude(new() { ApiKey = "sk-ant-x", QuestionsPerDay = 1 }).QuotaReached() && !Claude(new() { ApiKey = "sk-ant-x", QuestionsPerDay = 0 }).QuotaReached() && !Claude(new() { ApiKey = "sk-ant-x", QuestionsPerDay = 1_000_000 }).QuotaReached(), "Daily question ceiling in API mode (0 = unlimited).");
+    try { await Claude(new()).StatusAsync(false, CancellationToken.None); Assert(false, "A missing key is reported."); }
+    catch (GatewayException e) { Assert(e.Code == "not_configured", "A missing key reads as not configured."); }
+    var apiStatus = await Claude(new() { ApiKey = "sk-ant-x", MaxContextTokens = 50_000 }).StatusAsync(false, CancellationToken.None);
+    Assert(apiStatus.State == "ready" && apiStatus.Engine == "api" && apiStatus.ContextTokens == 50_000 && apiStatus.Vision && apiStatus.Model == "Claude Haiku 5.5", "API mode status without a network call.");
     Console.WriteLine($"Database integration checks passed: {assertions} total assertions.");
 }
 if (!args.Contains("--serve")) return;
@@ -416,6 +445,28 @@ app.UseUmbraco().WithMiddleware(u => { u.UseBackOffice(); u.UseWebsite(); }).Wit
 await app.RunAsync();
 
 // A content type and three published pages, so knowledge import and automatic injection can be tested.
+/// <summary>A one-page PDF with a standard font, built by hand (correct cross-reference offsets).</summary>
+static byte[] FixturePdf(string text)
+{
+    var content = text.Length > 0 ? $"BT /F1 18 Tf 72 720 Td ({text}) Tj ET" : "";
+    string[] objects =
+    [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        $"<< /Length {content.Length} >>\nstream\n{content}\nendstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ];
+    var pdf = new StringBuilder("%PDF-1.4\n");
+    var offsets = new List<int>();
+    for (var i = 0; i < objects.Length; i++) { offsets.Add(pdf.Length); pdf.Append($"{i + 1} 0 obj\n{objects[i]}\nendobj\n"); }
+    var xref = pdf.Length;
+    pdf.Append($"xref\n0 {objects.Length + 1}\n0000000000 65535 f \n");
+    foreach (var offset in offsets) pdf.Append($"{offset:D10} 00000 n \n");
+    pdf.Append($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF");
+    return Encoding.ASCII.GetBytes(pdf.ToString());
+}
+
 static async Task SeedAsync(IServiceProvider services)
 {
     var types = services.GetRequiredService<IContentTypeService>();

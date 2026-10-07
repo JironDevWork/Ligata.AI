@@ -33,7 +33,7 @@ public sealed record BudgetRequest(AssistantSettings Settings);
 [ApiVersion("1.0"), Route("umbraco/management/api/v{version:apiVersion}/ligata-ai")]
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(AssistantEditorFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, ApiKeyVault vault, ContentKnowledge content, ChatRelay relay, IOptions<AssistantOptions> options,
+public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, ApiKeyVault vault, ContentKnowledge content, ChatRelay relay, IOptions<AssistantOptions> options,
     IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore) : ManagementApiControllerBase
 {
     private static object Problem(string message, Dictionary<string, string>? errors = null) => new { message, errors };
@@ -42,8 +42,18 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         var row = store.Row();
         var (url, key, source) = gateway.Target();
+        var claude = options.Value.Claude;
         return new
         {
+            // gpu = Ligata AI gateway; api = Claude via Anthropic (configured only in appsettings, the key is never sent here).
+            mode = engine.Mode,
+            // What visitors see while the notice under the input is left at its default.
+            defaultPrivacyNotice = engine.UsesApi ? AssistantIdentity.ApiPrivacyNotice : AssistantIdentity.DefaultPrivacyNotice,
+            claude = engine.UsesApi ? new
+            {
+                model = claude.Model, modelName = ClaudeEngine.DisplayName(claude.Model), configured = claude.Configured, effort = claude.Effort,
+                claude.MaxContextTokens, claude.MaxConcurrent, claude.QuestionsPerDay, customEndpoint = claude.BaseUrl.Trim() != "",
+            } : null,
             gatewayUrl = url, gatewayUrlFromConfig = options.Value.GatewayUrl != "", keySource = source,
             keyHint = source == "configuration" ? ApiKeyVault.Hint(key!) : row.KeyHint, publicApiBase = options.Value.PublicApiBase,
             allowedOrigins = options.Value.AllowedOrigins, autoInject = options.Value.AutoInject,
@@ -102,13 +112,14 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken token)
     {
-        try { return Ok(new { ok = true, status = await gateway.StatusAsync(token), connection = Connection() }); }
+        try { return Ok(new { ok = true, status = await engine.StatusAsync(token, verify: true), connection = Connection() }); }
         catch (GatewayException e) { return Ok(new { ok = false, code = e.Code, message = e.Message, connection = Connection() }); }
     }
 
     [HttpPost("connection")]
     public async Task<IActionResult> SaveConnection([FromBody] ConnectionRequest request, CancellationToken token)
     {
+        if (engine.UsesApi) return BadRequest(Problem("This site uses the Claude API (LigataAI:Mode = api). Its key and model are set in the site's configuration."));
         var (settings, version) = store.Settings();
         if (request.GatewayUrl != null && request.GatewayUrl.TrimEnd('/') != settings.GatewayUrl)
         {
@@ -127,7 +138,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
 
     private async Task<IActionResult> StatusWithVersion(int version, CancellationToken token)
     {
-        try { return Ok(new { version, ok = true, status = await gateway.StatusAsync(token), connection = Connection() }); }
+        try { return Ok(new { version, ok = true, status = await engine.StatusAsync(token, verify: true), connection = Connection() }); }
         catch (GatewayException e) { return Ok(new { version, ok = false, code = e.Code, message = e.Message, connection = Connection() }); }
     }
 
@@ -146,7 +157,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
 
     private async Task<(int Tokens, bool Estimated)> Count(string text, CancellationToken token)
     {
-        try { return ((await gateway.CountAsync([text], token))[0], false); }
+        try { return ((await engine.CountAsync([text], token))[0], false); }
         catch (GatewayException) { return ((int)Math.Ceiling(text.Length / 3.6), true); }
     }
 
@@ -192,7 +203,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         using var memory = new MemoryStream();
         await file.CopyToAsync(memory, token);
         string text;
-        try { text = extension == ".pdf" ? (await gateway.ExtractPdfAsync(memory.ToArray(), token)).Text : DocumentText.Extract(name, memory.ToArray()); }
+        try { text = extension == ".pdf" ? (await engine.ExtractPdfAsync(memory.ToArray(), token)).Text : DocumentText.Extract(name, memory.ToArray()); }
         catch (GatewayException e) { return BadRequest(Problem(e.Code == "gateway_unavailable" || e.Code == "not_configured" ? "PDFs are converted by the AI gateway, which is not reachable right now. Try again later or upload the text instead." : e.Message)); }
         catch (Exception e) when (e is InvalidDataException or System.Xml.XmlException) { return BadRequest(Problem(e.Message)); }
         if (string.IsNullOrWhiteSpace(text)) return BadRequest(Problem("This file contains no readable text."));
@@ -226,7 +237,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         var items = store.EnabledKnowledge().Concat(store.Knowledge().Where(k => !k.Enabled).Select(k => store.Find(k.Id)!)).ToList();
         try
         {
-            var counts = await gateway.CountAsync(items.Select(i => PromptBuilder.Knowledge([i])).ToList(), token);
+            var counts = await engine.CountAsync(items.Select(i => PromptBuilder.Knowledge([i])).ToList(), token);
             for (var i = 0; i < items.Count; i++) store.SetTokens(items[i].Id, counts[i], false);
             return Ok(new { knowledge = store.Knowledge() });
         }
@@ -258,7 +269,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         var (settings, version) = store.Settings();
         var features = settings.Effective(options.Value.Features);
-        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, gateway, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true));
+        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, engine, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true, engine.Mode));
     }
 
     [HttpPost("attachments"), RequestSizeLimit(16_000_000)]
@@ -266,7 +277,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         try
         {
-            var document = await gateway.ExtractPdfAsync(Convert.FromBase64String(request.Data ?? ""), token);
+            var document = await engine.ExtractPdfAsync(Convert.FromBase64String(request.Data ?? ""), token);
             return Ok(new { name = Path.GetFileName(request.Name ?? "document.pdf"), document.Text, document.Pages, document.PagesRead, document.Truncated, document.Tokens });
         }
         catch (FormatException) { return BadRequest(new { error = new { code = "invalid_document", message = "The file could not be read." } }); }

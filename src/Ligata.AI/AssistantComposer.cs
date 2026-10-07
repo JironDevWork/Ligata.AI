@@ -48,6 +48,9 @@ public sealed class AssistantComposer : IComposer
         builder.Services.AddHttpContextAccessor();
         // Streaming answers can take minutes; individual calls set their own shorter limits.
         builder.Services.AddHttpClient<GatewayClient>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        builder.Services.AddSingleton<ClaudeGate>();
+        builder.Services.AddScoped<ClaudeEngine>();
+        builder.Services.AddScoped<AssistantEngine>();
         builder.Services.AddTransient<ITagHelperComponent, AssistantTagHelperComponent>();
         builder.Services.AddSingleton<IPackageManifestReader, AssistantManifestReader>();
         builder.AddNotificationAsyncHandler<UmbracoApplicationStartingNotification, AssistantStarting>();

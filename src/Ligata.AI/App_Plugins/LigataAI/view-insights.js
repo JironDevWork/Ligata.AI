@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.2.0';
+import { icon, number, compact } from './ui.js?v=0.3.0';
 
 export const insightsView = {
   duration(ms) {
@@ -51,7 +51,7 @@ export const insightsView = {
           <i class="answered" style="height:${d.answered / peak * 100}%"></i><i class="busy" style="height:${(d.busy + d.offline) / peak * 100}%"></i><i class="failed" style="height:${d.failed / peak * 100}%"></i></div>`)}</div>
           <div class="row"><small class="grow">${days[0].day}</small><small>${days.at(-1).day}</small></div>`
         : html`<div class="empty">${icon('chart')}<p>No questions yet in this period.</p></div>`}
-        ${sum('busy') > sum('questions') * 0.1 && sum('questions') > 20 ? html`<div class="notice warning">${icon('warn')}<div>More than 10% of questions were turned away because the shared AI was busy. Ask the gateway operator about capacity or a higher queue limit.</div></div>` : nothing}
+        ${sum('busy') > sum('questions') * 0.1 && sum('questions') > 20 ? html`<div class="notice warning">${icon('warn')}<div>More than 10% of questions were turned away because the AI was busy or the daily limit was reached. ${this.api() ? 'Raise LigataAI:Claude:MaxConcurrent or QuestionsPerDay in the site configuration.' : 'Ask the gateway operator about capacity or a higher queue limit.'}</div></div>` : nothing}
       </section>
     </div>`;
   },

@@ -1,5 +1,16 @@
 # Operations
 
+Two ways to run the AI. **GPU mode** (below) runs Gemma on the Ligata mini PC; everything in this file is about that machine. **API mode** (`LigataAI:Mode = api`) needs none of it: each website calls Anthropic itself. Its whole setup is the website's configuration:
+
+```powershell
+# on the web server, as a secret/environment variable of the site (never in a committed appsettings file)
+LigataAI__Mode=api
+LigataAI__Claude__ApiKey=<key from console.anthropic.com>
+```
+
+Then restart the site and check **AI Assistant → Settings → Connection → Test connection**. Set a monthly spend limit in the Anthropic Console as the final cost ceiling (the package also enforces `LigataAI:Claude:QuestionsPerDay`, default 1,500).
+
+
 ## On the AI machine (mini PC with the RTX 3060 eGPU)
 
 ### First setup

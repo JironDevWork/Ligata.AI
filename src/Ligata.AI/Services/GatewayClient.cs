@@ -16,7 +16,7 @@ public sealed class GatewayException(string code, string message, int status = 5
     public JsonElement? Details { get; } = details;
 }
 
-public sealed record GatewayStatus(string State, string? Model, int ContextTokens, bool Vision, int QueueWaiting, bool QueueRunning, int EstimatedWaitSeconds, bool GpuHealthy, JsonElement Limits, JsonElement Usage);
+public sealed record GatewayStatus(string State, string? Model, int ContextTokens, bool Vision, int QueueWaiting, bool QueueRunning, int EstimatedWaitSeconds, bool GpuHealthy, JsonElement Limits, JsonElement Usage, string Engine = "gpu", string? ModelId = null);
 public sealed record ExtractedDocument(string Text, int Pages, int PagesRead, bool Truncated, int? Tokens);
 
 /// <summary>Server-to-server client for the shared Ligata AI gateway. The API key never leaves this server.</summary>

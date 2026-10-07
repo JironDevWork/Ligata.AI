@@ -7,6 +7,14 @@ public sealed class AssistantOptions
     public string[] AllowedOrigins { get; set; } = [];
     /// <summary>Absolute or root-relative base the widget calls, e.g. https://cms.example.ch/api/ligata-ai.</summary>
     public string PublicApiBase { get; set; } = "/api/ligata-ai";
+    /// <summary>
+    /// Where answers come from. gpu = the self-hosted Ligata AI gateway (GatewayUrl/ApiKey);
+    /// api = Claude through Anthropic's API, called directly from this server (Claude:ApiKey). No gateway is needed.
+    /// </summary>
+    public string Mode { get; set; } = "gpu";
+    /// <summary>Settings for Mode = api.</summary>
+    public ClaudeOptions Claude { get; set; } = new();
+    public bool UsesApi => string.Equals(Mode?.Trim(), "api", StringComparison.OrdinalIgnoreCase);
     /// <summary>Overrides the gateway URL stored in the backoffice.</summary>
     public string GatewayUrl { get; set; } = "";
     /// <summary>Overrides the API key stored (encrypted) in the backoffice. Prefer an environment variable: LigataAI__ApiKey.</summary>
@@ -31,9 +39,29 @@ public sealed class AssistantOptions
     public SupportLimits Support { get; set; } = new();
 }
 
+/// <summary>Claude through Anthropic's API (LigataAI:Mode = api). The key stays in configuration and is only ever sent to Anthropic.</summary>
+public sealed class ClaudeOptions
+{
+    /// <summary>Anthropic API key (sk-ant-…). Prefer an environment variable or secret store: LigataAI__Claude__ApiKey.</summary>
+    public string ApiKey { get; set; } = "";
+    public string Model { get; set; } = "claude-haiku-5-5";
+    /// <summary>How much the model thinks before answering: low, medium or high. "Think before answering" in the backoffice raises it one level.</summary>
+    public string Effort { get; set; } = "low";
+    /// <summary>Largest prompt per question. Claude Haiku 5.5 costs five times more per token above 100,000 prompt tokens.</summary>
+    public int MaxContextTokens { get; set; } = 100_000;
+    /// <summary>Answers written at the same time on this site. Further visitors wait up to 15 seconds, then see "busy".</summary>
+    public int MaxConcurrent { get; set; } = 8;
+    /// <summary>Questions per day (UTC) for the whole site, a hard ceiling on cost. 0 = unlimited.</summary>
+    public int QuestionsPerDay { get; set; } = 1500;
+    public int TimeoutSeconds { get; set; } = 90;
+    /// <summary>Only for tests or an approved proxy. Empty = https://api.anthropic.com (environment variables are ignored).</summary>
+    public string BaseUrl { get; set; } = "";
+    public bool Configured => ApiKey.Trim().Length > 0;
+}
+
 public sealed class FeatureOptions
 {
-    /// <summary>AI answers through the Ligata AI gateway.</summary>
+    /// <summary>AI answers (through the Ligata AI gateway or the Claude API, see Mode).</summary>
     public bool Assistant { get; set; } = true;
     /// <summary>Visitors can chat with the team; the team answers in the Inbox.</summary>
     public bool LiveChat { get; set; } = true;

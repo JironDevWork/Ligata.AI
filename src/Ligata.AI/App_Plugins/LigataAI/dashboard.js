@@ -1,17 +1,17 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest, bearer } from './api.js?v=0.2.0';
-import { styles } from './styles.js?v=0.2.0';
-import { icon, controls } from './ui.js?v=0.2.0';
-import { themes, colorFields } from './themes.js?v=0.2.0';
-import { overviewView } from './view-overview.js?v=0.2.0';
-import { appearanceView } from './view-appearance.js?v=0.2.0';
-import { behaviourView } from './view-behaviour.js?v=0.2.0';
-import { knowledgeView } from './view-knowledge.js?v=0.2.0';
-import { connectionView } from './view-connection.js?v=0.2.0';
-import { insightsView } from './view-insights.js?v=0.2.0';
-import { teamView } from './view-team.js?v=0.2.0';
+import { aiRequest, bearer } from './api.js?v=0.3.0';
+import { styles } from './styles.js?v=0.3.0';
+import { icon, controls } from './ui.js?v=0.3.0';
+import { themes, colorFields } from './themes.js?v=0.3.0';
+import { overviewView } from './view-overview.js?v=0.3.0';
+import { appearanceView } from './view-appearance.js?v=0.3.0';
+import { behaviourView } from './view-behaviour.js?v=0.3.0';
+import { knowledgeView } from './view-knowledge.js?v=0.3.0';
+import { connectionView } from './view-connection.js?v=0.3.0';
+import { insightsView } from './view-insights.js?v=0.3.0';
+import { teamView } from './view-team.js?v=0.3.0';
 
 // A tab only appears when its feature is licensed for this installation (LigataAI:Features).
 const tabs = [
@@ -40,6 +40,10 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
   }
   connectedCallback() { super.connectedCallback(); window.addEventListener('beforeunload', this.unload); this.poll = setInterval(() => this.tab === 'overview' && !document.hidden && this.refreshStatus(), 15000); }
   disconnectedCallback() { window.removeEventListener('beforeunload', this.unload); clearInterval(this.poll); super.disconnectedCallback(); }
+
+  /** API mode: Claude via Anthropic, configured in appsettings (no gateway). */
+  api() { return this.connection?.mode === 'api'; }
+  engineName() { return this.api() ? (this.connection.claude?.modelName || 'Claude') : 'AI gateway'; }
 
   get dirty() { return this.loaded && JSON.stringify(this.settings) !== this.saved; }
   request(path, method, body, options) { return aiRequest(this.auth, path, method, body, options); }
@@ -148,8 +152,8 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
     const f = this.effectiveFeatures(), t = s.support, c = s.contact;
     // Same shape as the public settings; team requests are simulated in the preview (nothing reaches the Inbox).
     const d = this.defaults?.identity || {};
-    const publicSettings = { name: i.name, greeting: f.assistant || i.greeting !== d.greeting ? i.greeting : '', suggestions: i.suggestions.filter(x => x.trim()), avatarUrl: i.avatarUrl, language: i.language, inputPlaceholder: i.inputPlaceholder, privacyNotice: f.assistant || i.privacyNotice !== d.privacyNotice ? i.privacyNotice : '', privacyUrl: i.privacyUrl, fallbackMessage: i.fallbackMessage, fallbackEmail: i.fallbackEmail, fallbackUrl: i.fallbackUrl, appearance: s.appearance, allowImages: b.allowImages, allowPdfs: b.allowPdfs, contextLimit: parts.limit, baseTokens: parts.instructions + parts.knowledge, limits: {},
-      features: { assistant: f.assistant, liveChat: f.liveChat, email: f.email },
+    const publicSettings = { name: i.name, greeting: f.assistant || i.greeting !== d.greeting ? i.greeting : '', suggestions: i.suggestions.filter(x => x.trim()), avatarUrl: i.avatarUrl, language: i.language, inputPlaceholder: i.inputPlaceholder, privacyNotice: i.privacyNotice !== d.privacyNotice ? i.privacyNotice : !f.assistant ? '' : this.connection?.defaultPrivacyNotice || i.privacyNotice, privacyUrl: i.privacyUrl, fallbackMessage: i.fallbackMessage, fallbackEmail: i.fallbackEmail, fallbackUrl: i.fallbackUrl, appearance: s.appearance, allowImages: b.allowImages, allowPdfs: b.allowPdfs, contextLimit: parts.limit, baseTokens: parts.instructions + parts.knowledge, limits: {},
+      features: { assistant: f.assistant, liveChat: f.liveChat, email: f.email }, engine: f.assistant ? this.connection?.mode || 'gpu' : null,
       team: f.liveChat || f.email ? { teamName: t.teamName, suggest: t.suggestWhenUnsure && f.assistant, button: t.showTeamButton, nameField: t.nameField, emailField: t.emailField, emailWhenOffline: t.requireEmailWhenOffline, waitingMessage: t.waitingMessage, offlineMessage: t.offlineMessage, privacyNotice: t.privacyNotice, days: t.inactivityDays } : null,
       contact: f.email ? { title: c.title, intro: c.intro, nameField: c.nameField, successMessage: c.successMessage } : null, captcha: null };
     const attr = value => String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -160,7 +164,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
       .hero{padding:72px 32px 24px;max-width:760px}.hero h1{font-size:40px;line-height:1.1;letter-spacing:-1px;margin:0 0 16px}.hero p{font-size:18px;line-height:1.6;opacity:.7;margin:0}
       .lines{padding:24px 32px;display:grid;gap:12px;max-width:760px}.lines i{display:block;height:10px;border-radius:10px;background:${dark ? '#22252d' : '#e6e6e1'}}.lines i:nth-child(3n){width:70%}</style></head>
       <body><div class="nav"><div class="logo"></div><span></span><span></span><span></span></div><div class="hero"><h1>${attr(b.siteName || 'Your website')}</h1><p>This is a preview page. The assistant below uses your current settings, including changes you have not saved yet.</p></div><div class="lines">${'<i></i>'.repeat(9)}</div>
-      <script src="/assets/ligata-ai/ligata-ai.js?v=0.2.0&p=${Date.now()}" data-ligata-ai data-preview="true" data-open="true" data-api="/umbraco/management/api/v1/ligata-ai" data-settings="${attr(JSON.stringify(publicSettings))}"></script></body></html>`;
+      <script src="/assets/ligata-ai/ligata-ai.js?v=0.3.0&p=${Date.now()}" data-ligata-ai data-preview="true" data-open="true" data-api="/umbraco/management/api/v1/ligata-ai" data-settings="${attr(JSON.stringify(publicSettings))}"></script></body></html>`;
   }
   previewPane() {
     return html`<aside class="preview">
@@ -170,7 +174,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
         <button type="button" class="icon-btn" title="Clear test conversation" @click=${() => { window.__ligataAIPreviewState = null; this.schedulePreview(true); }}>${icon('refresh')}</button>
       </div>
       <div class="frame ${this.device}"><iframe title="Assistant preview" .srcdoc=${this.previewHtml || ''}></iframe></div>
-      <small>Chats in the preview are real answers from the AI gateway, using your saved knowledge and the settings shown here. They are not counted in Insights.</small>
+      <small>Chats in the preview are real answers from ${this.api() ? this.engineName() : 'the AI gateway'}, using your saved knowledge and the settings shown here. They are not counted in Insights${this.api() ? ', but they do count towards the daily question limit' : ''}.</small>
     </aside>`;
   }
 
@@ -198,9 +202,10 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
 
   statusPill() {
     if (!this.licensedFeatures().assistant) return this.inbox ? html`<span class="pill ${this.inbox.online ? 'ok' : ''}"><i></i>${this.inbox.online} team member${this.inbox.online === 1 ? '' : 's'} online</span>` : nothing;
-    if (!this.status) return html`<span class="pill"><i></i>Checking AI gateway…</span>`;
-    if (!this.status.ok) return html`<span class="pill bad" title=${this.status.message || ''}><i></i>${this.status.code === 'not_configured' ? 'Not connected' : 'AI gateway offline'}</span>`;
+    if (!this.status) return html`<span class="pill"><i></i>Checking ${this.api() ? 'Claude' : 'AI gateway'}…</span>`;
+    if (!this.status.ok) return html`<span class="pill bad" title=${this.status.message || ''}><i></i>${this.status.code === 'not_configured' ? (this.api() ? 'No API key' : 'Not connected') : this.status.code === 'invalid_key' ? 'Key rejected' : this.api() ? 'Claude unreachable' : 'AI gateway offline'}</span>`;
     const s = this.status.status;
+    if (s.engine === 'api') return s.state === 'busy' ? html`<span class="pill warn"><i></i>Claude busy</span>` : html`<span class="pill ok"><i></i>AI online · ${s.model}</span>`;
     if (s.state !== 'ready') return html`<span class="pill warn"><i></i>Model ${s.state === 'loading' ? 'starting' : 'offline'}</span>`;
     if (!s.gpuHealthy) return html`<span class="pill warn"><i></i>GPU memory warning</span>`;
     return html`<span class="pill ok"><i></i>AI online${s.queueWaiting ? ` · ${s.queueWaiting} waiting` : ''}</span>`;

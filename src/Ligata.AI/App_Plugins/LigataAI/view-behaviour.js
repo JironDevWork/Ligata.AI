@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact } from './ui.js?v=0.2.0';
+import { number, compact } from './ui.js?v=0.3.0';
 
 export const behaviourView = {
   behaviourView() {
@@ -34,17 +34,17 @@ export const behaviourView = {
             ${this.toggle('behaviour.stayOnTopic', 'Stay on topic', 'Politely declines requests unrelated to your website (homework, coding, …). Recommended.')}
             ${this.toggle('behaviour.includePageContext', 'Know the current page', 'The assistant is told which page the visitor is on.')}
             ${this.toggle('behaviour.useMarkdown', 'Formatted answers', 'Lists, bold text and links.')}
-            ${this.toggle('behaviour.thinking', 'Think before answering', 'More careful answers for complex questions, but noticeably slower for everyone sharing the GPU.')}
+            ${this.toggle('behaviour.thinking', 'Think before answering', this.api() ? 'More careful answers for complex questions. Answers start a little later and use more tokens.' : 'More careful answers for complex questions, but noticeably slower for everyone sharing the GPU.')}
           </div>
         </section>` : nothing}
 
         ${this.licensedFeatures().assistant ? html`<section class="card">
           <header><div><h2>Memory & limits</h2><p class="muted">Bigger limits allow longer chats and documents, but the first answer takes longer.</p></div></header>
           <div class="grid">
-            ${this.range('behaviour.contextLimit', 'Conversation limit', 8192, maxContext, 4096, v => `${compact(v)} tokens`, `Everything the assistant keeps in mind at once: instructions, knowledge, the chat and attachments. The AI server allows up to ${compact(maxContext)}.`)}
+            ${this.range('behaviour.contextLimit', 'Conversation limit', 8192, maxContext, 4096, v => `${compact(v)} tokens`, `Everything the assistant keeps in mind at once: instructions, knowledge, the chat and attachments. ${this.api() ? `${this.engineName()} is limited to ${compact(maxContext)} per question (LigataAI:Claude:MaxContextTokens).` : `The AI server allows up to ${compact(maxContext)}.`}`)}
             ${this.range('behaviour.knowledgeBudget', 'Knowledge budget', 0, Math.max(0, b.contextLimit - b.maxAnswerTokens - 2048), 1024, v => `${compact(v)} tokens`, 'The most your enabled knowledge may use. Keeping it lean keeps answers fast.')}
             ${this.range('behaviour.maxAnswerTokens', 'Longest answer', 256, 4096, 128, v => `${number(v)} tokens`, '≈ 0.75 words per token.')}
-            ${this.range('behaviour.temperature', 'Creativity', 0, 1.2, 0.05, v => (+v).toFixed(2), 'Lower is more factual and consistent; higher is more varied.')}
+            ${this.api() ? nothing : this.range('behaviour.temperature', 'Creativity', 0, 1.2, 0.05, v => (+v).toFixed(2), 'Lower is more factual and consistent; higher is more varied.')}
           </div>
           <div class="section">
             ${this.toggle('behaviour.allowImages', 'Visitors can attach screenshots', 'PNG, JPEG or WebP. Images are processed in memory and never stored.')}
@@ -64,7 +64,7 @@ export const behaviourView = {
 
         <section class="card">
           <header><div><h2>Privacy</h2></div></header>
-          ${this.text('identity.privacyNotice', 'Notice under the input', { rows: 2, max: 600 })}
+          ${this.text('identity.privacyNotice', 'Notice under the input', { rows: 2, max: 600, help: this.api() && this.settings.identity.privacyNotice === this.defaults?.identity?.privacyNotice ? `Visitors see: “${this.connection.defaultPrivacyNotice}” (the default for the Claude API) until you change this text.` : '' })}
           <div class="section">${this.text('identity.privacyUrl', 'Privacy policy link', { placeholder: '/datenschutz/' })}</div>
           <small class="muted">Conversations with the AI are never stored on the server. Conversations with your team are stored for the period set under Team &amp; email and then deleted. Visitors' IP addresses are pseudonymised and only used for limits. Mention the chat in your privacy policy.</small>
         </section>

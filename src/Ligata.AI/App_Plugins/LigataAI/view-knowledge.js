@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact, date } from './ui.js?v=0.2.0';
+import { icon, number, compact, date } from './ui.js?v=0.3.0';
 
 const kinds = { text: ['text', 'Text'], file: ['file', 'File'], page: ['page', 'Website page'] };
 
@@ -85,7 +85,7 @@ export const knowledgeView = {
     });
   },
 
-  async recount() { await this.run(async () => { this.knowledge = (await this.request('/knowledge/recount', 'POST', {}, { timeout: 180000 })).knowledge; }, 'Token counts updated by the AI gateway.'); },
+  async recount() { await this.run(async () => { this.knowledge = (await this.request('/knowledge/recount', 'POST', {}, { timeout: 180000 })).knowledge; }, `Token counts updated by ${this.api() ? 'Claude' : 'the AI gateway'}.`); },
 
   knowledgeView() {
     const b = this.settings.behaviour;
@@ -101,7 +101,7 @@ export const knowledgeView = {
             <label class="btn primary">${icon('upload')}Upload files<input class="sr" type="file" multiple accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm" @change=${e => { this.uploadFiles(e.target.files); e.target.value = ''; }}></label></div></header>
         <div class="row" style="margin-bottom:8px"><strong class="grow">${number(used)} of ${number(b.knowledgeBudget)} tokens used</strong>${estimated ? html`<button class="btn small" @click=${() => this.recount()}>${icon('refresh')}Count exactly</button>` : nothing}<button class="btn small quiet" @click=${() => { this.tab = 'behaviour'; }}>Change budget</button></div>
         <div class="meter ${over ? 'over' : ''}" role="meter" aria-valuemin="0" aria-valuemax=${b.knowledgeBudget} aria-valuenow=${used}><i style="width:${Math.min(100, used / Math.max(1, b.knowledgeBudget) * 100)}%"></i></div>
-        <small class="muted" style="display:block;margin-top:8px">${over ? 'Enabled knowledge exceeds the budget. Switch sources off or raise the budget.' : `About ${compact(Math.max(0, b.knowledgeBudget - used))} tokens free (≈ ${compact(Math.max(0, b.knowledgeBudget - used) * 0.75)} words).`}${estimated ? ' Counts marked “est.” were estimated because the AI gateway was not reachable.' : ''}</small>
+        <small class="muted" style="display:block;margin-top:8px">${over ? 'Enabled knowledge exceeds the budget. Switch sources off or raise the budget.' : `About ${compact(Math.max(0, b.knowledgeBudget - used))} tokens free (≈ ${compact(Math.max(0, b.knowledgeBudget - used) * 0.75)} words).`}${estimated ? ` Counts marked “est.” were estimated because ${this.api() ? 'Claude' : 'the AI gateway'} was not reachable.` : ''}</small>
       </section>
 
       <div class="drop ${this.dragOver ? 'over' : ''}" @dragover=${e => { e.preventDefault(); this.dragOver = true; }} @dragleave=${() => { this.dragOver = false; }} @drop=${e => { e.preventDefault(); this.dragOver = false; this.uploadFiles(e.dataTransfer.files); }}>

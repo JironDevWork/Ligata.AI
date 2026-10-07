@@ -1,6 +1,6 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon } from './ui.js?v=0.2.0';
-import { themes, colorFields } from './themes.js?v=0.2.0';
+import { icon } from './ui.js?v=0.3.0';
+import { themes, colorFields } from './themes.js?v=0.3.0';
 
 export const appearanceView = {
   appearanceView() {
@@ -46,10 +46,10 @@ export const appearanceView = {
           </div>
           <div class="section">
             ${this.toggle('appearance.showContextMeter', 'Show the memory meter', 'A slim bar showing how much of the conversation memory is used.')}
-            ${this.toggle('appearance.showQueuePosition', 'Show queue position', 'When the shared AI is busy, visitors see their place in line and the expected wait.')}
+            ${this.api() ? nothing : this.toggle('appearance.showQueuePosition', 'Show queue position', 'When the shared AI is busy, visitors see their place in line and the expected wait.')}
             ${this.toggle('appearance.animations', 'Animations', 'Visitors who prefer reduced motion never see animations.')}
             ${this.licensedFeatures().liveChat ? this.toggle('appearance.sound', 'Chime when the team replies', 'A soft sound when a team member answers while the chat is closed or the tab is in the background.') : nothing}
-            ${this.toggle('appearance.showBranding', 'Show “Private AI by Ligata”')}
+            ${this.toggle('appearance.showBranding', this.api() ? 'Show “AI by Ligata”' : 'Show “Private AI by Ligata”')}
           </div>
           <details class="section"><summary><strong>Advanced</strong></summary>
             <div style="margin-top:12px">${this.text('appearance.zIndex', 'Stacking order (z-index)', { type: 'number', help: 'Raise or lower this if the bubble should appear above or below other floating elements on your site.' })}</div>

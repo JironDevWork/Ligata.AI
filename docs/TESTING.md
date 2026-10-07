@@ -8,11 +8,11 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 33 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 81 assertions
+# Package domain and security checks (no database): 91 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
-# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest: 121 assertions in total
+# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling: 134 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
@@ -23,6 +23,34 @@ cd tests/e2e; npm ci; node run.mjs
 ```
 
 The database mode refuses any path outside a `.runtime` folder or not named `ai-test.db`. Email goes to an SMTP pickup folder next to the database (`.runtime/mail/*.eml`), never to a real mail server.
+
+### API mode: Claude through Anthropic (browser)
+
+No key and no cost: `tests/e2e/mock-anthropic.mjs` stands in for the Anthropic Messages API and is strict where the real API is. It refuses:
+- a wrong key or a missing `anthropic-version` header;
+- sampling parameters or a thinking budget, which Claude Haiku 5.5 rejects;
+- prefill or empty text blocks;
+- malformed image or document blocks.
+
+It simulates prompt caching from the first `cache_control` breakpoint, streams like the real API (`message_start`, `ping`, thinking and text blocks, `message_delta`) and has switchable failure modes: `overloaded` (529), `ratelimit`, `unauthorized`, `slow`.
+
+```bash
+node tests/e2e/mock-anthropic.mjs &      # :1230
+CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash tests/e2e/restart-host.sh
+cd tests/e2e && node api.mjs             # 13 checks, screenshots in .runtime/e2e/api
+node support.mjs                         # the team suite also passes in API mode (the mock hands off like the GPU mock)
+```
+
+| Check | What is verified |
+| --- | --- |
+| Config | `engine: "api"`, the Claude privacy notice, Claude's image cost; the key is in no page, config or script |
+| Answer | Streamed through the same widget, "AI by Ligata" branding, memory meter from the real prompt size |
+| Request shape | `claude-haiku-5-5`, streaming, effort `low`, no temperature, cache breakpoint after guardrails and knowledge, date and page after it, pseudonymous `metadata.user_id`, room for thinking in `max_tokens` |
+| Caching | A follow-up question reports cached tokens |
+| Handoff | The `[[team]]` marker becomes the team card |
+| Attachments | Screenshot as a JPEG image block; PDF read on the site's server (PdfPig) and sent as a text document block |
+| Failures | Overload shows "busy" with a working retry; a refusal has no retry; a rejected key turns the widget offline, *Test connection* explains it and recovers |
+| Backoffice | Claude card instead of gateway fields, no part of the key anywhere, overview/behaviour/appearance wording, PDF knowledge counted by the token counting endpoint |
 
 ### Team handoff, live chat and email (browser)
 

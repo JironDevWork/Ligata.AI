@@ -20,10 +20,11 @@ public sealed class ChatValidationException(string code, string message, int sta
 }
 
 /// <summary>
-/// Turns a visitor conversation into a gateway request (system prompt + knowledge + history) and relays
-/// the gateway's event stream to the browser. Nothing about the conversation is stored.
+/// Turns a visitor conversation into a request (system prompt + knowledge + history) for the configured engine
+/// and relays its event stream to the browser: the gateway's stream as is, or Claude's in the same format.
+/// Nothing about the conversation is stored.
 /// </summary>
-public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, IOptions<AssistantOptions> options, ILogger<ChatRelay> logger)
+public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ClaudeEngine claude, IOptions<AssistantOptions> options, ILogger<ChatRelay> logger)
 {
     public const int MaxMessages = 120, MaxUserCharacters = 8000, MaxAssistantCharacters = 24000, MaxDocumentCharacters = 600_000, MaxImageBase64 = 7_400_000;
 
@@ -73,15 +74,27 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, IOpti
         var features = settings.Effective(options.Value.Features);
         if (!features.Assistant) { await Json(http, 503, "disabled", "The AI assistant is switched off."); return; }
         List<object> messages;
+        string stable, context;
         try
         {
-            var system = PromptBuilder.System(settings, store.EnabledKnowledge(), request.PageTitle, request.PagePath, DateTime.Now, PromptBuilder.Handoff(settings, features));
-            messages = Messages(request, settings, system);
+            // Same for every visitor (cacheable) + this request's date and page.
+            var team = PromptBuilder.Handoff(settings, features);
+            stable = PromptBuilder.Guardrails(settings, team) + PromptBuilder.Knowledge(store.EnabledKnowledge());
+            context = PromptBuilder.Context(settings, request.PageTitle, request.PagePath, DateTime.Now, team);
+            messages = Messages(request, settings, stable + context);
         }
         catch (ChatValidationException e) { await Json(http, e.Status, e.Code, e.Message); return; }
 
+        var api = options.Value.UsesApi;
+        if (api && claude.QuotaReached())
+        {
+            if (countStats) store.Count(s => s.Busy++);
+            await Json(http, 429, "daily_quota", "This website has reached its daily question limit. Please try again tomorrow.");
+            return;
+        }
         var last = request.Messages[^1];
         if (countStats) store.Count(s => { s.Questions++; if (request.Messages.Count(m => m.Role == "user") == 1) s.Conversations++; s.Attachments += last.Attachments?.Count ?? 0; });
+        if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, countStats); return; }
         var body = new
         {
             messages, visitor, maxTokens = settings.Behaviour.MaxAnswerTokens, temperature = settings.Behaviour.Temperature,
