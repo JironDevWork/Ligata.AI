@@ -51,6 +51,8 @@ public sealed class SupportLimits
     public int MaxOpenConversations { get; set; } = 500;
     public int MaxStoredConversations { get; set; } = 20000;
     public int PollsPerAddress { get; set; } = 4;
+    /// <summary>Burst limit per IP for new team requests and emails (on top of the per-visitor limits above).</summary>
+    public int ContactRequestsPerTenMinutes { get; set; } = 10;
 }
 
 /// <summary>Google reCAPTCHA v3. Read from LigataAI:Recaptcha, or else from LigataForms:Recaptcha so a site configures it once.</summary>

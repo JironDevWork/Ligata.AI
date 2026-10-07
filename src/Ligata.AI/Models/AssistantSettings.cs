@@ -184,6 +184,8 @@ public sealed record AssistantAppearance
     public bool ShowQueuePosition { get; init; } = true;
     public bool ShowBranding { get; init; } = true;
     public bool Animations { get; init; } = true;
+    /// <summary>A soft chime when the team replies while the chat is closed or the tab is in the background.</summary>
+    public bool Sound { get; init; } = true;
     public string Teaser { get; init; } = "";
     public int TeaserDelaySeconds { get; init; } = 6;
     public int ZIndex { get; init; } = 2147483000;

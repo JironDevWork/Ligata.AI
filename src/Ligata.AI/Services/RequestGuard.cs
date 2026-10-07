@@ -55,7 +55,7 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
         {
             "ask" => (Math.Clamp(options.Value.MessagesPerTenMinutes, 1, 500), TimeSpan.FromMinutes(10)),
             "file" => (20, TimeSpan.FromMinutes(10)),
-            "contact" => (10, TimeSpan.FromMinutes(10)),
+            "contact" => (Math.Clamp(options.Value.Support.ContactRequestsPerTenMinutes, 1, 1000), TimeSpan.FromMinutes(10)),
             "say" => (Math.Clamp(options.Value.Support.VisitorMessagesPerMinute, 1, 120), TimeSpan.FromMinutes(1)),
             "poll" => (900, TimeSpan.FromMinutes(10)),
             "typing" => (400, TimeSpan.FromMinutes(10)),

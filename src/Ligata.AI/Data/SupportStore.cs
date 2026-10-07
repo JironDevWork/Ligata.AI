@@ -85,7 +85,8 @@ public sealed class SupportStore(IScopeProvider scopes, SupportHub hub)
     public int OpenForVisitor(string visitor)
     {
         using var scope = scopes.CreateScope(autoComplete: true);
-        return scope.Database.ExecuteScalar<int>("SELECT COUNT(*) FROM LigataAIConversation WHERE Visitor=@0 AND State<>@1", visitor, "closed");
+        // Only live chats: email requests have their own hourly limit and stay open until the team handles them.
+        return scope.Database.ExecuteScalar<int>("SELECT COUNT(*) FROM LigataAIConversation WHERE Visitor=@0 AND State<>@1 AND Kind=@2", visitor, "closed", "chat");
     }
 
     public int CreatedSince(string visitor, DateTime since, string? kind = null)

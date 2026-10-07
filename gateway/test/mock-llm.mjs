@@ -35,14 +35,18 @@ export function startMockLlm() {
       response.on('close', () => { if (!response.writableFinished) { closed = true; state.aborted++; } });
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
       try {
-        for (const [i, token] of state.tokens.entries()) {
+        // Questions about a person or something unknown get a handoff answer; the marker arrives split across chunks.
+        const last = body.messages.at(-1);
+        const asked = typeof last?.content === 'string' ? last.content : (last?.content || []).map(part => part.text || '').join(' ');
+        const tokens = /person|human|unknown|mensch|weiss nicht/i.test(asked) ? ['Sorry, ', 'I could ', 'not find ', 'that in ', 'my information. ', 'Our team ', 'can help.', '\n[[', 'te', 'am]]'] : state.tokens;
+        for (const [i, token] of tokens.entries()) {
           await new Promise(r => setTimeout(r, state.delayMs));
           if (closed) return;
           if (state.mode === 'drop' && i === 2) { response.destroy(); return; }
           response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: token } }] })}\n\n`);
         }
         const prompt = count(JSON.stringify(body.messages));
-        response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: prompt, completion_tokens: state.tokens.length }, timings: { prompt_n: prompt, cache_n: 0, predicted_n: state.tokens.length, prompt_per_second: 1000, predicted_per_second: 30 } })}\n\n`);
+        response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: prompt, completion_tokens: tokens.length }, timings: { prompt_n: prompt, cache_n: 0, predicted_n: tokens.length, prompt_per_second: 1000, predicted_per_second: 30 } })}\n\n`);
         response.end('data: [DONE]\n\n');
       } finally { state.active--; }
       return;

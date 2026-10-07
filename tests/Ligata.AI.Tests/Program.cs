@@ -180,7 +180,8 @@ var credentials = JsonDocument.Parse(System.IO.File.ReadAllText(credentialsFile)
 var mailFolder = Path.Combine(Path.GetDirectoryName(db)!, "mail");
 Directory.CreateDirectory(mailFolder);
 var fakeCaptcha = args.Contains("--fake-captcha");
-var builder = WebApplication.CreateBuilder(args.Where(a => a != "--database" && a != db && a != "--serve" && a != "--fake-captcha").ToArray());
+var supportFixture = args.Contains("--support-fixture");
+var builder = WebApplication.CreateBuilder(args.Where(a => a != "--database" && a != db && a != "--serve" && a != "--fake-captcha" && a != "--support-fixture").ToArray());
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
     ["ConnectionStrings:umbracoDbDSN"] = "Data Source=" + db + ";Cache=Shared;Foreign Keys=True;Pooling=True",
@@ -202,6 +203,13 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["Umbraco:CMS:Global:Smtp:DeliveryMethod"] = "SpecifiedPickupDirectory",
     ["Umbraco:CMS:Global:Smtp:PickupDirectoryLocation"] = mailFolder,
 });
+// The browser suites run many visitors from one address; per-visitor limits are covered by the database checks.
+if (supportFixture)
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["LigataAI:Support:OpenConversationsPerVisitor"] = "100", ["LigataAI:Support:ConversationsPerVisitorPerDay"] = "1000",
+        ["LigataAI:Support:EmailsPerVisitorPerHour"] = "500", ["LigataAI:Support:ContactRequestsPerTenMinutes"] = "1000", ["LigataAI:Support:VisitorMessagesPerMinute"] = "120",
+    });
 if (fakeCaptcha)
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     {
@@ -251,7 +259,7 @@ using (var scope = app.Services.CreateScope())
     };
     var teamVersion = store.Save(teamSettings, baseVersion);
     var visitorA = "visitor-a-" + Guid.NewGuid().ToString("N")[..8];
-    CreateConversationRequest Request(string kind, string? name, string? email, string message, List<HistoryMessage>? history = null, string? captcha = null) =>
+    CreateConversationRequest Request(string kind, string? name, string? email, string message, List<HistoryMessage>? history = null, string? captcha = "pass-fixture") =>
         new(kind, name, email, message, history, "Prices", "/prices/", "de", captcha, Guid.NewGuid().ToString("N"));
     var (chat, chatToken) = await support.CreateAsync(Request("chat", "Anna", "anna@example.test", "Can I talk to someone?", [new("user", "What does hosting cost per day?"), new("assistant", "I could not find that. [[team]]")]), visitorA, default);
     Assert(chat is { State: "open", Kind: "chat", Name: "Anna" } && chat.LastVisitorSeq == chat.LastSeq && chat.NeedsReply, "A chat request starts open and needs a reply.");
@@ -289,7 +297,9 @@ using (var scope = app.Services.CreateScope())
     // limits per visitor
     await support.CreateAsync(Request("chat", null, "x@example.test", "Second"), visitorA, default);
     await support.CreateAsync(Request("chat", null, "x@example.test", "Third"), visitorA, default);
-    try { await support.CreateAsync(Request("chat", null, "x@example.test", "Fourth"), visitorA, default); Assert(false, "A fourth open conversation is refused."); }
+    // Default limits (the browser fixture raises them for its single test address).
+    var defaultLimits = new SupportService(supportStore, store, supportHub, services.GetRequiredService<SupportMailer>(), services.GetRequiredService<AgentDirectory>(), services.GetRequiredService<IContactCaptcha>(), Options.Create(new AssistantOptions()));
+    try { await defaultLimits.CreateAsync(Request("chat", null, "x@example.test", "Fourth"), visitorA, default); Assert(false, "A fourth open conversation is refused."); }
     catch (SupportException e) { Assert(e.Code == "too_many_open", "A fourth open conversation is refused: " + e.Code); }
     try { await support.CreateAsync(Request("email", "Bob", null, "Please call me"), "visitor-b", default); Assert(false, "Email requests need an address."); }
     catch (SupportException e) { Assert(e.Code == "invalid_email", "Email requests need an address."); }
@@ -356,6 +366,15 @@ using (var scope = app.Services.CreateScope())
         scope4.Complete();
     }
     store.Save(baseSettings, store.Settings().Version);
+    // Browser fixture: the site is live with AI, live chat and email (developer convenience; the browser suite also sets this up through the UI).
+    if (supportFixture)
+        store.Save(baseSettings with
+        {
+            Enabled = true, Features = new() { Assistant = true, LiveChat = true, Email = true },
+            Support = baseSettings.Support with { TeamName = "Ligata Support" },
+            Notifications = new() { Recipients = ["team@ligata-ai.test"] }, Contact = baseSettings.Contact with { SendConfirmation = true },
+            Identity = baseSettings.Identity with { PrivacyUrl = "/privacy/" },
+        }, store.Settings().Version);
     Console.WriteLine($"Database integration checks passed: {assertions} total assertions.");
 }
 if (!args.Contains("--serve")) return;
