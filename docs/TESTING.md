@@ -45,8 +45,8 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself |
 
 Results (8 October 2026, version 0.4.0):
-- Privacy suite: 7/7 with the mock gateway, 7/7 in API mode, 6/6 in Cookiebot mode.
-- Regression with consent: AI suite 23/23, team suite 16/16, API suite 13/13.
+- Privacy suite: 7/7 with the mock gateway, 7/7 in API mode, 6/6 in Cookiebot mode, and 7/7 on the installed-package host (`.nupkg`, existing 0.3 database upgraded to the consent table).
+- Regression with consent: AI suite 23/23, team suite 16/16 (also on the installed-package host), API suite 13/13, no-AI suite 5/5 (no consent asked without the AI).
 - Package checks: 114 domain and 164 total with the database.
 
 ### API mode: Claude through Anthropic (browser)

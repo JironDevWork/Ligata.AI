@@ -57,7 +57,7 @@ export const privacyView = {
         <dt>Proof of consent</dt><dd>Kept ${number(p.keepDays)} days: a random id, the time and the text version. No IP address, no messages.</dd>
         ${sum ? html`<dt>Last 30 days</dt><dd>${number(sum.given)} agreed · ${number(sum.used)} asked a question · ${number(sum.withdrawn)} withdrew</dd>` : nothing}
       </dl>
-      ${!api && !p.gpuOperatorCountry ? html`<div class="notice warning">${icon('warn')}<div>Visitors are told who runs the AI server. Add its country to the site's configuration, for example <code>"LigataAI": { "Privacy": { "GpuOperatorCountry": "CH" } }</code>.</div></div>` : nothing}
+      ${!api && !p.gpuOperatorCountry ? html`<div class="notice warning" style="margin-top:14px">${icon('warn')}<div>Visitors are told who runs the AI server. Add its country to the site's configuration, for example <code>"LigataAI": { "Privacy": { "GpuOperatorCountry": "CH" } }</code>.</div></div>` : nothing}
       <div class="section">${this.text('privacy.consentText', 'Text of the consent request', { rows: 3, max: 1500, help: html`Empty uses this default, translated into the visitor's language: “${this.defaultConsentText()}” Name the recipient if you write your own.` })}</div>
       <div class="row section">
         <button type="button" class="btn" ?disabled=${this.busy} @click=${() => { this.set('privacy.consentRevision', revision + 1); this.message = 'Visitors will be asked again once you save.'; }}>${icon('refresh')}Ask all visitors again</button>
