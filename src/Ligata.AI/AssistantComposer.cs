@@ -30,6 +30,7 @@ public sealed class AssistantComposer : IComposer
         });
         builder.Services.AddTransient<AssistantInstaller>();
         builder.Services.AddScoped<AssistantStore>();
+        builder.Services.AddScoped<ConsentStore>();
         builder.Services.AddScoped<AssistantEditorFilter>();
         builder.Services.AddScoped<SupportAgentFilter>();
         builder.Services.AddScoped<ChatRelay>();

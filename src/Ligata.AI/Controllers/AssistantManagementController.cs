@@ -34,7 +34,7 @@ public sealed record BudgetRequest(AssistantSettings Settings);
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(AssistantEditorFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, ApiKeyVault vault, ContentKnowledge content, ChatRelay relay, IOptions<AssistantOptions> options,
-    IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore) : ManagementApiControllerBase
+    IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore, ConsentStore consents) : ManagementApiControllerBase
 {
     private static object Problem(string message, Dictionary<string, string>? errors = null) => new { message, errors };
 
@@ -77,7 +77,40 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     public IActionResult Overview()
     {
         var (settings, version) = store.Settings();
-        return Ok(new { settings, version, connection = Connection(), knowledge = store.Knowledge(), defaults = new AssistantSettings(), platform = Platform() });
+        return Ok(new { settings, version, connection = Connection(), knowledge = store.Knowledge(), defaults = new AssistantSettings(), platform = Platform(), privacy = Privacy(settings) });
+    }
+
+    /// <summary>Consent configuration (appsettings), the current consent version and how many visitors agreed recently.</summary>
+    private object Privacy(AssistantSettings settings)
+    {
+        var o = options.Value; var p = o.Privacy; var now = DateTime.UtcNow;
+        var features = settings.Effective(o.Features);
+        ConsentSummary? summary = null;
+        try { summary = consents.Summary(now.AddDays(-30), now); } catch (Exception e) when (e is not OutOfMemoryException) { } // table missing until the migration ran
+        return new
+        {
+            required = p.RequireConsent, mode = p.UsesCookiebot ? "cookiebot" : "explicit", category = p.Category,
+            consentDays = Math.Clamp(p.ConsentDays, 1, 400), keepDays = Math.Clamp(p.KeepConsentRecordsDays, Math.Clamp(p.ConsentDays, 1, 400), 3650),
+            gpuOperator = p.GpuOperator.Trim(), gpuOperatorCountry = p.GpuOperatorCountry.Trim(), cookiebotIgnore = p.CookiebotIgnore,
+            engine = VisitorConsent.Engine(o), version = VisitorConsent.Version(settings, o),
+            // What the preview widget needs to show the consent request (null when none is asked).
+            consent = VisitorConsent.Public(settings, o, features),
+            summary,
+            captcha = captcha.Value.Ready ? new { mode = captcha.Value.ConsentMode, category = captcha.Value.CookiebotCategory } : null,
+            languages = PrivacyPolicy.Languages,
+        };
+    }
+
+    [HttpGet("privacy")]
+    public IActionResult PrivacyInfo() => Ok(Privacy(store.Settings().Settings));
+
+    /// <summary>The privacy policy sections for this site's setup (uses the editor's unsaved settings when posted).</summary>
+    [HttpPost("privacy/policy"), RequestSizeLimit(400_000)]
+    public IActionResult PrivacyPolicyText([FromQuery] string language, [FromBody] AssistantSettings? settings)
+    {
+        settings ??= store.Settings().Settings;
+        try { AssistantValidation.Settings(settings); } catch (AssistantValidationException) { settings = store.Settings().Settings; }
+        return Ok(new { language = PrivacyPolicy.Languages.Contains(language) ? language : "en", text = PrivacyPolicy.Generate(language, settings, options.Value, captcha.Value) });
     }
 
     /// <summary>Queues a test email to the given (or saved) team addresses and tries to send it at once.</summary>
@@ -269,7 +302,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         var (settings, version) = store.Settings();
         var features = settings.Effective(options.Value.Features);
-        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, engine, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true, engine.Mode));
+        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, engine, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true, engine.Mode, VisitorConsent.Public(settings, options.Value, features)));
     }
 
     [HttpPost("attachments"), RequestSizeLimit(16_000_000)]

@@ -46,7 +46,7 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
 
     /// <summary>
     /// kind: read (config/status), ask (AI questions), file (attachment processing), contact (team requests
-    /// and emails), say (visitor chat messages), poll (live chat long polls), typing, avatar.
+    /// and emails), say (visitor chat messages), poll (live chat long polls), typing, avatar, consent (given or withdrawn).
     /// </summary>
     public bool Allow(HttpContext context, string kind)
     {
@@ -60,9 +60,11 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
             "poll" => (900, TimeSpan.FromMinutes(10)),
             "typing" => (400, TimeSpan.FromMinutes(10)),
             "avatar" => (300, TimeSpan.FromMinutes(10)),
+            // Agreeing is rarer than asking; offices share one address.
+            "consent" => (Math.Clamp(options.Value.MessagesPerTenMinutes * 2, 10, 1000), TimeSpan.FromMinutes(10)),
             _ => (Math.Clamp(options.Value.ReadsPerTenMinutes, 10, 100000), TimeSpan.FromMinutes(10)),
         };
-        var global = kind switch { "read" => 5000, "poll" => 30000, "typing" => 10000, "avatar" => 5000, _ => 1000 };
+        var global = kind switch { "read" => 5000, "poll" => 30000, "typing" => 10000, "avatar" => 5000, "consent" => 300, _ => 1000 };
         lock (gate)
         {
             bool Take(string bucket, int max, TimeSpan window)

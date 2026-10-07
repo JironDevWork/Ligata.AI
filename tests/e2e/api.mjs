@@ -47,9 +47,18 @@ function fixturePdf(text) {
   return Buffer.from(pdf, 'latin1');
 }
 
+/** A recorded consent, as the chat's "Agree" button creates it. */
+let consentId = null;
+async function consent() {
+  if (consentId) return consentId;
+  const config = await (await fetch(base + '/api/ligata-ai/config')).json();
+  const response = await fetch(base + '/api/ligata-ai/consent', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ version: config.settings.consent.version, source: 'chat', language: 'en' }) });
+  return consentId = (await response.json()).id;
+}
+
 /** Reads one answer from the public chat endpoint as server-sent events. */
 async function chat(messages) {
-  const response = await fetch(base + '/api/ligata-ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ messages, pageTitle: 'Home', pagePath: '/' }) });
+  const response = await fetch(base + '/api/ligata-ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ messages, pageTitle: 'Home', pagePath: '/', consent: await consent() }) });
   const text = await response.text();
   const events = [...text.matchAll(/event: (\w+)\ndata: (.*)\n/g)].map(m => ({ name: m[1], data: JSON.parse(m[2]) }));
   return { status: response.status, text, events, done: events.find(e => e.name === 'done')?.data, answer: events.filter(e => e.name === 'delta').map(e => e.data.text).join('') };
@@ -86,6 +95,8 @@ await check('public config: API mode is ready, names Claude, and never contains 
 await check('a visitor gets a streamed answer from Claude with the real prompt size', async () => {
   await page.goto(base + '/');
   await widget.locator('.launcher').click();
+  assert(/Anthropic/.test(await widget.locator('.agree').innerText()), 'the consent request names Anthropic');
+  await widget.locator('[data-agree]').click();
   const reply = await answer(`What does hosting cost? ${run}`);
   assert(reply.includes('Claude mock answer') && reply.includes('hosting'), 'answer: ' + reply);
   assert(/AI by Ligata/.test(await widget.locator('.brand').innerText()) && !/Private/.test(await widget.locator('.brand').innerText()), 'branding without "Private"');
@@ -193,7 +204,11 @@ await check('backoffice: overview, behaviour and appearance speak Claude, not GP
   await tab('Behaviour');
   const behaviour = await dashText();
   assert(!behaviour.includes('Creativity') && !behaviour.includes('sharing the GPU'), 'no temperature slider in API mode');
-  assert(behaviour.includes('Visitors see:') && behaviour.includes('Claude'), 'explains the default notice in API mode');
+  await tab('Privacy');
+  await dash.locator('h2', { hasText: 'Privacy notice' }).waitFor();
+  const privacy = await dashText();
+  assert(privacy.includes('Visitors see:') && privacy.includes('Claude'), 'explains the default notice in API mode');
+  assert(privacy.includes('Anthropic (USA)'), 'the consent card names Anthropic as the recipient');
   await tab('Appearance');
   const appearance = await dashText();
   assert(appearance.includes('Show “AI by Ligata”') && !appearance.includes('queue position'), 'branding and no queue option');

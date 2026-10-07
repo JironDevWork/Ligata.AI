@@ -24,12 +24,13 @@ public sealed record AssistantSettings
     public SupportSettings Support { get; init; } = new();
     public ContactSettings Contact { get; init; } = new();
     public NotificationSettings Notifications { get; init; } = new();
+    public PrivacySettings Privacy { get; init; } = new();
 
     /// <summary>Licensed (appsettings) and switched on (backoffice).</summary>
     public FeatureState Effective(FeatureOptions licensed) => new(licensed.Assistant && Features.Assistant, licensed.LiveChat && Features.LiveChat, licensed.Email && Features.Email);
 
     /// <summary>What a browser may see: no prompts, no knowledge, no gateway details, no recipients.</summary>
-    public object Public(int contextLimit, object limits, int baseTokens, FeatureState features, RecaptchaSettings captcha, string engine = "gpu") => new
+    public object Public(int contextLimit, object limits, int baseTokens, FeatureState features, RecaptchaSettings captcha, string engine = "gpu", object? consent = null) => new
     {
         Identity.Name,
         // Without the AI, the untouched AI defaults would promise answers that never come: the widget uses team wording instead.
@@ -48,6 +49,8 @@ public sealed record AssistantSettings
         } : null,
         Contact = features.Email ? new { Contact.Title, Contact.Intro, Contact.NameField, Contact.SuccessMessage } : null,
         Captcha = features.Team && Support.UseRecaptcha && captcha.Ready ? new { captcha.SiteKey, captcha.ConsentMode, captcha.CookiebotCategory } : null,
+        // What the AI needs before it may read messages (null: no consent is asked, see LigataAI:Privacy).
+        Consent = consent,
     };
 }
 
@@ -104,6 +107,15 @@ public sealed record ContactSettings
     public bool SendConfirmation { get; init; }
     public string ConfirmationSubject { get; init; } = "";
     public string ConfirmationText { get; init; } = "";
+}
+
+/// <summary>Editable parts of the consent visitors give before the AI reads their messages (the rest is in LigataAI:Privacy).</summary>
+public sealed record PrivacySettings
+{
+    /// <summary>Replaces the first paragraph of the consent request. Empty uses the translated default that names the recipient.</summary>
+    public string ConsentText { get; init; } = "";
+    /// <summary>Raising it asks every visitor again (for example after the privacy policy changed).</summary>
+    public int ConsentRevision { get; init; } = 1;
 }
 
 public sealed record NotificationSettings

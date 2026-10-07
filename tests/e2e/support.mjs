@@ -43,7 +43,9 @@ async function visitor(name, options = {}) {
   return { context, page, widget, shot: file => page.screenshot({ path: path.join(out, file + '.png') }) };
 }
 const openPanel = async v => { if (!(await v.widget.getAttribute('open') !== null)) await v.widget.locator('.launcher').click(); await v.widget.locator('.panel').waitFor(); };
-const ask = async (v, text) => { await v.widget.locator('.composer textarea').fill(text); await v.widget.locator('.composer textarea').press('Enter'); };
+// A new visitor agrees before the first question to the AI.
+const agree = async v => { const button = v.widget.locator('.agree:not(.hidden) [data-agree]'); if (await button.count()) { await button.click(); await v.widget.locator('.agree').waitFor({ state: 'hidden' }); } };
+const ask = async (v, text) => { await agree(v); await v.widget.locator('.composer textarea').fill(text); await v.widget.locator('.composer textarea').press('Enter'); };
 
 export const state = {};
 // Presence lasts 60 s after a team member's last heartbeat; the first checks need an offline team.

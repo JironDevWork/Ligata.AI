@@ -48,7 +48,11 @@ const open = async (host, name) => {
   page.on('dialog', d => d.accept());
   return { page, widget, name };
 };
-const ask = async (w, text) => { await w.widget.locator('textarea').fill(text); await w.widget.locator('textarea').press('Enter'); };
+const ask = async (w, text) => {
+  const agree = w.widget.locator('.agree:not(.hidden) [data-agree]');
+  if (await agree.count()) { await agree.click(); await w.widget.locator('.agree').waitFor({ state: 'hidden' }); }
+  await w.widget.locator('textarea').fill(text); await w.widget.locator('textarea').press('Enter');
+};
 const answers = w => w.widget.locator('.msg.bot');
 const idle = w => w.widget.locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 300000 });
 

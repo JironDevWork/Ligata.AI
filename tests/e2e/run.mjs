@@ -146,6 +146,10 @@ await check('appearance: theme, position and live preview', async () => {
 
 await check('preview chat answers through the gateway', async () => {
   const frame = page.frameLocator('ligata-ai-dashboard iframe');
+  // The preview asks for consent like the website (nothing is recorded for the preview).
+  // The bottom of the preview can sit below the fold of the test window; a scripted click is enough here.
+  await frame.locator('.agree:not(.hidden) [data-agree]').dispatchEvent('click', {}, { timeout: 10000 });
+  await frame.locator('.agree').waitFor({ state: 'hidden' });
   await frame.locator('textarea').fill('Hello from the backoffice preview');
   await frame.locator('textarea').press('Enter');
   await frame.locator('.msg.bot').nth(1).waitFor({ timeout: answerTimeout });
@@ -181,6 +185,8 @@ await check('the bubble is injected into Umbraco pages automatically', async () 
 
 await check('a visitor asks a suggested question and gets a streamed answer', async () => {
   await widget().locator('.launcher').click();
+  assert(await widget().locator('.suggestions button').count() === 0 && await widget().locator('.composer textarea').isHidden(), 'nothing can be sent before the visitor agreed');
+  await widget().locator('[data-agree]').click();
   await widget().locator('.suggestions button', { hasText: 'What does a website cost?' }).click();
   await widget().locator('.msg.bot').nth(1).waitFor({ timeout: answerTimeout });
   await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
@@ -223,7 +229,8 @@ await check('a second tab of the same visitor cannot jump the queue', async () =
   await second.goto(base + '/');
   // Fire two questions at once from the same IP: one runs, the other is told to wait.
   const ask = p => p.evaluate(async api => {
-    const r = await fetch(api + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'race' }] }) });
+    const consent = JSON.parse(localStorage.getItem('ligata-ai:consent:' + location.host)).id;
+    const r = await fetch(api + '/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'race' }], consent }) });
     if (r.headers.get('content-type')?.includes('event-stream')) { await r.text(); return 200; }
     return r.status;
   }, '/api/ligata-ai');
@@ -256,6 +263,7 @@ await check('a statically exported page on another origin works through CORS', a
     const p = await visitor.newPage();
     await p.goto('http://127.0.0.1:5311/');
     await p.locator('#ligata-ai .launcher').click();
+    await p.locator('#ligata-ai [data-agree]').click(); // consent is recorded through CORS like the questions
     await p.locator('#ligata-ai textarea').fill('Hallo von der statischen Seite');
     await p.locator('#ligata-ai textarea').press('Enter');
     await p.locator('#ligata-ai .msg.bot').nth(1).waitFor({ timeout: answerTimeout }).catch(async e => { throw new Error(e.message.split(/\n/)[0] + ' | widget says: ' + (await p.locator('#ligata-ai .log').innerText()).replace(/\s+/g, ' ').slice(-300)); });

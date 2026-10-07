@@ -37,6 +37,35 @@ public sealed class AssistantOptions
     public FeatureOptions Features { get; set; } = new();
     /// <summary>Hard limits for team conversations and email requests.</summary>
     public SupportLimits Support { get; set; } = new();
+    /// <summary>Consent before the AI sees a visitor's messages, and the details visitors are told.</summary>
+    public PrivacyOptions Privacy { get; set; } = new();
+}
+
+/// <summary>
+/// The AI receives a visitor's messages only after the visitor agreed (GDPR Art. 6(1)(a)). The consent is
+/// recorded (random id, no IP, no content) and checked by the server on every question and file.
+/// </summary>
+public sealed class PrivacyOptions
+{
+    /// <summary>Visitors must agree before their first question. Switch off only with your data protection adviser's approval.</summary>
+    public bool RequireConsent { get; set; } = true;
+    /// <summary>explicit = the chat asks itself; cookiebot = the chat unlocks with a Cookiebot category (falls back to explicit without Cookiebot).</summary>
+    public string ConsentMode { get; set; } = "explicit";
+    /// <summary>For ConsentMode = cookiebot: preferences, statistics or marketing.</summary>
+    public string CookiebotCategory { get; set; } = "preferences";
+    /// <summary>Visitors are asked again after this many days.</summary>
+    public int ConsentDays { get; set; } = 365;
+    /// <summary>Consent records (proof of consent) are deleted after this many days. Records never used for a question go after one day.</summary>
+    public int KeepConsentRecordsDays { get; set; } = 1095;
+    /// <summary>Who runs the AI server in GPU mode. Visitors are told this name before they agree.</summary>
+    public string GpuOperator { get; set; } = "Ligata";
+    /// <summary>Country of the AI server in GPU mode, in English (e.g. Switzerland). Shown to visitors and in the privacy policy text.</summary>
+    public string GpuOperatorCountry { get; set; } = "";
+    /// <summary>Adds data-cookieconsent="ignore" to the script tag so Cookiebot's automatic blocking leaves the chat alone (it handles consent itself and sets no cookies).</summary>
+    public bool CookiebotIgnore { get; set; } = true;
+
+    public bool UsesCookiebot => string.Equals(ConsentMode?.Trim(), "cookiebot", StringComparison.OrdinalIgnoreCase);
+    public string Category => CookiebotCategory?.Trim().ToLowerInvariant() is "preferences" or "statistics" or "marketing" ? CookiebotCategory.Trim().ToLowerInvariant() : "preferences";
 }
 
 /// <summary>Claude through Anthropic's API (LigataAI:Mode = api). The key stays in configuration and is only ever sent to Anthropic.</summary>

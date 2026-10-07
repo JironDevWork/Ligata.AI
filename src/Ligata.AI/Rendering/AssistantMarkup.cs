@@ -11,7 +11,7 @@ namespace Ligata.AI.Rendering;
 
 public static class AssistantMarkup
 {
-    public const string Version = "0.3.0";
+    public const string Version = "0.4.0";
     private const string RenderedKey = "Ligata.AI.Rendered";
 
     /// <summary>
@@ -21,7 +21,9 @@ public static class AssistantMarkup
     public static string Script(AssistantSettings settings, AssistantOptions options, int baseTokens, FeatureState features, RecaptchaSettings captcha)
     {
         var engine = options.UsesApi ? "api" : "gpu";
-        return $"<script src=\"/assets/ligata-ai/ligata-ai.js?v={Version}\" defer data-ligata-ai data-api=\"{WebUtility.HtmlEncode(options.PublicApiBase.TrimEnd('/'))}\" data-settings=\"{WebUtility.HtmlEncode(AssistantJson.Write(settings.Public(Math.Min(settings.Behaviour.ContextLimit, engine == "api" ? options.Claude.MaxContextTokens : int.MaxValue), Controllers.PublicAssistantController.Limits(null, engine), baseTokens, features, captcha, engine)))}\"></script>";
+        // The chat asks for consent itself and sets no cookies: Cookiebot's automatic blocking must not hide it.
+        var cookiebot = options.Privacy.CookiebotIgnore ? " data-cookieconsent=\"ignore\"" : "";
+        return $"<script src=\"/assets/ligata-ai/ligata-ai.js?v={Version}\" defer{cookiebot} data-ligata-ai data-api=\"{WebUtility.HtmlEncode(options.PublicApiBase.TrimEnd('/'))}\" data-settings=\"{WebUtility.HtmlEncode(AssistantJson.Write(settings.Public(Math.Min(settings.Behaviour.ContextLimit, engine == "api" ? options.Claude.MaxContextTokens : int.MaxValue), Controllers.PublicAssistantController.Limits(null, engine), baseTokens, features, captcha, engine, Services.VisitorConsent.Public(settings, options, features))))}\"></script>";
     }
 
     public static string? Render(HttpContext context, AssistantStore store, AssistantOptions options, bool manual)

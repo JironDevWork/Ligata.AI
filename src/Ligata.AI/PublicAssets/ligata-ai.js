@@ -76,11 +76,37 @@
       statusWaiting: 'In attesa del team', statusActive: 'Il team è qui', statusReplied: 'Il team ha risposto', statusClosed: 'Chiusa', statusSent: 'Inviato', statusAI: 'Assistente IA', remove: 'Rimuovi da questo dispositivo', removeConfirm: 'Rimuovere questa conversazione da questo dispositivo?', emptyList: 'Ancora nessuna conversazione.', notSent: 'Non inviato', previewSent: 'Anteprima: qui verrebbe avvisato il team. Le richieste reali appaiono nella Inbox.', homeHint: 'Come vuoi contattarci?', homeGreeting: 'Ciao! Come possiamo aiutarti?', newMessage: 'Nuovo messaggio', aiAnswer: 'IA',
       errors: { network: 'L’assistente non è raggiungibile al momento.', refused: 'Non posso aiutarti con questo. Fai un’altra domanda su questo sito.', too_many_open: 'Hai già conversazioni aperte con il team.', captcha_failed: 'Il controllo anti-spam non è riuscito. Riprova.', captcha_consent: 'Consenti il controllo anti-spam per inviare.', invalid_email: 'Inserisci un indirizzo e-mail valido.', invalid_message: 'Scrivi un messaggio.', closed: 'Questa conversazione è terminata. Iniziane una nuova.', not_found: 'Questa conversazione non è più disponibile.', default: 'Qualcosa è andato storto. Riprova.' } },
   };
+  // Consent before the AI reads a message (GDPR Art. 6(1)(a)). Provider and country come from the server.
+  const consentStrings = {
+    en: { consentTitle: 'Before we start', withoutAi: 'Without AI:', consentApi: (n, c) => `This assistant is an AI. To answer, your messages, attached files and the page you are on are sent to ${n}${c}, the provider of the AI model Claude, and processed there on behalf of this website.`,
+      consentGpu: (n, c) => `This assistant is an AI. To answer, your messages, attached files and the page you are on are sent to an AI server run by ${n}${c} on behalf of this website. Nothing is stored there.`,
+      consentNote: 'Please do not share sensitive personal data. You can withdraw your consent at any time under Conversations.', consentNoteCookies: 'Please do not share sensitive personal data. You can withdraw your consent at any time in the cookie settings.', consentAgree: 'Agree and start', consentCookiebot: c => `To use the AI assistant, allow the “${c}” category in the cookie settings.`,
+      consentWithdraw: 'Withdraw consent', consentWithdrawConfirm: 'Withdraw your consent to the AI assistant? Your conversations with the AI are removed from this device.', consentGiven: d => `You agreed to the AI assistant on ${d}.`, consentCookies: 'AI assistant allowed in the cookie settings.',
+      privacyPolicy: 'Privacy policy', categories: { preferences: 'Preferences', statistics: 'Statistics', marketing: 'Marketing' }, consentRequired: 'Please agree first so the assistant may read your message.', consentChanged: 'The information has changed. Please read it and agree again.' },
+    de: { consentTitle: 'Bevor es losgeht', withoutAi: 'Ohne KI:', consentApi: (n, c) => `Dieser Assistent ist eine KI. Damit er antworten kann, werden deine Nachrichten, angehängte Dateien und die aktuelle Seite an ${n}${c} gesendet, den Anbieter des KI-Modells Claude, und dort im Auftrag dieser Website verarbeitet.`,
+      consentGpu: (n, c) => `Dieser Assistent ist eine KI. Damit er antworten kann, werden deine Nachrichten, angehängte Dateien und die aktuelle Seite an einen KI-Server von ${n}${c} gesendet, der im Auftrag dieser Website arbeitet. Dort wird nichts gespeichert.`,
+      consentNote: 'Bitte teile keine sensiblen persönlichen Daten. Du kannst deine Einwilligung jederzeit unter «Gespräche» widerrufen.', consentNoteCookies: 'Bitte teile keine sensiblen persönlichen Daten. Du kannst deine Einwilligung jederzeit in den Cookie-Einstellungen widerrufen.', consentAgree: 'Zustimmen und starten', consentCookiebot: c => `Um den KI-Assistenten zu nutzen, erlaube in den Cookie-Einstellungen die Kategorie «${c}».`,
+      consentWithdraw: 'Einwilligung widerrufen', consentWithdrawConfirm: 'Einwilligung zum KI-Assistenten widerrufen? Deine Gespräche mit der KI werden von diesem Gerät entfernt.', consentGiven: d => `Du hast dem KI-Assistenten am ${d} zugestimmt.`, consentCookies: 'KI-Assistent in den Cookie-Einstellungen erlaubt.',
+      privacyPolicy: 'Datenschutzerklärung', categories: { preferences: 'Präferenzen', statistics: 'Statistiken', marketing: 'Marketing' }, consentRequired: 'Bitte stimme zuerst zu, damit der Assistent deine Nachricht lesen darf.', consentChanged: 'Die Angaben haben sich geändert. Bitte lies sie und stimme erneut zu.' },
+    fr: { consentTitle: 'Avant de commencer', withoutAi: 'Sans IA :', consentApi: (n, c) => `Cet assistant est une IA. Pour répondre, vos messages, les fichiers joints et la page consultée sont envoyés à ${n}${c}, le fournisseur du modèle d’IA Claude, et y sont traités pour le compte de ce site.`,
+      consentGpu: (n, c) => `Cet assistant est une IA. Pour répondre, vos messages, les fichiers joints et la page consultée sont envoyés à un serveur d’IA de ${n}${c}, qui les traite pour le compte de ce site. Rien n’y est conservé.`,
+      consentNote: 'Ne partagez pas de données personnelles sensibles. Vous pouvez retirer votre consentement à tout moment sous « Conversations ».', consentNoteCookies: 'Ne partagez pas de données personnelles sensibles. Vous pouvez retirer votre consentement à tout moment dans les paramètres des cookies.', consentAgree: 'Accepter et commencer', consentCookiebot: c => `Pour utiliser l’assistant IA, autorisez la catégorie « ${c} » dans les paramètres des cookies.`,
+      consentWithdraw: 'Retirer le consentement', consentWithdrawConfirm: 'Retirer votre consentement à l’assistant IA ? Vos conversations avec l’IA seront retirées de cet appareil.', consentGiven: d => `Vous avez accepté l’assistant IA le ${d}.`, consentCookies: 'Assistant IA autorisé dans les paramètres des cookies.',
+      privacyPolicy: 'Politique de confidentialité', categories: { preferences: 'Préférences', statistics: 'Statistiques', marketing: 'Marketing' }, consentRequired: 'Veuillez d’abord accepter pour que l’assistant puisse lire votre message.', consentChanged: 'Les informations ont changé. Veuillez les lire et accepter à nouveau.' },
+    it: { consentTitle: 'Prima di iniziare', withoutAi: 'Senza IA:', consentApi: (n, c) => `Questo assistente è un’IA. Per rispondere, i tuoi messaggi, i file allegati e la pagina che stai visitando vengono inviati a ${n}${c}, il fornitore del modello di IA Claude, e trattati per conto di questo sito.`,
+      consentGpu: (n, c) => `Questo assistente è un’IA. Per rispondere, i tuoi messaggi, i file allegati e la pagina che stai visitando vengono inviati a un server di IA di ${n}${c}, che li tratta per conto di questo sito. Lì non viene conservato nulla.`,
+      consentNote: 'Non condividere dati personali sensibili. Puoi revocare il consenso in qualsiasi momento in «Conversazioni».', consentNoteCookies: 'Non condividere dati personali sensibili. Puoi revocare il consenso in qualsiasi momento nelle impostazioni dei cookie.', consentAgree: 'Accetta e inizia', consentCookiebot: c => `Per usare l’assistente IA, consenti la categoria «${c}» nelle impostazioni dei cookie.`,
+      consentWithdraw: 'Revoca il consenso', consentWithdrawConfirm: 'Revocare il consenso all’assistente IA? Le tue conversazioni con l’IA verranno rimosse da questo dispositivo.', consentGiven: d => `Hai accettato l’assistente IA il ${d}.`, consentCookies: 'Assistente IA consentito nelle impostazioni dei cookie.',
+      privacyPolicy: 'Informativa sulla privacy', categories: { preferences: 'Preferenze', statistics: 'Statistiche', marketing: 'Marketing' }, consentRequired: 'Accetta prima, così l’assistente può leggere il tuo messaggio.', consentChanged: 'Le informazioni sono cambiate. Leggile e accetta di nuovo.' },
+  };
   const languageSetting = settings.language || 'auto';
   const pageLanguage = (document.documentElement.lang || navigator.language || 'en').slice(0, 2).toLowerCase();
   const lang = languageSetting !== 'auto' && strings[languageSetting] ? languageSetting : strings[pageLanguage] ? pageLanguage : 'en';
   const t = Object.assign({}, strings.en, strings[lang]);
   t.errors = Object.assign({}, strings.en.errors, strings[lang].errors);
+  Object.assign(t, consentStrings.en, consentStrings[lang]);
+  t.errors.consent_required = t.consentRequired;
+  const categoryName = c => t.categories[c] || c;
   const errorText = (code, fallback) => t.errors[code] || fallback || t.errors.default;
   const number = n => new Intl.NumberFormat(lang).format(Math.round(n));
   const compact = n => n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}k` : String(Math.round(n));
@@ -305,6 +331,13 @@
   .send{background:var(--lai-accent);color:var(--lai-on-accent)}.send:hover:not(:disabled){background:var(--lai-accent);color:var(--lai-on-accent);filter:brightness(1.08)}
   .icon-btn:disabled{opacity:.4;cursor:not-allowed}
   .closed-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--lai-surface);font-size:13px;color:var(--lai-muted)}.closed-bar .chip{white-space:nowrap;flex:none}
+  .agree{margin:0;padding:14px 14px 12px}.agree p{color:var(--lai-text);line-height:1.45}.agree .fine{margin-top:7px;font-size:12px;color:var(--lai-muted)}.agree .fine a{font-weight:600}
+  .agree .actions{align-items:center;margin-top:12px}.agree .btn{padding:9px 15px;font-size:13.5px}.agree .btn svg{width:17px;height:17px}.agree .btn:active,.consent-row button:active{transform:scale(.96)}
+  .agree .alt{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin-top:12px;padding-top:10px;border-top:1px solid var(--lai-line);font-size:12px;color:var(--lai-muted)}
+  .agree .alt .chip{padding:2px 0;background:none;border:0;border-radius:0;color:var(--lai-text);font-size:12.5px}.agree .alt .chip svg{width:15px;height:15px}.agree .alt .chip:hover{background:none;text-decoration:underline;text-underline-offset:2px}
+  .agree-error{margin-top:9px;font-size:12.5px;color:var(--lai-danger)}.agree-error[hidden]{display:none}
+  .consent-row{display:flex;align-items:center;gap:8px;margin:16px 4px 0;padding-top:12px;border-top:1px solid var(--lai-line);font-size:12px;line-height:1.4;color:var(--lai-muted)}
+  .consent-row svg{width:15px;height:15px}.consent-row button{margin-left:auto;flex:none;font-weight:600;color:var(--lai-text);text-decoration:underline;text-underline-offset:2px}
   .footer{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:11.5px;color:var(--lai-muted);line-height:1.45}
   .footer a{color:inherit}.footer .brand{white-space:nowrap}
   .privacy-link{display:inline-flex;align-items:center;gap:3px;margin-left:2px;white-space:nowrap;text-decoration:none;font-weight:600;color:var(--lai-text)!important;opacity:.72;transition:opacity .15s}
@@ -384,7 +417,9 @@
     const conversations = state.conversations.slice(0, 12).map(c => ({ ...c, messages: c.messages.slice(-200).map(m => ({ ...m, files: m.files ? m.files.map(f => ({ kind: f.kind, name: f.name, pages: f.pages, gone: true })) : undefined, pending: undefined })) }));
     const data = { conversations, activeId: state.activeId, open: state.open, view: state.view };
     if (previewStore) { previewStore.__ligataAIPreviewState = data; return; }
-    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { }
+    // Visitors who never write anything leave nothing on their device.
+    const keep = conversations.some(c => c.messages.length || c.team);
+    try { if (keep) localStorage.setItem(storageKey, JSON.stringify(data)); else localStorage.removeItem(storageKey); } catch { }
   }
   const current = () => state.conversations.find(c => c.id === state.activeId) || null;
   const isTeamChat = c => !!(c?.team && c.team.kind === 'chat');
@@ -400,6 +435,121 @@
     }
     state.activeId = c.id;
     return c;
+  }
+
+  // ---------- consent ----------
+  // The AI reads nothing before the visitor agreed (settings.consent is null when the site asks no consent).
+  // explicit: the button in the chat; cookiebot: the configured Cookiebot category (explicit when Cookiebot is missing).
+  // The server records each consent (random id, no IP, no content) and checks the id with every question and file.
+  let consentConfig = settings.consent || null;
+  const consentKey = 'ligata-ai:consent:' + location.host;
+  let consent = null; // { id, version, expires, at, source }
+  const cookiebotMode = () => consentConfig?.mode === 'cookiebot' && !!window.Cookiebot;
+  const cookiebotAllows = () => window.Cookiebot?.consent?.[consentConfig?.category] === true;
+  function sendWithdrawal(id) {
+    request('consent/withdraw', { method: 'POST', body: JSON.stringify({ id }) }).then(response => {
+      if (!response.ok) return;
+      try { if (JSON.parse(localStorage.getItem(consentKey) || 'null')?.withdraw === id) localStorage.removeItem(consentKey); } catch { }
+    }, () => { /* retried on the next page */ });
+  }
+  function loadConsent() {
+    try {
+      const saved = previewStore ? previewStore.__ligataAIPreviewConsent : JSON.parse(localStorage.getItem(consentKey) || 'null');
+      if (saved?.withdraw) { sendWithdrawal(saved.withdraw); return; } // a withdrawal that did not reach the server yet
+      if (!consentConfig || !saved) return;
+      if (saved.version === consentConfig.version && Date.parse(saved.expires) > Date.now()) consent = saved;
+      else forgetConsent(); // expired, or the recipient or text changed: ask again
+    } catch { /* storage unavailable: ask in every page view */ }
+  }
+  function saveConsent(value) {
+    consent = value;
+    if (previewStore) { previewStore.__ligataAIPreviewConsent = value; return; }
+    try { localStorage.setItem(consentKey, JSON.stringify(value)); } catch { }
+  }
+  function forgetConsent() {
+    consent = null;
+    if (previewStore) { previewStore.__ligataAIPreviewConsent = null; return; }
+    try { localStorage.removeItem(consentKey); } catch { }
+  }
+  /** Withdrawal: the server records it, the browser forgets the consent and the AI conversations. */
+  function withdrawConsent() {
+    const id = consent?.id;
+    forgetConsent();
+    if (id && id !== 'preview' && !previewStore) {
+      try { localStorage.setItem(consentKey, JSON.stringify({ withdraw: id })); } catch { }
+      sendWithdrawal(id);
+    }
+    if (state.busy) state.controller?.abort();
+    for (const c of state.conversations.filter(x => !x.team)) { loops.get(c.id)?.abort(); loops.delete(c.id); }
+    state.conversations = state.conversations.filter(c => c.team);
+    if (!current()) state.activeId = null;
+    state.pending = []; state.queuedAsk = '';
+    persist(true);
+  }
+  /** The AI may read this visitor's messages (a Cookiebot consent is recorded on the server with the first question). */
+  function aiAllowed() {
+    if (!consentConfig) return true;
+    return cookiebotMode() ? cookiebotAllows() : !!consent;
+  }
+  async function recordConsent(source) {
+    if (previewStore || preview) { saveConsent({ id: 'preview', version: consentConfig.version, expires: new Date(Date.now() + 86400000).toISOString(), at: Date.now(), source }); return; }
+    const response = await request('consent', { method: 'POST', body: JSON.stringify({ version: consentConfig.version, source, language: lang }) });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 409) { await refreshConfig(true); throw Object.assign(new Error(), { code: 'consent_changed' }); }
+    if (!response.ok || !result.id) throw Object.assign(new Error(), { code: result.error?.code || 'network' });
+    saveConsent({ id: result.id, version: result.version, expires: result.expires, at: Date.now(), source });
+  }
+  /** Before a question or file. False: no consent (the chat shows why). */
+  async function ensureConsent() {
+    if (!consentConfig || consent) return aiAllowed();
+    if (!cookiebotMode() || !cookiebotAllows()) return false;
+    if (state.consenting) return false;
+    state.consenting = true;
+    try { await recordConsent('cookiebot'); return true; } finally { state.consenting = false; }
+  }
+  /** The server refused a consent id (withdrawn elsewhere, expired, or the text changed): ask again. */
+  async function consentLost() {
+    forgetConsent();
+    state.consentNotice = t.consentChanged;
+    await refreshConfig(true);
+    if (!state.busy) render(); else updateComposer();
+  }
+  const regionName = code => { try { return /^[a-z]{2}$/i.test(code) ? new Intl.DisplayNames([lang], { type: 'region' }).of(code.toUpperCase()) : code; } catch { return code; } };
+  function consentCard() {
+    const provider = consentConfig.provider || {};
+    const country = provider.country ? ` (${regionName(provider.country)})` : '';
+    const intro = consentConfig.text ? inline(consentConfig.text) : escape(provider.kind === 'anthropic' ? t.consentApi(provider.name || 'Anthropic', country) : t.consentGpu(provider.name || 'Ligata', country));
+    const privacyLink = settings.privacyUrl && safeHref(settings.privacyUrl) ? ` <a href="${escape(settings.privacyUrl)}" target="_blank" rel="noopener">${t.privacyPolicy}</a>` : '';
+    const viaCookiebot = cookiebotMode();
+    const others = contactActions(true);
+    return `<h3>${svg('shield')}<span id="lai-consent-title">${t.consentTitle}</span></h3>
+      <p>${intro}</p>
+      <p class="fine">${escape(viaCookiebot ? t.consentNoteCookies : t.consentNote)}${privacyLink}</p>
+      ${viaCookiebot ? `<p class="fine">${escape(t.consentCookiebot(categoryName(consentConfig.category)))}</p>` : ''}
+      <div class="agree-error" role="alert" ${state.consentNotice ? '' : 'hidden'}>${escape(state.consentNotice || '')}</div>
+      <div class="actions">${viaCookiebot ? `<button type="button" class="btn primary" data-cookie-settings>${t.cookieSettings}</button>` : `<button type="button" class="btn primary" data-agree>${svg('check')}${t.consentAgree}</button>`}</div>
+      ${others ? `<div class="alt"><span>${t.withoutAi}</span>${others}</div>` : ''}`;
+  }
+  async function agree(button) {
+    button.disabled = true;
+    try { await recordConsent('chat'); }
+    catch (error) {
+      state.consentNotice = error.code === 'consent_changed' ? t.consentChanged : errorText(error.code);
+      updateComposer();
+      const again = root.querySelector('[data-agree]'); if (again) again.disabled = false;
+      return;
+    }
+    state.consentNotice = '';
+    render();
+    if (state.queuedAsk) { input.value = state.queuedAsk; state.queuedAsk = ''; autosize(); updateComposer(); }
+    input.focus({ preventScroll: true });
+  }
+  function consentRow() {
+    if (!consentConfig || !F.ai) return '';
+    if (cookiebotMode()) return cookiebotAllows() ? `<div class="consent-row">${svg('shield')}<span>${escape(t.consentCookies)}</span><button type="button" data-cookie-settings>${t.cookieSettings}</button></div>` : '';
+    if (!consent) return '';
+    const day = new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(new Date(consent.at || Date.now()));
+    return `<div class="consent-row">${svg('shield')}<span>${escape(t.consentGiven(day))}</span><button type="button" data-withdraw-consent>${t.consentWithdraw}</button></div>`;
   }
 
   // ---------- skeleton ----------
@@ -431,6 +581,7 @@
               <button type="submit" class="icon-btn send" title="${t.send}" aria-label="${t.send}">${svg('send')}</button>
             </div>
           </form>
+          <div class="card agree hidden" role="region" aria-labelledby="lai-consent-title"></div>
           <div class="closed-bar hidden"><span></span><button type="button" class="chip" data-action="new">${svg('plus')}${t.newChat}</button></div>
           <div class="footer"><span class="privacy"><span class="privacy-text">${escape(settings.privacyNotice || '')}</span>${settings.privacyUrl ? ` <a class="privacy-link" href="${escape(safeHref(settings.privacyUrl) || '#')}" target="_blank" rel="noopener">${svg('shield')}<span>${t.privacy}</span></a>` : ''}</span>${look.showBranding ? `<span class="brand">${F.ai ? (settings.engine === 'api' ? t.poweredByApi : t.poweredBy) : t.poweredByTeam}</span>` : ''}</div>
         </div>
@@ -501,7 +652,7 @@
 
   function updateMeter() {
     const c = current();
-    const show = look.showContextMeter && F.ai && state.view === 'chat' && c && !c.team && c.kind === 'ai';
+    const show = look.showContextMeter && F.ai && state.view === 'chat' && c && !c.team && c.kind === 'ai' && aiAllowed();
     $('.meter').classList.toggle('hidden', !show);
     if (!show) return;
     const limit = c.context?.limit || state.contextLimit || 0;
@@ -599,7 +750,7 @@
     if (!c) return;
     if (c.kind === 'ai') {
       if (settings.greeting) { const node = messageNode({ role: 'assistant', content: settings.greeting }); node.querySelector('.meta').remove(); log.append(node); }
-      if (!c.messages.length && settings.suggestions?.length && F.ai) {
+      if (!c.messages.length && settings.suggestions?.length && F.ai && aiAllowed()) {
         const suggestions = document.createElement('div');
         suggestions.className = 'suggestions';
         suggestions.innerHTML = settings.suggestions.map(s => `<button type="button">${escape(s)}</button>`).join('');
@@ -640,11 +791,12 @@
   }
 
   /** Ways to reach a person: the team channels when enabled, otherwise the configured email/contact page. */
-  function contactActions() {
+  function contactActions(quiet) {
     const actions = [];
-    if (F.chat) actions.push(`<button type="button" class="chip" data-open-sheet="chat">${svg('chat')}${chatWith()}</button>`);
-    if (F.email) actions.push(`<button type="button" class="chip ${F.chat ? 'ghost' : ''}" data-open-sheet="email">${svg('mail')}${t.sendEmail}</button>`);
-    if (!actions.length && settings.fallbackEmail) actions.push(`<a class="chip" href="mailto:${escape(settings.fallbackEmail)}">${svg('mail')}${t.email}</a>`);
+    const strong = quiet ? 'ghost' : '';
+    if (F.chat) actions.push(`<button type="button" class="chip ${strong}" data-open-sheet="chat">${svg('chat')}${chatWith()}</button>`);
+    if (F.email) actions.push(`<button type="button" class="chip ${F.chat || quiet ? 'ghost' : ''}" data-open-sheet="email">${svg('mail')}${t.sendEmail}</button>`);
+    if (!actions.length && settings.fallbackEmail) actions.push(`<a class="chip ${strong}" href="mailto:${escape(settings.fallbackEmail)}">${svg('mail')}${t.email}</a>`);
     if (!F.chat && settings.fallbackUrl && safeHref(settings.fallbackUrl)) actions.push(`<a class="chip ghost" href="${escape(settings.fallbackUrl)}">${svg('link')}${t.contact}</a>`);
     return actions.join('');
   }
@@ -703,7 +855,8 @@
       ${items.map(c => `<div class="item ${c.unread ? 'unread' : ''} ${c.id === state.activeId ? 'current' : ''}">
           <button type="button" class="open-item" data-open="${c.id}" aria-label="${escape(c.title || t.newChat)}"></button>
           ${itemFace(c)}<div class="text"><div class="row"><b>${escape(c.title || (c.team?.kind === 'email' ? t.sendEmail : t.newChat))}</b><time>${relative(c.updated)}</time></div><div class="preview">${itemPill(c)}${escape(itemPreview(c))}</div></div>
-          <button type="button" class="del" data-remove-conversation="${c.id}" title="${isOpenTeam(c) ? t.endChat : t.remove}" aria-label="${isOpenTeam(c) ? t.endChat : t.remove}">${svg(isOpenTeam(c) ? 'door' : 'trash')}</button></div>`).join('')}`;
+          <button type="button" class="del" data-remove-conversation="${c.id}" title="${isOpenTeam(c) ? t.endChat : t.remove}" aria-label="${isOpenTeam(c) ? t.endChat : t.remove}">${svg(isOpenTeam(c) ? 'door' : 'trash')}</button></div>`).join('')}
+      ${consentRow()}`;
   }
 
   function renderHome() {
@@ -727,7 +880,11 @@
     const teamChat = isTeamChat(c);
     const closed = chat && !!c.team && (c.team.state === 'closed' || !!c.team.gone || c.team.kind === 'email');
     const aiOff = chat && !c.team && !F.ai;
-    form.classList.toggle('hidden', !chat || closed || aiOff);
+    const needsConsent = chat && !c.team && F.ai && !aiAllowed();
+    form.classList.toggle('hidden', !chat || closed || aiOff || needsConsent);
+    const card = $('.agree');
+    card.classList.toggle('hidden', !needsConsent);
+    if (needsConsent) { const html = consentCard(); if (card.dataset.html !== html) { card.innerHTML = html; card.dataset.html = html; } }
     $('.closed-bar').classList.toggle('hidden', !(chat && closed));
     // Team conversations are stored (that is their purpose); the AI notice may say the opposite.
     $('.privacy-text').textContent = chat && c.team ? (c.team.kind === 'email' ? t.storedEmail : team.privacyNotice || t.stored(days())) : settings.privacyNotice || (F.ai ? '' : F.chat ? team.privacyNotice || t.stored(days()) : t.storedEmail);
@@ -792,6 +949,10 @@
         state.contextLimit = data.settings.contextLimit || state.contextLimit;
         state.baseTokens = data.settings.baseTokens || state.baseTokens;
         Object.assign(limits, data.settings.limits || {});
+        if (!preview && 'consent' in data.settings && JSON.stringify(data.settings.consent || null) !== JSON.stringify(consentConfig)) {
+          consentConfig = data.settings.consent || null;
+          if (consent && consent.version !== consentConfig?.version) forgetConsent();
+        }
       }
       state.teamOnline = data.team?.online || 0;
       setStatus(data.state === 'disabled' && preview ? 'ready' : data.state, data.queue);
@@ -833,7 +994,8 @@
   }
 
   async function addFiles(files) {
-    if (isTeamChat(current()) || !F.ai) return;
+    if (isTeamChat(current()) || !F.ai || !files.length) return;
+    try { if (!await ensureConsent()) { updateComposer(); return; } } catch (error) { showError(error.code === 'consent_changed' ? 'consent_required' : error.code || 'network'); return; }
     for (const file of files) {
       const isImage = /^image\/(png|jpeg|webp)$/.test(file.type);
       const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
@@ -849,8 +1011,9 @@
         else {
           if (file.size > limits.maxPdfBytes) { fail('pdf_too_large'); continue; }
           const data = (await readAsDataUrl(file)).split(',')[1];
-          const response = await request('attachments', { method: 'POST', body: JSON.stringify({ name: item.name, data }) });
+          const response = await request('attachments', { method: 'POST', body: JSON.stringify({ name: item.name, data, consent: consent?.id }) });
           const result = await response.json().catch(() => ({}));
+          if (result.error?.code === 'consent_required') { state.pending = state.pending.filter(x => x !== item); await consentLost(); return; }
           if (!response.ok) { fail(result.error?.code || 'invalid_pdf'); continue; }
           Object.assign(item, { text: result.text, pages: result.pages, tokens: result.tokens || Math.ceil(result.text.length / 3.5) });
         }
@@ -865,7 +1028,7 @@
   // ---------- AI conversation ----------
   function payload(c) {
     return {
-      pageTitle: document.title.slice(0, 150), pagePath: location.pathname.slice(0, 300),
+      pageTitle: document.title.slice(0, 150), pagePath: location.pathname.slice(0, 300), consent: consent?.id,
       messages: c.messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({
         role: m.role, content: m.role === 'assistant' ? stripMark(m.content) : m.content,
         attachments: (m.files || []).filter(f => !f.gone).map(f => f.kind === 'image' ? { type: 'image', name: f.name, data: f.data } : { type: 'document', name: f.name, text: f.text }),
@@ -878,6 +1041,9 @@
   async function send(text, isRetry) {
     if (isTeamChat(current())) return sendTeam(text);
     if (state.busy || !F.ai) return;
+    try { if (!await ensureConsent()) { updateComposer(); return; } }
+    catch (error) { showError(error.code === 'consent_changed' ? 'consent_required' : error.code || 'network'); return; }
+    if (state.busy) return;
     const c = current() || startConversation('ai');
     text = (text ?? input.value).trim();
     if (!isRetry) {
@@ -916,6 +1082,13 @@
       if (!response.ok || !response.body || !(response.headers.get('content-type') || '').includes('event-stream')) {
         const result = await response.json().catch(() => ({}));
         finish();
+        if (result.error?.code === 'consent_required') {
+          // The question waits in the input until the visitor agreed again.
+          const last = c.messages.at(-1);
+          if (last?.role === 'user') { c.messages.pop(); input.value = last.content || ''; state.pending = (last.files || []).filter(f => !f.gone); autosize(); persist(true); }
+          await consentLost();
+          return;
+        }
         if (result.error?.code === 'context_full') { c.context.used = result.error.promptTokens || c.context.limit; updateMeter(); }
         if (['gateway_unavailable', 'model_unavailable', 'not_configured', 'invalid_key', 'disabled'].includes(result.error?.code)) setStatus(result.error.code === 'disabled' ? 'disabled' : 'offline');
         showError(result.error?.code || 'network', result.error?.message, ['context_full', 'disabled', 'daily_quota', 'origin_denied', 'message_too_long'].includes(result.error?.code) ? null : () => send('', true));
@@ -1040,7 +1213,7 @@
         ${emailMode !== 'hidden' ? `<label class="field"><span>${label(t.emailField, emailMode)}</span><input name="email" type="email" autocomplete="email" inputmode="email" maxlength="200" ${emailMode === 'required' ? 'required' : ''}><span class="err"></span></label>` : ''}
         <label class="field"><span>${t.message}</span><textarea name="message" rows="3" maxlength="${MAX_TEAM_TEXT}" placeholder="${escape(t.messageHint)}" required></textarea><span class="err"></span></label>
         ${captcha ? (captcha.consentMode === 'cookiebot'
-          ? `<p class="fine captcha-cookie ${captchaAllowed() ? 'hidden' : ''}">${escape(t.captchaCookie(captcha.cookiebotCategory))} <a href="#" data-cookie-settings>${t.cookieSettings}</a></p>`
+          ? `<p class="fine captcha-cookie ${captchaAllowed() ? 'hidden' : ''}">${escape(t.captchaCookie(categoryName(captcha.cookiebotCategory)))} <a href="#" data-cookie-settings>${t.cookieSettings}</a></p>`
           : `<label class="consent"><input type="checkbox" name="consent"><span>${t.captchaConsent}</span></label>`) : ''}
         <p class="fine">${escape(chat ? team.privacyNotice || t.stored(days()) : t.storedEmail)}${captcha ? ` ${t.captchaNote(label => `<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">${label}</a>`, label => `<a href="https://policies.google.com/terms" target="_blank" rel="noopener">${label}</a>`)}` : ''}${settings.privacyUrl ? ` <a class="privacy-link" href="${escape(safeHref(settings.privacyUrl) || '#')}" target="_blank" rel="noopener">${svg('shield')}<span>${t.privacy}</span></a>` : ''}</p>
         <div class="sheet-error" role="alert">${svg('alert')}<span></span></div>
@@ -1373,6 +1546,13 @@
   launcher.addEventListener('click', () => open(!state.open));
   $('.label')?.addEventListener('click', () => open(true));
   root.addEventListener('click', async event => {
+    const agreeButton = event.target.closest('[data-agree]');
+    if (agreeButton) { agree(agreeButton); return; }
+    if (event.target.closest('[data-cookie-settings]') && !event.target.closest('.sheet')) { event.preventDefault(); window.Cookiebot?.renew?.(); return; }
+    if (event.target.closest('[data-withdraw-consent]')) {
+      if (confirm(t.consentWithdrawConfirm)) { withdrawConsent(); state.view = 'chat'; render(); }
+      return;
+    }
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'close') { open(false); launcher.focus(); }
     if (action === 'new') newConversation();
@@ -1429,10 +1609,17 @@
   });
   if (captcha?.consentMode === 'cookiebot')
     for (const eventName of ['CookiebotOnAccept', 'CookiebotOnDecline', 'CookiebotOnConsentReady']) window.addEventListener(eventName, () => root.querySelector('.captcha-cookie')?.classList.toggle('hidden', captchaAllowed()));
+  function cookiebotChanged() {
+    if (consentConfig?.mode !== 'cookiebot' || !window.Cookiebot) return;
+    if (consent && !cookiebotAllows()) withdrawConsent();
+    if (!state.busy) render(); else updateComposer();
+  }
+  for (const eventName of ['CookiebotOnAccept', 'CookiebotOnDecline', 'CookiebotOnConsentReady', 'CookiebotOnLoad']) window.addEventListener(eventName, cookiebotChanged);
   setInterval(() => { if (state.open && !state.busy && !document.hidden) refreshConfig(['offline', 'starting', 'busy'].includes(state.status)); }, 30000);
 
   // ---------- start ----------
   load();
+  loadConsent();
   const mount = () => {
     document.body.append(host);
     setStatus('checking');
@@ -1456,7 +1643,7 @@
   };
   window.LigataAI = {
     open: () => open(true), close: () => open(false), toggle: () => open(!state.open), reset: () => newConversation(),
-    ask: text => { if (!F.ai) return; open(true); if (current()?.team) startConversation('ai'); show('chat'); send(text); },
+    ask: text => { if (!F.ai) return; open(true); if (current()?.team) startConversation('ai'); show('chat'); if (!aiAllowed()) { state.queuedAsk = String(text || ''); return; } send(text); },
     contact: kind => { open(true); if (F.ai) { if (!current() || current().team) startConversation('ai'); show('chat'); } openSheet(kind === 'email' ? 'email' : 'chat', ''); },
   };
   if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);

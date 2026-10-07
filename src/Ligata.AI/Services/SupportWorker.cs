@@ -10,8 +10,8 @@ namespace Ligata.AI.Services;
 
 /// <summary>
 /// Every 30 s: closes inactive conversations, removes absent team members, deletes conversations past
-/// retention and sends queued emails (with retries). Keep the application running (IIS: AlwaysRunning)
-/// so this also happens without traffic.
+/// retention and sends queued emails (with retries). Every hour: deletes old and unused consent records.
+/// Keep the application running (IIS: AlwaysRunning) so this also happens without traffic.
 /// </summary>
 public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<AssistantOptions> options, ILogger<SupportWorker> logger) : BackgroundService
 {
@@ -19,16 +19,25 @@ public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<Assistan
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.Value.Features.Inbox) return;
+        if (!options.Value.Features.Inbox && !options.Value.Features.Assistant) return;
         using var timer = new PeriodicTimer(Interval);
+        var consentsPurged = DateTime.MinValue;
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
                 using var scope = scopes.CreateScope();
                 if (scope.ServiceProvider.GetRequiredService<IRuntimeState>().Level != RuntimeLevel.Run) continue;
-                scope.ServiceProvider.GetRequiredService<SupportService>().Maintain();
-                await SendAsync(scope.ServiceProvider, stoppingToken);
+                if (options.Value.Features.Inbox)
+                {
+                    scope.ServiceProvider.GetRequiredService<SupportService>().Maintain();
+                    await SendAsync(scope.ServiceProvider, stoppingToken);
+                }
+                if (DateTime.UtcNow - consentsPurged > TimeSpan.FromHours(1))
+                {
+                    PurgeConsents(scope.ServiceProvider.GetRequiredService<ConsentStore>(), options.Value.Privacy, DateTime.UtcNow);
+                    consentsPurged = DateTime.UtcNow;
+                }
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
@@ -36,6 +45,10 @@ public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<Assistan
             }
         }
     }
+
+    /// <summary>Proof of consent is kept for KeepConsentRecordsDays; a consent never used for a question proves nothing and goes after a day.</summary>
+    public static int PurgeConsents(ConsentStore store, PrivacyOptions privacy, DateTime now) =>
+        store.Purge(now.AddDays(-Math.Clamp(privacy.KeepConsentRecordsDays, Math.Clamp(privacy.ConsentDays, 1, 400), 3650)), now.AddDays(-1));
 
     public static async Task<int> SendAsync(IServiceProvider services, CancellationToken token)
     {

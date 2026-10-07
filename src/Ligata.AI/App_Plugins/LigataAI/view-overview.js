@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.3.0';
+import { icon, number, compact } from './ui.js?v=0.4.0';
 
 export const overviewView = {
   budgetCard(title = 'Context budget', compactView = false) {
@@ -60,7 +60,9 @@ export const overviewView = {
     const teamSteps = !(l.liveChat || l.email) ? [] : [
       { done: (e.liveChat || e.email) && (!l.email || recipients > 0), label: 'Set up your team', detail: e.liveChat || e.email ? `${[e.liveChat && 'Live chat', e.email && 'email form'].filter(Boolean).join(' and ')} on${l.email ? (recipients ? ` · notifications to ${recipients} address${recipients === 1 ? '' : 'es'}` : ' · add team email addresses for notifications') : ''}` : 'Switch on live chat or the email form, so visitors can reach a person.', tab: 'team' },
     ];
+    const policyLinked = !!this.settings.identity.privacyUrl;
     const steps = [...aiSteps, ...teamSteps,
+      { done: policyLinked, label: 'Add the chat to your privacy policy', detail: policyLinked ? 'Linked from the chat. The text for your privacy policy is under Privacy.' : 'Copy the ready-made text under Privacy into your privacy policy and link it.', tab: 'privacy' },
       { done: this.settings.enabled, label: 'Show it on the website', detail: this.settings.enabled ? `Mode: ${({ all: 'every page', include: 'selected pages', exclude: 'all but excluded pages', manual: 'manual placement' })[this.settings.display.mode]}` : 'Use the switch at the top when you are happy with the preview.', tab: null },
     ];
     return html`<div class="split">

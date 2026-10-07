@@ -123,6 +123,50 @@ Assert(Throws(() => PdfText.Extract(FixturePdf(""), CancellationToken.None)) == 
 Assert(Throws(() => PdfText.Extract(new byte[PdfText.MaxBytes + 1], CancellationToken.None)) == "pdf_too_large", "PDF size limit.");
 static string? Throws(Action action) { try { action(); return null; } catch (GatewayException e) { return e.Code; } }
 
+// ---------- privacy: consent and the privacy policy text ----------
+var gpuSite = new AssistantOptions { Privacy = new() { GpuOperator = "Ligata", GpuOperatorCountry = "CH" } };
+var apiSite = new AssistantOptions { Mode = "api", Claude = new() { ApiKey = "sk-ant-x" } };
+var aiOn = new AssistantFeatures { Assistant = true, LiveChat = true, Email = true };
+var aiSettings = defaults with { Enabled = true, Features = aiOn };
+var aiFeatures = aiSettings.Effective(new FeatureOptions());
+Assert(new PrivacyOptions().RequireConsent && new PrivacyOptions().ConsentMode == "explicit" && new PrivacyOptions().CookiebotIgnore, "Consent is required by default, asked in the chat.");
+var gpuVersion = VisitorConsent.Version(aiSettings, gpuSite);
+Assert(gpuVersion.StartsWith("gpu.1.") && VisitorConsent.Version(aiSettings, apiSite).StartsWith("api.1."), "The consent version names the engine and the revision.");
+Assert(VisitorConsent.Version(aiSettings, new AssistantOptions { Privacy = new() { GpuOperator = "Other GmbH", GpuOperatorCountry = "CH" } }) != gpuVersion
+    && VisitorConsent.Version(aiSettings, new AssistantOptions { Privacy = new() { GpuOperator = "Ligata", GpuOperatorCountry = "US" } }) != gpuVersion, "Another recipient asks everyone again.");
+Assert(VisitorConsent.Version(aiSettings with { Privacy = new() { ConsentRevision = 2 } }, gpuSite) != gpuVersion, "Editors can ask everyone again.");
+Assert(VisitorConsent.Version(aiSettings with { Privacy = new() { ConsentText = "Changed wording" } }, gpuSite) == gpuVersion, "Editing the wording alone does not discard consents.");
+var publicConsent = JsonSerializer.Serialize(aiSettings.Public(65536, new { }, 100, aiFeatures, new RecaptchaSettings(), "api", VisitorConsent.Public(aiSettings, apiSite, aiFeatures)), AssistantJson.Options);
+Assert(publicConsent.Contains("\"consent\":{") && publicConsent.Contains("\"kind\":\"anthropic\"") && publicConsent.Contains("\"country\":\"US\"") && publicConsent.Contains("\"mode\":\"explicit\"") && !publicConsent.Contains("sk-ant"), "The widget learns who receives the data, never the key.");
+Assert(VisitorConsent.Public(aiSettings, new AssistantOptions { Privacy = new() { RequireConsent = false } }, aiFeatures) == null && VisitorConsent.Public(aiSettings, gpuSite, aiSettings.Effective(new FeatureOptions { Assistant = false })) == null, "No consent is asked without the AI or when switched off.");
+Assert(new PrivacyOptions { ConsentMode = " Cookiebot ", CookiebotCategory = "Marketing" } is { UsesCookiebot: true, Category: "marketing" } && new PrivacyOptions { CookiebotCategory = "necessary" }.Category == "preferences", "Cookiebot categories are limited to the optional ones.");
+var consentNow = DateTime.UtcNow;
+var validConsent = new ConsentRow { Id = Guid.NewGuid(), Version = gpuVersion, CreatedUtc = consentNow, ExpiresUtc = consentNow.AddDays(365) };
+Assert(VisitorConsent.Check(validConsent, gpuVersion, consentNow) == ConsentCheck.Valid, "A current consent is accepted.");
+Assert(VisitorConsent.Check(null, gpuVersion, consentNow) == ConsentCheck.Unknown && VisitorConsent.Check(new ConsentRow { Version = gpuVersion, ExpiresUtc = consentNow.AddDays(1), WithdrawnUtc = consentNow }, gpuVersion, consentNow) == ConsentCheck.Withdrawn
+    && VisitorConsent.Check(new ConsentRow { Version = gpuVersion, ExpiresUtc = consentNow.AddMinutes(-1) }, gpuVersion, consentNow) == ConsentCheck.Expired && VisitorConsent.Check(validConsent, "api.1.abcdef", consentNow) == ConsentCheck.Outdated, "Unknown, withdrawn, expired and outdated consents are refused.");
+Assert(VisitorConsent.Language("de-CH") == "de-ch" && VisitorConsent.Language("<script>") == "" && VisitorConsent.Source("cookiebot") == "cookiebot" && VisitorConsent.Source("anything") == "chat", "Consent records keep only clean values.");
+var markup = AssistantMarkup.Script(aiSettings, gpuSite, 100, aiFeatures, new RecaptchaSettings());
+Assert(markup.Contains("data-cookieconsent=\"ignore\"") && markup.Contains("&quot;consent&quot;:{") && markup.Contains("Ligata"), "The script tag escapes Cookiebot's automatic blocking and carries the consent request.");
+Assert(!AssistantMarkup.Script(aiSettings, new AssistantOptions { Privacy = new() { CookiebotIgnore = false } }, 100, aiFeatures, new RecaptchaSettings()).Contains("data-cookieconsent"), "The Cookiebot exemption can be switched off.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(aiSettings with { Privacy = new() { ConsentText = new string('x', 1501) } }), "The consent text has a length limit.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(aiSettings with { Privacy = new() { ConsentRevision = 0 } }), "The consent revision starts at 1.");
+
+var template = "A<!-- if x -->\n- x line\n<!-- endif -->\n- always\n<!-- if !x -->not x<!-- endif --> <!-- if y|x -->either<!-- endif --> {{v}} {{unknown}}\n<!-- if docs -->notes<!-- endif -->";
+var rendered = PrivacyPolicy.Render(template, new HashSet<string> { "x" }, new Dictionary<string, string> { ["v"] = "value" });
+Assert(rendered == "A\n- x line\n- always\n either value {{unknown}}\n", "Template blocks, negation, alternatives and values: " + JsonSerializer.Serialize(rendered));
+Assert(PrivacyPolicy.Render("<!-- if a -->outer <!-- if b -->inner<!-- endif --> end<!-- endif -->", new HashSet<string> { "a" }, new Dictionary<string, string>()) == "outer  end\n", "Nested blocks.");
+var policyDe = PrivacyPolicy.Generate("de", aiSettings, gpuSite, new RecaptchaSettings());
+Assert(policyDe.Contains("KI-Server von Ligata") && policyDe.Contains("in der Schweiz") && !policyDe.Contains("Anthropic") && policyDe.Contains("Art. 6 Abs. 1 lit. a DSGVO") && policyDe.Contains("Chat mit unserem Team") && policyDe.Contains("Einwilligung widerrufen"), "German policy for the own GPU, with consent and team chat.");
+Assert(!policyDe.Contains("<!--") && !policyDe.Contains("{{") && !policyDe.Contains("Für Website-Betreiber") && !policyDe.Contains("reCAPTCHA"), "No template markup, notes or switched-off services remain.");
+var policyEn = PrivacyPolicy.Generate("en", aiSettings with { Features = new() { Assistant = true } }, apiSite, new RecaptchaSettings());
+Assert(policyEn.Contains("Anthropic, PBC") && policyEn.Contains("Claude Haiku 5.5") && policyEn.Contains("Standard Contractual Clauses") && !policyEn.Contains("Chat with our team") && !policyEn.Contains("AI server run by"), "English policy for the Claude API without team features.");
+var withCaptcha = PrivacyPolicy.Generate("de", aiSettings, new AssistantOptions { Privacy = new() { ConsentMode = "cookiebot", CookiebotCategory = "statistics" } }, new RecaptchaSettings { SiteKey = "k", SecretKey = "s", AllowedHostnames = ["x"], ConsentMode = "cookiebot", CookiebotCategory = "marketing" });
+Assert(withCaptcha.Contains("Google reCAPTCHA") && withCaptcha.Contains("„Marketing“") && withCaptcha.Contains("„Statistiken“") && withCaptcha.Contains("[Land]"), "reCAPTCHA, Cookiebot categories and a missing server country are spelled out.");
+var noConsent = PrivacyPolicy.Generate("en", aiSettings, new AssistantOptions { Privacy = new() { RequireConsent = false } }, new RecaptchaSettings());
+Assert(noConsent.Contains("[please add") && !noConsent.Contains("Proof of your consent"), "Without consent the legal basis is left for the operator.");
+Assert(PrivacyPolicy.Country("US", "en") == "the United States" && PrivacyPolicy.Country("DE", "de") == "Deutschland" && PrivacyPolicy.Country("Schweiz", "de") == "Schweiz", "Countries read naturally.");
+
 // ---------- secrets and visitors ----------
 var vault = new ApiKeyVault(new EphemeralDataProtectionProvider());
 var key = "lai_0123456789ab_" + new string('A', 43);
@@ -438,6 +482,29 @@ using (var scope = app.Services.CreateScope())
     catch (GatewayException e) { Assert(e.Code == "not_configured", "A missing key reads as not configured."); }
     var apiStatus = await Claude(new() { ApiKey = "sk-ant-x", MaxContextTokens = 50_000 }).StatusAsync(false, CancellationToken.None);
     Assert(apiStatus.State == "ready" && apiStatus.Engine == "api" && apiStatus.ContextTokens == 50_000 && apiStatus.Vision && apiStatus.Model == "Claude Haiku 5.5", "API mode status without a network call.");
+
+    // Consent records: created, checked, used, withdrawn and purged.
+    var consents = services.GetRequiredService<ConsentStore>();
+    var consentOptions = new AssistantOptions { Privacy = new() { GpuOperatorCountry = "CH" } };
+    var consentVersion = VisitorConsent.Version(store.Settings().Settings, consentOptions);
+    var given = consents.Create(consentVersion, "gpu", "chat", "de", DateTime.UtcNow, DateTime.UtcNow.AddDays(365));
+    Assert(VisitorConsent.Verify(consents, given.Id.ToString(), store.Settings().Settings, consentOptions, DateTime.UtcNow) == ConsentCheck.Valid, "A recorded consent lets questions through.");
+    Assert(consents.Find(given.Id)!.UsedUtc != null, "The first question is recorded.");
+    Assert(VisitorConsent.Verify(consents, null, store.Settings().Settings, consentOptions, DateTime.UtcNow) == ConsentCheck.Missing
+        && VisitorConsent.Verify(consents, Guid.NewGuid().ToString(), store.Settings().Settings, consentOptions, DateTime.UtcNow) == ConsentCheck.Unknown
+        && VisitorConsent.Verify(consents, "not-a-guid", store.Settings().Settings, consentOptions, DateTime.UtcNow) == ConsentCheck.Unknown, "Questions without a known consent are refused.");
+    Assert(consents.Withdraw(given.Id, DateTime.UtcNow) && VisitorConsent.Verify(consents, given.Id.ToString(), store.Settings().Settings, consentOptions, DateTime.UtcNow) == ConsentCheck.Withdrawn, "A withdrawal applies at once (no stale cache).");
+    var unused = consents.Create(consentVersion, "gpu", "cookiebot", "en", DateTime.UtcNow.AddDays(-2), DateTime.UtcNow.AddDays(363));
+    var old = consents.Create(consentVersion, "gpu", "chat", "en", DateTime.UtcNow.AddDays(-2000), DateTime.UtcNow.AddDays(-1635));
+    var summary = consents.Summary(DateTime.UtcNow.AddDays(-30), DateTime.UtcNow);
+    Assert(summary.Given >= 2 && summary.Used >= 1 && summary.Withdrawn >= 1, "The backoffice sees how many visitors agreed and withdrew.");
+    Assert(SupportWorker.PurgeConsents(consents, new PrivacyOptions(), DateTime.UtcNow) >= 2 && consents.Find(unused.Id) == null && consents.Find(old.Id) == null && consents.Find(given.Id) != null, "Unused consents go after a day, records after the keeping period.");
+    using (var scope5 = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+    {
+        var stored = scope5.Database.Fetch<string>("SELECT Version FROM LigataAIConsent WHERE Id=@0", given.Id);
+        Assert(stored.SequenceEqual([consentVersion]) && !typeof(ConsentRow).GetProperties().Any(x => x.Name.Contains("Ip") || x.Name.Contains("Address") || x.Name.Contains("Visitor") || x.Name.Contains("Text")), "Consent records hold no IP address, visitor id or content.");
+        scope5.Database.Execute("DELETE FROM LigataAIConsent"); scope5.Complete();
+    }
     Console.WriteLine($"Database integration checks passed: {assertions} total assertions.");
 }
 if (!args.Contains("--serve")) return;

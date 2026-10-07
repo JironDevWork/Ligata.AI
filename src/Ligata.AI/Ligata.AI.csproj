@@ -5,9 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <PackageId>Ligata.AI</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Ligata</Authors>
-    <Description>Website chat for Umbraco 17: AI assistant (self-hosted Ligata AI gateway or Claude through the Anthropic API), live chat with your team in an Umbraco inbox, and an email form. Each feature can be licensed on its own.</Description>
+    <Description>Website chat for Umbraco 17: AI assistant (self-hosted Ligata AI gateway or Claude through the Anthropic API), live chat with your team in an Umbraco inbox, and an email form. GDPR-ready: consent before the AI reads a message (with Cookiebot support) and privacy policy templates. Each feature can be licensed on its own.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/JironDevWork/Ligata.AI</RepositoryUrl>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
@@ -24,5 +24,9 @@
     <None Remove="PublicAssets/**" />
     <Content Include="PublicAssets/**" Pack="true" PackagePath="static/assets/ligata-ai/%(RecursiveDir)%(Filename)%(Extension)" />
     <None Include="buildTransitive/Ligata.AI.targets" Pack="true" PackagePath="buildTransitive/" />
+    <!-- Privacy policy templates: the backoffice fills them in for the site's setup. -->
+    <EmbeddedResource Include="../../docs/privacy/datenschutz-de.md" LogicalName="Ligata.AI.Privacy.de.md" />
+    <EmbeddedResource Include="../../docs/privacy/privacy-policy-en.md" LogicalName="Ligata.AI.Privacy.en.md" />
+    <None Include="../../docs/privacy/*.md" Pack="true" PackagePath="docs/privacy/" />
   </ItemGroup>
 </Project>

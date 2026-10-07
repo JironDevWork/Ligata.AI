@@ -11,7 +11,8 @@ namespace Ligata.AI.Services;
 
 public sealed record ChatAttachment(string Type, string? Name, string? Data, string? Text);
 public sealed record ChatMessage(string Role, string Content, List<ChatAttachment>? Attachments);
-public sealed record ChatRequest(List<ChatMessage> Messages, string? PageTitle, string? PagePath);
+/// <summary>Consent is the id of the visitor's recorded consent (LigataAI:Privacy:RequireConsent).</summary>
+public sealed record ChatRequest(List<ChatMessage> Messages, string? PageTitle, string? PagePath, string? Consent = null);
 
 public sealed class ChatValidationException(string code, string message, int status = 400) : Exception(message)
 {

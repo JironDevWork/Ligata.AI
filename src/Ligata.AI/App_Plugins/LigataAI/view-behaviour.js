@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact } from './ui.js?v=0.3.0';
+import { number, compact } from './ui.js?v=0.4.0';
 
 export const behaviourView = {
   behaviourView() {
@@ -62,11 +62,8 @@ export const behaviourView = {
           <div class="section">${this.text('identity.fallbackMessage', 'Offline message', { rows: 2, max: 400 })}</div>
         </section>
 
-        <section class="card">
-          <header><div><h2>Privacy</h2></div></header>
-          ${this.text('identity.privacyNotice', 'Notice under the input', { rows: 2, max: 600, help: this.api() && this.settings.identity.privacyNotice === this.defaults?.identity?.privacyNotice ? `Visitors see: “${this.connection.defaultPrivacyNotice}” (the default for the Claude API) until you change this text.` : '' })}
-          <div class="section">${this.text('identity.privacyUrl', 'Privacy policy link', { placeholder: '/datenschutz/' })}</div>
-          <small class="muted">Conversations with the AI are never stored on the server. Conversations with your team are stored for the period set under Team &amp; email and then deleted. Visitors' IP addresses are pseudonymised and only used for limits. Mention the chat in your privacy policy.</small>
+        <section class="card muted-card">
+          <header><div><h2>Privacy</h2><p class="muted">The privacy notice, the link to your privacy policy, visitor consent and a ready-made text for your privacy policy are under Privacy.</p></div><button type="button" class="btn small" @click=${() => { this.tab = 'privacy'; this.refreshPrivacy(); this.loadPolicy(); }}>Open</button></header>
         </section>
 
         <section class="card">

@@ -147,3 +147,25 @@ public sealed class EmailRow
     [Column("CreatedUtc")] public DateTime CreatedUtc { get; set; }
     [Column("SentUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? SentUtc { get; set; }
 }
+
+/// <summary>
+/// Proof that a visitor agreed before the AI received their messages. Holds no IP address and no content:
+/// the random id lives only in that visitor's browser. Deleted after LigataAI:Privacy:KeepConsentRecordsDays.
+/// </summary>
+[TableName("LigataAIConsent"), PrimaryKey("Id", AutoIncrement = false), ExplicitColumns]
+public sealed class ConsentRow
+{
+    [Column("Id"), PrimaryKeyColumn(AutoIncrement = false)] public Guid Id { get; set; }
+    /// <summary>The consent text version the visitor saw (engine, revision and recipient).</summary>
+    [Column("Version"), Length(40)] public string Version { get; set; } = "";
+    /// <summary>gpu | api</summary>
+    [Column("Engine"), Length(10)] public string Engine { get; set; } = "";
+    /// <summary>chat (the button in the chat) | cookiebot (the configured Cookiebot category)</summary>
+    [Column("Source"), Length(12)] public string Source { get; set; } = "chat";
+    [Column("Language"), Length(10)] public string Language { get; set; } = "";
+    [Column("CreatedUtc"), Index(IndexTypes.NonClustered)] public DateTime CreatedUtc { get; set; }
+    [Column("ExpiresUtc")] public DateTime ExpiresUtc { get; set; }
+    /// <summary>First question or file sent with this consent; unused records are deleted after a day.</summary>
+    [Column("UsedUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? UsedUtc { get; set; }
+    [Column("WithdrawnUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? WithdrawnUtc { get; set; }
+}
