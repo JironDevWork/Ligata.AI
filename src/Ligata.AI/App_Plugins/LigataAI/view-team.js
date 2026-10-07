@@ -87,7 +87,7 @@ export const teamView = {
           <div class="section">
             ${this.toggle('contact.sendConfirmation', 'Send the visitor a confirmation', 'A copy of their message, in their language, with your reply-to address.')}
             ${c.sendConfirmation ? html`<div class="grid">
-              ${this.text('contact.confirmationSubject', 'Subject', { max: 150, placeholder: 'We received your message – {site}' })}
+              ${this.text('contact.confirmationSubject', 'Subject', { max: 150, placeholder: 'Your message to {site}' })}
               ${this.text('contact.confirmationText', 'Text', { rows: 4, max: 4000, placeholder: 'Hi {name}\n\nThanks for your message. We will get back to you as soon as possible.', help: 'Placeholders: {name}, {site}. Empty: a translated default.' })}
             </div>` : nothing}
           </div>
@@ -128,7 +128,7 @@ export const teamView = {
 
         <section class="card">
           <header><div><h2>Who answers</h2></div></header>
-          <dl class="facts"><dt>Inbox</dt><dd>${[...new Set([...(p.agentGroups || []), ...(p.editorGroups || [])])].join(', ') || '—'}</dd><dt>Settings</dt><dd>${(p.editorGroups || []).join(', ')}</dd></dl>
+          <dl class="facts"><dt>Inbox</dt><dd>${[...new Set([...(p.agentGroups || []), ...(p.editorGroups || [])])].join(', ') || '-'}</dd><dt>Settings</dt><dd>${(p.editorGroups || []).join(', ')}</dd></dl>
           <small class="muted">User groups come from <code>LigataAI:AgentGroups</code> and <code>LigataAI:EditorGroups</code>. Each member’s name and profile picture come from their Umbraco profile.</small>
         </section>
       </div>

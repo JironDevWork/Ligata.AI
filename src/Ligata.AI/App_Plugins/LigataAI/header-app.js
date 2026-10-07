@@ -16,6 +16,8 @@ class LigataAIHeaderApp extends UmbElementMixin(LitElement) {
   static styles = css`
     :host{position:relative;display:inline-flex}
     .badge{position:absolute;top:2px;right:0;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--uui-color-danger,#d42054);color:#fff;font:700 10.5px/17px system-ui,sans-serif;text-align:center;pointer-events:none;box-shadow:0 0 0 2px var(--uui-color-header-surface,#1b264f)}
+  
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   `;
 
   constructor() {

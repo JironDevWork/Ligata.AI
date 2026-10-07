@@ -6,16 +6,16 @@ export const styles = css`
     --accent:var(--uui-color-interactive,#3544b1);--accent-soft:color-mix(in srgb,var(--accent) 9%,transparent);--ok:#1f9d55;--warn:#c98200;--danger:var(--uui-color-danger,#c62f3b);
     --c-instructions:#8b93a7;--c-knowledge:#5b6cff;--c-chat:#2cb67d;--c-answer:#f2a93b;--radius:12px}
   *{box-sizing:border-box}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
-  svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
   h1,h2,h3,h4,p{margin:0}h1{font-size:24px;letter-spacing:-.5px;line-height:1.2}h2{font-size:17px;letter-spacing:-.2px}h3{font-size:14.5px}p{line-height:1.55}
   small,.muted{color:var(--muted)}small{font-size:12px;line-height:1.45}
   :focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px}
   .workspace{max-width:1480px;margin:auto;padding:26px 32px 48px}
   .eyebrow{font-size:10.5px;text-transform:uppercase;letter-spacing:1.3px;font-weight:700;color:var(--muted)}
   .top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}
-  .top .title{display:grid;gap:6px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.grow{flex:1}
+  .top .title{display:grid;gap:6px}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.row.section{display:flex}.grow{flex:1}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 14px;font-weight:600;line-height:1.35;white-space:nowrap;text-decoration:none;transition:background .15s,border-color .15s}
-  .btn:hover:not(:disabled){background:var(--subtle)}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--uui-color-interactive-contrast,#fff)}.btn.primary:hover:not(:disabled){filter:brightness(.94);background:var(--accent)}
+  .btn:hover:not(:disabled){background:var(--subtle)}.btn:active:not(:disabled){transform:translateY(1px)}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--uui-color-interactive-contrast,#fff)}.btn.primary:hover:not(:disabled){filter:brightness(.94);background:var(--accent)}
   .btn.quiet{border-color:transparent;background:transparent;color:var(--muted);font-weight:500}.btn.quiet:hover:not(:disabled){color:var(--uui-color-text);background:var(--subtle)}.btn.danger{color:var(--danger)}.btn.small{padding:5px 10px;font-size:12.5px;border-radius:7px}
   .icon-btn{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;border:0;background:transparent;color:var(--muted)}.icon-btn:hover:not(:disabled){background:var(--subtle);color:var(--uui-color-text)}
   .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--subtle);color:var(--muted);white-space:nowrap}
@@ -36,8 +36,8 @@ export const styles = css`
   .split{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:24px;align-items:start}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
   .card>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.card>header p{margin-top:3px}
-  .section{display:grid;gap:14px}.section+.section{margin-top:22px;padding-top:22px;border-top:1px solid var(--line)}
-  .control{display:grid;gap:6px}.control>span{font-weight:600;font-size:13px}.control small{margin-top:-2px}
+  .section{display:grid;gap:14px}.section+.section,.card>:not(header):not(.section)+.section{margin-top:22px;padding-top:22px;border-top:1px solid var(--line)}.card>.grid+small{display:block;margin-top:14px}
+  .control{display:grid;gap:6px;align-content:start}.control>span{font-weight:600;font-size:13px}.control small{margin-top:-2px}
   .control input[type=text],.control input[type=url],.control input[type=email],.control input[type=password],.control input[type=number],.control select,.control textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--surface);transition:border-color .15s,box-shadow .15s}
   .control textarea{resize:vertical;line-height:1.5}.control input:focus,.control select:focus,.control textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .control.invalid input,.control.invalid textarea,.control.invalid select{border-color:var(--danger)}.control .error{color:var(--danger);font-size:12px}
@@ -88,4 +88,5 @@ export const styles = css`
   .spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
   @media(max-width:1180px){.split{grid-template-columns:1fr}.preview{position:static}.preview .frame{height:640px}}
   @media(max-width:820px){.two,.three{grid-template-columns:1fr}.workspace{padding:18px 16px 40px}.k-item{grid-template-columns:auto 1fr;}.k-tokens,.k-actions{grid-column:2}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 `;

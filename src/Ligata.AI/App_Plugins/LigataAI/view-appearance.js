@@ -1,8 +1,16 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { icon } from './ui.js?v=0.3.0';
-import { themes, colorFields } from './themes.js?v=0.3.0';
+import { themes, colorFields, contrast, readablePairs } from './themes.js?v=0.3.0';
 
 export const appearanceView = {
+  /** Warns (without blocking) when a colour pair is hard to read; shown even while the colour list is collapsed. */
+  contrastNotice(a) {
+    const low = readablePairs.map(([text, back, label]) => ({ label, ratio: contrast(a[text], a[back]) })).filter(x => x.ratio < 4.5);
+    if (!low.length) return nothing;
+    return html`<div class="notice warning" style="margin-top:14px">${icon('warn')}<div><strong>Some text may be hard to read</strong>
+      <ul>${low.map(x => html`<li>${x.label}: ${x.ratio.toFixed(1)}:1</li>`)}</ul><small>Aim for at least 4.5:1 so every visitor can read the chat comfortably.</small></div></div>`;
+  },
+
   appearanceView() {
     const a = this.settings.appearance;
     return html`<div class="split">
@@ -16,10 +24,11 @@ export const appearanceView = {
           <div class="section">
             ${this.segmented('appearance.colorScheme', 'Colour mode', [['light', 'Light'], ['dark', 'Dark'], ['auto', 'Follow visitor']], 'Dark mode keeps your accent and bubble colours and uses a dark panel.')}
           </div>
-          <details class="section"><summary><strong>Colours</strong> <small class="muted">— all ten are editable</small></summary>
+          <details class="section"><summary><strong>Colours</strong> <small class="muted">All ten can be changed.</small></summary>
             <div class="colors" style="margin-top:12px">${colorFields.map(([key, label]) => html`<label class="color"><input type="color" .value=${a[key]} @input=${e => this.set('appearance.' + key, e.target.value)}><span>${label}<code>${a[key]}</code></span></label>`)}</div>
             ${this.errors && Object.keys(this.errors).some(k => colorFields.some(([c]) => k === 'appearance.' + c)) ? html`<span class="error">Colours must be hex values like #2f5bff.</span>` : nothing}
           </details>
+          ${this.contrastNotice(a)}
         </section>
         <section class="card">
           <header><div><h2>Chat bubble</h2><p class="muted">The button visitors click to open the assistant.</p></div></header>

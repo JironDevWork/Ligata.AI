@@ -51,7 +51,7 @@ export const inboxStyles = css`
   .note .label{display:flex;gap:6px;align-items:center;font-size:11.5px;font-weight:700;margin-bottom:3px}.note svg{width:14px;height:14px}
   .event{align-self:center;display:flex;gap:7px;align-items:center;padding:4px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:12px;color:var(--muted)}
   .event svg{width:14px;height:14px}.event.good{color:var(--ok)}
-  .divider{display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:4px 0}
+  .divider{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:var(--muted);margin:4px 0}
   .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line)}
   .typing{align-self:flex-start;display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted)}
   .dots{display:inline-flex;gap:3px;padding:8px 10px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}.dots i{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.35;animation:bounce 1.2s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
@@ -66,7 +66,7 @@ export const inboxStyles = css`
   .gate{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--accent-soft)}
   .gate p{font-size:13.5px}
   .details{overflow-y:auto;padding:16px;display:grid;gap:18px;align-content:start}
-  .details h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
+  .details h3{font-size:13.5px;font-weight:700;color:var(--uui-color-text,#1b264f);margin-bottom:8px}
   .details dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:13px}.details dt{color:var(--muted)}.details dd{margin:0;overflow-wrap:anywhere;font-weight:600}
   .visitor-card{display:flex;gap:12px;align-items:center}
   .agents{display:grid;gap:8px}.agent{display:flex;gap:10px;align-items:center;font-size:13px}.agent small{display:block}
@@ -86,4 +86,5 @@ export const inboxStyles = css`
   .back-btn{display:none}
   @media(max-width:1280px){.panes{grid-template-columns:300px minmax(0,1fr)}.panes .details{display:none}.panes.show-details{grid-template-columns:300px minmax(0,1fr) 280px}.panes.show-details .details{display:grid}}
   @media(max-width:860px){.app{padding:12px}.panes,.panes.show-details{grid-template-columns:1fr}.panes.has-thread .list-pane{display:none}.panes:not(.has-thread) .thread{display:none}.back-btn{display:inline-grid}.panes .details{display:none!important}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 `;

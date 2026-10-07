@@ -197,6 +197,15 @@ await check('backoffice: overview, behaviour and appearance speak Claude, not GP
   await tab('Appearance');
   const appearance = await dashText();
   assert(appearance.includes('Show “AI by Ligata”') && !appearance.includes('queue position'), 'branding and no queue option');
+  // Unreadable colours are flagged while editing (WCAG AA), and the warning goes away when fixed.
+  assert(await dash.locator('.notice.warning', { hasText: 'hard to read' }).count() === 0, 'the preset passes');
+  await dash.locator('summary', { hasText: 'Colours' }).click();
+  const visitorText = dash.locator('label.color', { hasText: 'Visitor text' }).locator('input[type=color]');
+  const original = await visitorText.inputValue();
+  await visitorText.fill('#dddddd');
+  await dash.locator('.notice.warning', { hasText: 'Visitor text on the visitor bubble' }).waitFor();
+  await visitorText.fill(original);
+  await dash.locator('.notice.warning', { hasText: 'hard to read' }).waitFor({ state: 'detached' });
   await admin.screenshot({ path: path.join(out, '04-overview.png') });
 });
 

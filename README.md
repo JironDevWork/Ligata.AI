@@ -38,7 +38,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
 - **Settings**, organised in tabs:
   - **Overview**: getting-started checklist per feature, team inbox numbers, AI server status and the **context budget**.
   - **Appearance**:
-    - six themes and ten editable colours, light/dark/automatic mode, position;
+    - six themes and ten editable colours, light/dark/automatic mode, position; every preset passes WCAG AA, and a live check flags colour pairs that are hard to read;
     - bubble icon, size and label, teaser, window size, corners, font;
     - memory meter, queue position, animations, a chime for team replies and branding.
     - A **live preview** uses unsaved settings, answers real AI questions and simulates team requests.
@@ -179,6 +179,12 @@ Then, in the backoffice:
   - AI processing on your own server, without storage, or in API mode by Anthropic (Claude);
   - team conversations stored for your configured period;
   - Google reCAPTCHA, if used.
+
+## Third-party components
+
+- [Anthropic C# SDK](https://github.com/anthropics/anthropic-sdk-csharp) (MIT) for API mode.
+- [PdfPig](https://github.com/UglyToad/PdfPig) (Apache-2.0) reads PDFs on the site's server in API mode.
+- [Tabler Icons](https://tabler.io/icons) (MIT), outline set, in the widget and the backoffice.
 
 ## Tests
 

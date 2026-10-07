@@ -10,8 +10,8 @@ const out = path.join(here, '..', '..', '.runtime', 'e2e', 'gallery-support');
 mkdirSync(out, { recursive: true });
 const widget = readFileSync(path.join(here, '..', '..', 'src', 'Ligata.AI', 'PublicAssets', 'ligata-ai.js'), 'utf8');
 const themes = {
-  midnight: { theme: 'midnight', colorScheme: 'dark', accent: '#8b7dff', accentText: '#ffffff', background: '#14151c', surface: '#1e2029', text: '#f1f2f7', mutedText: '#a0a4b4', userBubble: '#8b7dff', userText: '#ffffff', assistantBubble: '#1e2029', assistantText: '#f1f2f7', radius: 22 },
-  sunset: { theme: 'sunset', colorScheme: 'light', accent: '#e2552d', accentText: '#ffffff', background: '#fffaf6', surface: '#fbeee6', text: '#2a1710', mutedText: '#7a5a4c', userBubble: '#e2552d', userText: '#ffffff', assistantBubble: '#fbeee6', assistantText: '#2a1710', radius: 24 },
+  midnight: { theme: 'midnight', colorScheme: 'dark', accent: '#8b7dff', accentText: '#14151c', background: '#14151c', surface: '#1e2029', text: '#f1f2f7', mutedText: '#a0a4b4', userBubble: '#8b7dff', userText: '#14151c', assistantBubble: '#1e2029', assistantText: '#f1f2f7', radius: 22 },
+  sunset: { theme: 'sunset', colorScheme: 'light', accent: '#c9461f', accentText: '#ffffff', background: '#fffaf6', surface: '#fbeee6', text: '#2a1710', mutedText: '#7a5a4c', userBubble: '#c9461f', userText: '#ffffff', assistantBubble: '#fbeee6', assistantText: '#2a1710', radius: 24 },
 };
 const settings = appearance => ({
   name: 'Lia', greeting: 'Hi! I am Lia, the assistant of Ligata. How can I help?', suggestions: [], language: 'en', privacyNotice: 'Answers come from an AI on our own server and can be wrong.', privacyUrl: '/privacy/',

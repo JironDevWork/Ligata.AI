@@ -70,12 +70,12 @@ public static partial class AssistantValidation
         Check(a.LauncherIcon != "avatar" || i.AvatarUrl != "", "appearance.launcherIcon", "The avatar icon needs an avatar image.");
         Length(a.LauncherLabel, 30, "appearance.launcherLabel", "The bubble label");
         Length(a.Teaser, 160, "appearance.teaser", "The teaser");
-        Check(a.Radius is >= 0 and <= 32, "appearance.radius", "Corner radius must be 0–32 px.");
-        Check(a.LauncherSize is >= 44 and <= 88, "appearance.launcherSize", "Bubble size must be 44–88 px.");
-        Check(a.PanelWidth is >= 320 and <= 560, "appearance.panelWidth", "Panel width must be 320–560 px.");
-        Check(a.PanelHeight is >= 420 and <= 900, "appearance.panelHeight", "Panel height must be 420–900 px.");
-        Check(a.OffsetX is >= 0 and <= 200 && a.OffsetY is >= 0 and <= 200, "appearance.offset", "Distance from the edge must be 0–200 px.");
-        Check(a.TeaserDelaySeconds is >= 0 and <= 120, "appearance.teaserDelaySeconds", "Teaser delay must be 0–120 seconds.");
+        Check(a.Radius is >= 0 and <= 32, "appearance.radius", "Corner radius must be between 0 and 32 px.");
+        Check(a.LauncherSize is >= 44 and <= 88, "appearance.launcherSize", "Bubble size must be between 44 and 88 px.");
+        Check(a.PanelWidth is >= 320 and <= 560, "appearance.panelWidth", "Panel width must be between 320 and 560 px.");
+        Check(a.PanelHeight is >= 420 and <= 900, "appearance.panelHeight", "Panel height must be between 420 and 900 px.");
+        Check(a.OffsetX is >= 0 and <= 200 && a.OffsetY is >= 0 and <= 200, "appearance.offset", "Distance from the edge must be between 0 and 200 px.");
+        Check(a.TeaserDelaySeconds is >= 0 and <= 120, "appearance.teaserDelaySeconds", "Teaser delay must be between 0 and 120 seconds.");
         Check(a.ZIndex is >= 1 and <= 2147483647, "appearance.zIndex", "Invalid stacking order.");
 
         Check(Modes.Contains(d.Mode), "display.mode", "Choose where the assistant appears.");
@@ -90,8 +90,8 @@ public static partial class AssistantValidation
         Length(t.OfflineMessage, 400, "support.offlineMessage", "The offline message");
         Length(t.PrivacyNotice, 400, "support.privacyNotice", "The storage notice");
         Check(AgentDisplays.Contains(t.AgentDisplay), "support.agentDisplay", "Choose how team members appear.");
-        Check(t.InactivityDays is >= 1 and <= 30, "support.inactivityDays", "Conversations close after 1–30 days without activity.");
-        Check(t.RetentionDays is >= 1 and <= 365, "support.retentionDays", "Closed conversations are kept 1–365 days.");
+        Check(t.InactivityDays is >= 1 and <= 30, "support.inactivityDays", "Conversations close after 1 to 30 days without activity.");
+        Check(t.RetentionDays is >= 1 and <= 365, "support.retentionDays", "Closed conversations are kept for 1 to 365 days.");
         Length(c.Title, 80, "contact.title", "The form title");
         Length(c.Intro, 400, "contact.intro", "The introduction");
         Check(Fields.Contains(c.NameField), "contact.nameField", "Choose whether the name is hidden, optional or required.");

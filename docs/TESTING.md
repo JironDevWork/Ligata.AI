@@ -50,7 +50,15 @@ node support.mjs                         # the team suite also passes in API mod
 | Handoff | The `[[team]]` marker becomes the team card |
 | Attachments | Screenshot as a JPEG image block; PDF read on the site's server (PdfPig) and sent as a text document block |
 | Failures | Overload shows "busy" with a working retry; a refusal has no retry; a rejected key turns the widget offline, *Test connection* explains it and recovers |
-| Backoffice | Claude card instead of gateway fields, no part of the key anywhere, overview/behaviour/appearance wording, PDF knowledge counted by the token counting endpoint |
+| Backoffice | Claude card instead of gateway fields, no part of the key anywhere, overview/behaviour/appearance wording, the colour contrast warning, PDF knowledge counted by the token counting endpoint |
+
+Results (7 October 2026, version 0.3.0):
+- API suite: 13/13 on the project host, twice in a row, and on the installed-package host (`.nupkg` with the Anthropic SDK and PdfPig, existing 0.2 database).
+- Team suite in API mode: 16/16.
+- Regression in GPU mode: AI suite 23/23 (twice), team suite 16/16, no-AI suite 5/5.
+- Package checks: 91 domain and 134 total with the database. Gateway: 33.
+
+Bug found by these runs and fixed: pressing Enter while a screenshot was still being prepared silently dropped the message (now it is sent as soon as the file is ready).
 
 ### Team handoff, live chat and email (browser)
 

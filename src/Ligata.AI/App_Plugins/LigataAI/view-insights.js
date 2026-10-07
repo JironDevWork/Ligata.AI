@@ -26,7 +26,7 @@ export const insightsView = {
           <div class="stat"><b>${number(sum('conversations'))}</b><small>Conversations</small></div>
           <div class="stat"><b>${number(sum('questions'))}</b><small>Questions</small></div>
           <div class="stat"><b>${number(answered)}</b><small>Answered</small></div>
-          <div class="stat"><b>${averageSeconds ? averageSeconds.toFixed(1) + ' s' : '—'}</b><small>Average answer time (incl. waiting)</small></div>
+          <div class="stat"><b>${averageSeconds ? averageSeconds.toFixed(1) + ' s' : '-'}</b><small>Average answer time (incl. waiting)</small></div>
           <div class="stat"><b>${number(sum('attachments'))}</b><small>Attachments</small></div>
           <div class="stat"><b>${number(sum('busy'))}</b><small>Turned away (busy)</small></div>
           <div class="stat"><b>${number(sum('offline'))}</b><small>While offline</small></div>
@@ -40,7 +40,7 @@ export const insightsView = {
           <div class="stat"><b>${number(sum('chatRequests'))}</b><small>Chat requests</small></div>
           <div class="stat"><b>${number(sum('emailRequests'))}</b><small>Email messages</small></div>
           <div class="stat"><b>${number(sum('agentReplies'))}</b><small>Team replies</small></div>
-          <div class="stat"><b>${sum('responses') ? this.duration(sum('firstResponseMs') / sum('responses')) : '—'}</b><small>Average first response</small></div>
+          <div class="stat"><b>${sum('responses') ? this.duration(sum('firstResponseMs') / sum('responses')) : '-'}</b><small>Average first response</small></div>
           ${this.licensedFeatures().assistant ? html`<div class="stat"><b>${number(sum('suggested'))}</b><small>AI could not answer (offered the team)</small></div>` : nothing}
         </div>
         ${this.licensedFeatures().assistant && sum('suggested') > 5 ? html`<small class="muted">Questions the AI could not answer are a good hint for missing knowledge. Only the count is kept, never the question.</small>` : nothing}

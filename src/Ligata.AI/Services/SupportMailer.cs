@@ -127,10 +127,10 @@ public sealed class SupportMailer(SupportStore store, IAssistantEmailDelivery de
     {
         public static Texts For(string language) => language switch
         {
-            "de" => new("Wir haben deine Nachricht erhalten – {site}", "Hallo {name}\n\nDanke für deine Nachricht. Wir melden uns so bald wie möglich bei dir.", "Deine Nachricht", "Antwort von {site}"),
-            "fr" => new("Nous avons bien reçu votre message – {site}", "Bonjour {name}\n\nMerci pour votre message. Nous vous répondrons dès que possible.", "Votre message", "Réponse de {site}"),
-            "it" => new("Abbiamo ricevuto il tuo messaggio – {site}", "Ciao {name}\n\nGrazie per il tuo messaggio. Ti risponderemo il prima possibile.", "Il tuo messaggio", "Risposta da {site}"),
-            _ => new("We received your message – {site}", "Hi {name}\n\nThanks for your message. We will get back to you as soon as possible.", "Your message", "Reply from {site}"),
+            "de" => new("Deine Nachricht an {site}", "Hallo {name}\n\nDanke für deine Nachricht. Wir melden uns so bald wie möglich bei dir.", "Deine Nachricht", "Antwort von {site}"),
+            "fr" => new("Votre message à {site}", "Bonjour {name}\n\nMerci pour votre message. Nous vous répondrons dès que possible.", "Votre message", "Réponse de {site}"),
+            "it" => new("Il tuo messaggio a {site}", "Ciao {name}\n\nGrazie per il tuo messaggio. Ti risponderemo il prima possibile.", "Il tuo messaggio", "Risposta da {site}"),
+            _ => new("Your message to {site}", "Hi {name}\n\nThanks for your message. We will get back to you as soon as possible.", "Your message", "Reply from {site}"),
         };
     }
 }

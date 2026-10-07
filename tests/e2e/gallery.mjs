@@ -12,8 +12,8 @@ mkdirSync(out, { recursive: true });
 const script = readFileSync(path.join(here, '..', '..', 'src', 'Ligata.AI', 'PublicAssets', 'ligata-ai.js'), 'utf8');
 const themes = {
   ligata: { accent: '#2f5bff', accentText: '#ffffff', background: '#ffffff', surface: '#f3f4f8', text: '#15171f', mutedText: '#5d6272', userBubble: '#2f5bff', userText: '#ffffff', assistantBubble: '#f3f4f8', assistantText: '#15171f', radius: 20 },
-  midnight: { accent: '#8b7dff', accentText: '#ffffff', background: '#14151c', surface: '#1e2029', text: '#f1f2f7', mutedText: '#a0a4b4', userBubble: '#8b7dff', userText: '#ffffff', assistantBubble: '#1e2029', assistantText: '#f1f2f7', radius: 22, colorScheme: 'dark' },
-  sunset: { accent: '#e2552d', accentText: '#ffffff', background: '#fffaf6', surface: '#fbeee6', text: '#2a1710', mutedText: '#7a5a4c', userBubble: '#e2552d', userText: '#ffffff', assistantBubble: '#fbeee6', assistantText: '#2a1710', radius: 24, font: 'rounded' },
+  midnight: { accent: '#8b7dff', accentText: '#14151c', background: '#14151c', surface: '#1e2029', text: '#f1f2f7', mutedText: '#a0a4b4', userBubble: '#8b7dff', userText: '#14151c', assistantBubble: '#1e2029', assistantText: '#f1f2f7', radius: 22, colorScheme: 'dark' },
+  sunset: { accent: '#c9461f', accentText: '#ffffff', background: '#fffaf6', surface: '#fbeee6', text: '#2a1710', mutedText: '#7a5a4c', userBubble: '#c9461f', userText: '#ffffff', assistantBubble: '#fbeee6', assistantText: '#2a1710', radius: 24, font: 'rounded' },
   graphite: { accent: '#111317', accentText: '#ffffff', background: '#ffffff', surface: '#f2f2f3', text: '#111317', mutedText: '#63666d', userBubble: '#111317', userText: '#ffffff', assistantBubble: '#f2f2f3', assistantText: '#111317', radius: 10, position: 'right', launcherIcon: 'sparkle' },
 };
 const conversation = [

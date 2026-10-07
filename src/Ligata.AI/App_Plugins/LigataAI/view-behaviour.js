@@ -25,7 +25,7 @@ export const behaviourView = {
 
         ${this.licensedFeatures().assistant ? html`<section class="card">
           <header><div><h2>Instructions</h2><p class="muted">Tell the assistant about your business and how to behave. Ligata adds safety guardrails automatically.</p></div>${this.budget ? html`<span class="pill info" title="Instructions incl. guardrails">${number(this.budget.instructionTokens)} tokens${this.budget.estimated ? ' (est.)' : ''}</span>` : nothing}</header>
-          ${this.text('behaviour.instructions', 'Your instructions', { rows: 12, max: 20000, placeholder: 'Example:\nWe are a web studio in Zurich. We build Umbraco websites for SMEs.\n- Recommend booking a free 30-minute call for project questions.\n- Prices start at CHF 4,800; never quote a final price.\n- Opening hours: Mon–Fri 8–17.' })}
+          ${this.text('behaviour.instructions', 'Your instructions', { rows: 12, max: 20000, placeholder: 'Example:\nWe are a web studio in Zurich. We build Umbraco websites for SMEs.\n- Recommend booking a free 30-minute call for project questions.\n- Prices start at CHF 4,800; never quote a final price.\n- Opening hours: Mon-Fri 8-17.' })}
           <div class="grid two section">
             ${this.segmented('behaviour.tone', 'Tone', [['friendly', 'Friendly'], ['professional', 'Professional'], ['concise', 'Concise'], ['playful', 'Playful']])}
             ${this.segmented('behaviour.answerLength', 'Answer length', [['short', 'Short'], ['balanced', 'Balanced'], ['detailed', 'Detailed']])}

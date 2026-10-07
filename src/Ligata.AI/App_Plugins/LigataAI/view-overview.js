@@ -32,9 +32,9 @@ export const overviewView = {
     return html`<section class="card team-card">
       <header><div><h2>Team inbox</h2><p class="muted">Visitors who asked for a person, and email messages.</p></div><button class="btn small primary" @click=${go}>${icon('inbox')}Open inbox</button></header>
       <div class="stats">
-        <div class="stat"><b class=${c.needsReply ? 'bad' : ''}>${c.needsReply ?? '—'}</b><small>Need a reply</small></div>
-        <div class="stat"><b>${c.active ?? '—'}</b><small>Active chats</small></div>
-        <div class="stat"><b>${i ? i.online : '—'}</b><small>Team members online</small></div>
+        <div class="stat"><b class=${c.needsReply ? 'bad' : ''}>${c.needsReply ?? '-'}</b><small>Need a reply</small></div>
+        <div class="stat"><b>${c.active ?? '-'}</b><small>Active chats</small></div>
+        <div class="stat"><b>${i ? i.online : '-'}</b><small>Team members online</small></div>
       </div>
     </section>`;
   },
@@ -77,7 +77,7 @@ export const overviewView = {
         </section>` : e.assistant ? html`<section class="card">
           <header><div><h2>Shared AI server</h2><p class="muted">All Ligata websites share one GPU and answer one question at a time, in order.</p></div><button class="btn small" @click=${() => this.refreshStatus()}>${icon('refresh')}Refresh</button></header>
           ${s?.ok ? html`<dl class="facts">
-            <dt>Model</dt><dd>${s.status.model || '—'} <span class="pill ${ready ? 'ok' : 'warn'}"><i></i>${s.status.state}</span></dd>
+            <dt>Model</dt><dd>${s.status.model || '-'} <span class="pill ${ready ? 'ok' : 'warn'}"><i></i>${s.status.state}</span></dd>
             <dt>Context window</dt><dd>${number(s.status.contextTokens)} tokens</dd>
             <dt>Queue</dt><dd>${s.status.queueRunning ? 'Answering' : 'Idle'}${s.status.queueWaiting ? ` · ${s.status.queueWaiting} waiting (≈ ${s.status.estimatedWaitSeconds} s)` : ''}</dd>
             <dt>GPU memory</dt><dd>${s.status.gpuHealthy ? 'Healthy (everything in VRAM)' : 'Warning: VRAM overflowing into system RAM'}</dd>
