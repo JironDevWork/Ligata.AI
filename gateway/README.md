@@ -11,6 +11,7 @@ Umbraco site ──HTTPS (API key)──► Cloudflare Tunnel ──► gateway 
 - **Global queue**: exactly one answer is generated at a time, in arrival order, across all websites. Visitors see their position and an estimated wait.
 - **Fairness**: one queued or running question per visitor and site (visitors are HMAC-pseudonymised by the site, raw IPs never arrive here), a per-site queue cap, a global queue cap and a daily quota per key. Full queues answer `503` with `Retry-After`.
 - **Streaming**: Server-Sent Events with `queued`, `started`, `progress` (long prompts), `thinking`, `delta`, `done` (usage, context used/limit, speed) and `error`. Heartbeats every 15 s keep tunnels and proxies open during long prompt processing.
+- **Prompt-cache slots**: llama-server runs 3 slots over one unified 256k KV pool in VRAM. Each website is pinned to a slot, so its instructions and knowledge stay processed: the next visitor of a recently active site gets the first word in well under a second instead of waiting ~1 s per 1,000 knowledge tokens. When a request needs room, idle sites' caches are erased least-recently-used first; idle caches are capped at 64k tokens because attention spans every occupied cell (a fuller pool makes cold prompts ~20–35 % slower).
 - **Attachments**: PNG/JPEG screenshots (≤ 5 MB, ≤ 8 per conversation) go to the vision model; PDFs (≤ 10 MB, ≤ 80 pages) are converted to text in memory (`/v1/extract`). Nothing is written to disk.
 - **Failure handling**: model offline/starting → immediate `503 model_unavailable`/`model_loading` (never queued). A broken stream ends with an `error` event and the queue continues. Answers stop after 300 s. A visitor who leaves is removed from the queue, and leaving mid-answer cancels the GPU work.
 - **Memory watch**: every 30 s the gateway samples llama-server's RAM, VRAM and GPU-shared RAM. Shared RAM growing more than 300 MB above its level after load is reported as a VRAM spill (`gpu.healthy: false`).
@@ -28,6 +29,8 @@ pm2 save
 The model files and llama.cpp live in `C:\Code\Ligata.AI\runtime` (not in Git); see [model/README](../model/README.md) for the download and the chosen profile.
 
 ## API keys
+
+Open **http://127.0.0.1:1212** on the AI machine for the operator page: model and queue status, prompt-cache slots, RAM/VRAM over time, and every website key with today's usage, limits, *Create key* and *Revoke*. It only answers on loopback, only for the `127.0.0.1`/`localhost` host name, and writes need a custom header, so other websites open in the same browser cannot use it. The same works from the command line:
 
 ```powershell
 node cli.mjs keys create "Example AG website" --requests-per-day 1500
@@ -62,7 +65,7 @@ Message parts: `{ type: 'text', text }`, `{ type: 'image', data }` (base64 PNG/J
 ## Tests
 
 ```powershell
-npm test   # 24 tests: keys, queue, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text
+npm test   # 33 tests: keys, queue, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
 ```
 
 The tests run against a mock llama-server (`test/mock-llm.mjs`) with switchable failure modes; `node test/mock-server.mjs 1298` serves the mock on a fixed port for UI development.

@@ -6,7 +6,7 @@
 // slots share the pool, cached prefixes of idle sites are erased (least recently used first) when a
 // request needs the room, and idle caches are capped because attention spans every occupied cell.
 export class SlotManager {
-  constructor({ count = 1, contextTokens = 0, maxIdleTokens = 98304, reserve = 2048, log = () => {} } = {}) {
+  constructor({ count = 1, contextTokens = 0, maxIdleTokens = 65536, reserve = 2048, log = () => {} } = {}) {
     Object.assign(this, { contextTokens, maxIdleTokens, reserve, log, clock: 0 });
     this.resize(count);
   }

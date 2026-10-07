@@ -1,4 +1,3 @@
-import http from 'node:http';
 import { watch } from 'node:fs';
 import { mkdirSync } from 'node:fs';
 import { loadConfig } from './config.mjs';
@@ -8,6 +7,7 @@ import { Llm } from './llm.mjs';
 import { MemoryMonitor } from './monitor.mjs';
 import { createServer } from './server.mjs';
 import { SlotManager } from './slots.mjs';
+import { createAdmin } from './admin.mjs';
 
 // Logs carry metadata only: never prompts, answers, attachments or keys.
 const log = (event, data = {}) => console.log(JSON.stringify({ at: new Date().toISOString(), event, ...data }));
@@ -37,12 +37,8 @@ export function startGateway(overrides = {}) {
   server.headersTimeout = 20000;
   server.listen(config.port, config.host, () => log('listening', { host: config.host, port: server.address().port }));
 
-  // Operator status, loopback only. The tunnel publishes only the public port.
-  const admin = http.createServer(async (request, response) => {
-    if (request.url !== '/status') { response.writeHead(404).end(); return; }
-    const body = { model: await llm.health(), props: await llm.props().catch(() => null), queue: scheduler.snapshot(), slots: slots.snapshot(), memory: monitor.latest, memoryHistory: monitor.history.slice(-120), keys: keys.list() };
-    response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body, null, 2));
-  });
+  // Operator page and status, loopback only. The tunnel publishes only the public port.
+  const admin = createAdmin({ config, keys, scheduler, slots, monitor, llm });
   if (config.adminPort) admin.listen(config.adminPort, '127.0.0.1');
 
   const stop = () => new Promise(resolve => {

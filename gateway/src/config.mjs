@@ -34,7 +34,7 @@ export const defaults = {
   },
   // Cached prompts of idle websites kept in the shared KV pool (tokens). More is faster for returning
   // sites but slows everyone a little, because attention spans every occupied cell.
-  cache: { maxIdleTokens: 98304 },
+  cache: { maxIdleTokens: 65536 },
   // Default per-key limits; each key can override them.
   keyDefaults: { requestsPerDay: 2000, maxContextTokens: 262144, maxQueued: 10 },
   // Measured vision cost of one image, used before the exact count is known.

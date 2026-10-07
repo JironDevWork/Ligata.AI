@@ -76,7 +76,7 @@ Then, in the backoffice: **AI Assistant → Connection** → gateway address and
 dotnet run --project tests/Ligata.AI.Tests -c Release                         # 47 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]
 cd tests/e2e; npm ci; node run.mjs                                             # 23 browser checks in Microsoft Edge
-cd gateway; npm test                                                           # 24 gateway tests
+cd gateway; npm test                                                           # 33 gateway tests
 ```
 
 The database mode installs a disposable Umbraco 17 site (SQLite under `.runtime/`, generated fixture admin), seeds three pages and checks the store, versioning, knowledge and section grant; `--serve` keeps it running for the browser suite. See [docs/TESTING.md](docs/TESTING.md).

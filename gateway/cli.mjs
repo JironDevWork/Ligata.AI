@@ -45,6 +45,7 @@ try {
     const m = status.memory;
     console.log(`Model: ${status.model}${status.props ? ` (${status.props.model}, ${status.props.contextTokens} tokens context, vision ${status.props.vision ? 'on' : 'off'})` : ''}`);
     console.log(`Queue: ${status.queue.running ? 'answering' : 'idle'}, ${status.queue.waiting} waiting, ${status.queue.completed} answered since start, ~${status.queue.averageSeconds}s per answer`);
+    if (status.slots?.length > 1) console.log('Prompt caches: ' + status.slots.map(s => `slot ${s.id} ${s.site ? `${status.keys.find(k => k.id === s.site)?.name ?? s.site} (${s.tokens} tokens, idle ${s.idleSeconds}s)` : 'empty'}`).join(' | '));
     if (m?.running) console.log(`Memory: RAM ${m.workingSetMB} MB | VRAM ${m.processVramMB} MB (GPU ${m.gpuUsedMB}/${m.gpuTotalMB} MB) | GPU-shared RAM ${m.sharedRamMB} MB${m.spilling ? '  <-- SPILLING INTO SYSTEM RAM' : ''}`);
     console.log(status.keys.map(row).join('\n'));
   } else {

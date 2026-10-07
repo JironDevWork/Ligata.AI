@@ -5,7 +5,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 ## Repeatable checks
 
 ```powershell
-# Gateway: 24 tests against a mock llama-server (no GPU needed)
+# Gateway: 33 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
 # Package domain and security checks (no database): 47 assertions
@@ -22,6 +22,27 @@ cd tests/e2e; npm ci; node run.mjs
 ```
 
 The database mode refuses any path outside a `.runtime` folder or not named `ai-test.db`.
+
+### Against the real GPU
+
+Set `REAL=1` to run the browser suite against the real model (answers vary, so arrival, shape and the screenshot/knowledge content are checked and printed). `tests/e2e/edge.mjs` covers the failure and load cases on the real stack with two sites (A on 5310, B on 5320):
+
+| Case | Checked |
+| --- | --- |
+| Two websites at once | Visitor B sees "You are next · about N s", both get answers |
+| A 32-page, 38k-token PDF | Text extracted in memory, visible reading progress bar, correct answer from page 21, memory meter drops to 26.5k free |
+| llama-server killed mid-answer | Visitor sees "Something went wrong… Try again", the launcher restarts the model, retry answers |
+| Gateway process stopped | Status offline, offline message with e-mail/contact options, input disabled; after restart the widget reconnects by itself and answers |
+
+```powershell
+$env:REAL=1; $env:GATEWAY='http://127.0.0.1:1210'; $env:KEY_FILE='../../.runtime/key-a.txt'; node tests/e2e/run.mjs
+node tests/e2e/edge.mjs
+node tests/e2e/gallery.mjs     # screenshots of themes, dark mode, mobile and the teaser for visual review
+```
+
+Real-model results (7 October 2026): 23/23 browser checks on both the project-reference host and the installed-package host, 4/4 edge cases, and the 60-question soak (4 concurrent visitors, 2 sites, knowledge prompts, screenshots, PDFs): 60 answered, 0 failed, RAM 1.52–1.80 GB without upward trend, VRAM constant at 10,784 MB, no spill.
+
+Bugs found by these runs and fixed: the availability check re-rendered the conversation while an answer was streaming (the progress indicator vanished); the progress bar was an inline element with a width (invisible); prompt progress double-counted cached tokens; an outage replaced the error notice and with it the *Try again* button.
 
 ### Installed-package check
 

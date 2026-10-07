@@ -52,16 +52,20 @@ export function startMockLlm() {
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ state, url: `http://127.0.0.1:${server.address().port}`, close: () => new Promise(r => { server.closeAllConnections(); server.close(r); }) })));
 }
 
-/** A tiny, valid one-page PDF containing `text` (Helvetica, uncompressed). */
+/** A small valid PDF (Helvetica, uncompressed) with 45 lines per page. */
 export function makePdf(lines) {
-  const content = `BT /F1 12 Tf 72 720 Td 14 TL ${lines.map(l => `(${l.replace(/[()\\]/g, '\\$&')}) '`).join(' ')} ET`;
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
-    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-  ];
+  const pages = [];
+  for (let i = 0; i < Math.max(1, lines.length); i += 45) pages.push(lines.slice(i, i + 45));
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', null, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  const kids = [];
+  for (const page of pages) {
+    const content = `BT /F1 11 Tf 50 760 Td 15 TL ${page.map(line => `(${line.replace(/[()\\]/g, c => '\\' + c)}) '`).join(' ')} ET`;
+    objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    const contentId = objects.length;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentId} 0 R /Resources << /Font << /F1 3 0 R >> >> >>`);
+    kids.push(`${objects.length} 0 R`);
+  }
+  objects[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
   let pdf = '%PDF-1.4\n';
   const offsets = [];
   objects.forEach((object, i) => { offsets.push(pdf.length); pdf += `${i + 1} 0 obj\n${object}\nendobj\n`; });
@@ -70,3 +74,4 @@ export function makePdf(lines) {
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(pdf, 'latin1');
 }
+
