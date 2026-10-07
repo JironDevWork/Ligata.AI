@@ -84,14 +84,14 @@ A chat bubble (bottom left by default). Styles are isolated in Shadow DOM, and i
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.4.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.4.1 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.4.2.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.4.2 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
 - **Database**: the migrations create eight tables in the CMS database: settings, knowledge, counters, conversations, messages, team members, the email queue and consent records.
 - **Access**: the section is granted to the `admin` group, and to the agent groups for the Inbox.
-- **Files**: publish/restart once so the backoffice files (`App_Plugins/LigataAI`) and the widget (`/assets/ligata-ai/ligata-ai.js`) are copied.
+- **Files**: the backoffice files (`/App_Plugins/LigataAI`) and the widget (`/assets/ligata-ai/ligata-ai.js`) are static web assets: `dotnet run` serves them from the package, and publishing copies them into `wwwroot`.
 
 Then, in the backoffice:
 - **For the AI on the Ligata GPU**: **Settings → Connection** → gateway address and the key from `node cli.mjs keys create "Site name"` on the gateway machine → add knowledge.

@@ -12,13 +12,4 @@
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" />
     <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="72.1.0.3" />
   </ItemGroup>
-  <!-- A project reference does not install NuGet static assets; copy them like the package would. -->
-  <Target Name="CopyLigataAIAssets" BeforeTargets="Build" Condition="'$(UsePackage)' != 'true'">
-    <ItemGroup>
-      <LigataPlugin Include="../../src/Ligata.AI/App_Plugins/**/*" />
-      <LigataPublic Include="../../src/Ligata.AI/PublicAssets/**/*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(LigataPlugin)" DestinationFolder="wwwroot/App_Plugins/%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(LigataPublic)" DestinationFolder="wwwroot/assets/ligata-ai/%(RecursiveDir)" SkipUnchangedFiles="true" />
-  </Target>
 </Project>

@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest } from './api.js?v=0.4.1';
+import { aiRequest } from './api.js?v=0.4.2';
 
 const inboxPath = '/umbraco/section/ai-assistant/dashboard/inbox';
 const enabled = key => { try { return localStorage.getItem('ligata-ai-inbox:' + key) !== '0'; } catch { return true; } };

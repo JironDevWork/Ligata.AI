@@ -38,7 +38,10 @@ public sealed class AssistantStore(IScopeProvider scopes)
     public (AssistantSettings Settings, int Version) Settings()
     {
         var row = Row();
-        return (AssistantJson.Read<AssistantSettings>(row.Json), row.Version);
+        var settings = AssistantJson.Read<AssistantSettings>(row.Json);
+        // An untouched notice from an earlier version reads as today's default (shown translated to visitors).
+        if (AssistantIdentity.EarlierDefaultNotices.Contains(settings.Identity.PrivacyNotice)) settings = settings with { Identity = settings.Identity with { PrivacyNotice = AssistantIdentity.DefaultPrivacyNotice } };
+        return (settings, row.Version);
     }
 
     public int Save(AssistantSettings settings, int expectedVersion)

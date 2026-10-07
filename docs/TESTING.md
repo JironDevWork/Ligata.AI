@@ -49,6 +49,7 @@ Results (8 October 2026, version 0.4.0):
 - Regression with consent: AI suite 23/23, team suite 16/16 (also on the installed-package host), API suite 13/13, no-AI suite 5/5 (no consent asked without the AI).
 - Package checks: 114 domain and 164 total with the database.
 - 0.4.1: the GPU server's country defaults to Switzerland (`CH`); package checks 116 domain and 166 total.
+- 0.4.2: backoffice and widget files ship as static web assets, so `dotnet run` of a site that installs the package serves them (0.4.1 only worked after publish: the backoffice answered 500). The untouched notice under the input is shown in the visitor's language. Package checks 118 and 168; AI suite 23/23, privacy suite 7/7, API suite 13/13, team suite 16/16; verified in Umbraco.BaselineV2 with `dotnet run` and the real GPU.
 
 ### API mode: Claude through Anthropic (browser)
 

@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number } from './ui.js?v=0.4.1';
+import { icon, number } from './ui.js?v=0.4.2';
 
 const categories = { preferences: 'Preferences', statistics: 'Statistics', marketing: 'Marketing' };
 const regionName = code => { try { return /^[a-z]{2}$/i.test(code) ? new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) : code; } catch { return code; } };
@@ -70,7 +70,7 @@ export const privacyView = {
     const url = this.settings.identity.privacyUrl;
     return html`<section class="card">
       <header><div><h2>Privacy notice</h2><p class="muted">Shown under the input and linked from the consent request.</p></div></header>
-      ${this.text('identity.privacyNotice', 'Notice under the input', { rows: 2, max: 600, help: this.api() && this.settings.identity.privacyNotice === this.defaults?.identity?.privacyNotice ? `Visitors see: “${this.connection.defaultPrivacyNotice}” (the default for the Claude API) until you change this text.` : '' })}
+      ${this.text('identity.privacyNotice', 'Notice under the input', { rows: 2, max: 600, help: this.settings.identity.privacyNotice === this.defaults?.identity?.privacyNotice ? (this.api() ? `While you keep the default, visitors read “${this.connection.defaultPrivacyNotice}” in their language.` : 'While you keep the default, visitors read it in their language (English, German, French or Italian).') : 'Your own text is shown as written, in every language.' })}
       <div class="section">${this.text('identity.privacyUrl', 'Privacy policy link', { placeholder: '/datenschutz/' })}</div>
       ${!url ? html`<div class="notice warning">${icon('warn')}<div>Add the link to your privacy policy. Visitors should be able to read it before they agree.</div></div>` : nothing}
       <small class="muted">Conversations with the AI are never stored on the server. Conversations with your team are stored for the period set under Team &amp; email and then deleted. Visitors' IP addresses are pseudonymised and only used for limits.</small>

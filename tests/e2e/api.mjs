@@ -86,7 +86,7 @@ pages.site = page;
 await check('public config: API mode is ready, names Claude, and never contains the key', async () => {
   const config = await (await fetch(base + '/api/ligata-ai/config')).json();
   assert(config.state === 'ready' && config.settings.engine === 'api', 'ready in API mode: ' + config.state);
-  assert(/Claude/.test(config.settings.privacyNotice) && !/own server/.test(config.settings.privacyNotice), 'honest default privacy notice');
+  assert(config.settings.privacyNotice === '', 'the untouched notice is left to the widget, which names Claude in the visitor\'s language');
   assert(config.settings.limits.imageTokens === 1600, 'Claude image cost published for the memory meter');
   const html = await (await fetch(base + '/')).text();
   assert(!secret(JSON.stringify(config)) && !secret(html) && !html.includes('sk-ant'), 'no key in config or page');
@@ -207,7 +207,7 @@ await check('backoffice: overview, behaviour and appearance speak Claude, not GP
   await tab('Privacy');
   await dash.locator('h2', { hasText: 'Privacy notice' }).waitFor();
   const privacy = await dashText();
-  assert(privacy.includes('Visitors see:') && privacy.includes('Claude'), 'explains the default notice in API mode');
+  assert(privacy.includes('in their language') && privacy.includes('Claude'), 'explains the default notice in API mode');
   assert(privacy.includes('Anthropic (USA)'), 'the consent card names Anthropic as the recipient');
   await tab('Appearance');
   const appearance = await dashText();

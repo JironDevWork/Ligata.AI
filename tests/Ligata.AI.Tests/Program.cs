@@ -124,6 +124,9 @@ Assert(Throws(() => PdfText.Extract(new byte[PdfText.MaxBytes + 1], Cancellation
 static string? Throws(Action action) { try { action(); return null; } catch (GatewayException e) { return e.Code; } }
 
 // ---------- privacy: consent and the privacy policy text ----------
+string NoticeOf(AssistantSettings s) => JsonDocument.Parse(JsonSerializer.Serialize(s.Public(65536, new { }, 100, s.Effective(new FeatureOptions()), new RecaptchaSettings(), "gpu"), AssistantJson.Options)).RootElement.GetProperty("privacyNotice").GetString()!;
+Assert(NoticeOf(defaults) == "" && NoticeOf(defaults with { Identity = defaults.Identity with { PrivacyNotice = AssistantIdentity.EarlierDefaultNotices[0] } }) == "" && NoticeOf(defaults with { Identity = defaults.Identity with { PrivacyNotice = "Eigener Hinweis." } }) == "Eigener Hinweis.", "Untouched notices are translated by the widget, own texts pass through.");
+Assert(!AssistantIdentity.DefaultPrivacyNotice.Contains("own server"), "The default notice makes no claim about whose server runs the AI.");
 var gpuSite = new AssistantOptions { Privacy = new() { GpuOperator = "Ligata", GpuOperatorCountry = "CH" } };
 var apiSite = new AssistantOptions { Mode = "api", Claude = new() { ApiKey = "sk-ant-x" } };
 var aiOn = new AssistantFeatures { Assistant = true, LiveChat = true, Email = true };

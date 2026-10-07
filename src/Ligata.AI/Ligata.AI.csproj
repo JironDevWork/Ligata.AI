@@ -5,12 +5,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <PackageId>Ligata.AI</PackageId>
-    <Version>0.4.1</Version>
+    <Version>0.4.2</Version>
     <Authors>Ligata</Authors>
     <Description>Website chat for Umbraco 17: AI assistant (self-hosted Ligata AI gateway or Claude through the Anthropic API), live chat with your team in an Umbraco inbox, and an email form. GDPR-ready: consent before the AI reads a message (with Cookiebot support) and privacy policy templates. Each feature can be licensed on its own.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/JironDevWork/Ligata.AI</RepositoryUrl>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Static web assets at the site root: wwwroot/App_Plugins/LigataAI → /App_Plugins/LigataAI and
+         wwwroot/assets/ligata-ai → /assets/ligata-ai, served by `dotnet run` and copied on publish. -->
+    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -18,12 +21,6 @@
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="Umbraco.Cms.Api.Management" Version="[17.6.2,18.0.0)" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
-    <Content Remove="App_Plugins/**" />
-    <None Remove="App_Plugins/**" />
-    <Content Include="App_Plugins/**" Pack="true" PackagePath="static/App_Plugins/%(RecursiveDir)%(Filename)%(Extension)" />
-    <None Remove="PublicAssets/**" />
-    <Content Include="PublicAssets/**" Pack="true" PackagePath="static/assets/ligata-ai/%(RecursiveDir)%(Filename)%(Extension)" />
-    <None Include="buildTransitive/Ligata.AI.targets" Pack="true" PackagePath="buildTransitive/" />
     <!-- Privacy policy templates: the backoffice fills them in for the site's setup. -->
     <EmbeddedResource Include="../../docs/privacy/datenschutz-de.md" LogicalName="Ligata.AI.Privacy.de.md" />
     <EmbeddedResource Include="../../docs/privacy/privacy-policy-en.md" LogicalName="Ligata.AI.Privacy.en.md" />

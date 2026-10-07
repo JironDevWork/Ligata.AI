@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(here, '..', '..', '.runtime', 'e2e');
 mkdirSync(out, { recursive: true });
-const script = readFileSync(path.join(here, '..', '..', 'src', 'Ligata.AI', 'PublicAssets', 'ligata-ai.js'), 'utf8');
+const script = readFileSync(path.join(here, '..', '..', 'src', 'Ligata.AI', 'wwwroot', 'assets', 'ligata-ai', 'ligata-ai.js'), 'utf8');
 const themes = {
   ligata: { accent: '#2f5bff', accentText: '#ffffff', background: '#ffffff', surface: '#f3f4f8', text: '#15171f', mutedText: '#5d6272', userBubble: '#2f5bff', userText: '#ffffff', assistantBubble: '#f3f4f8', assistantText: '#15171f', radius: 20 },
   midnight: { accent: '#8b7dff', accentText: '#14151c', background: '#14151c', surface: '#1e2029', text: '#f1f2f7', mutedText: '#a0a4b4', userBubble: '#8b7dff', userText: '#14151c', assistantBubble: '#1e2029', assistantText: '#f1f2f7', radius: 22, colorScheme: 'dark' },
