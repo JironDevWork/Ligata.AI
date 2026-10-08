@@ -33,6 +33,8 @@ public sealed class KnowledgeRow
     [Column("Enabled")] public bool Enabled { get; set; } = true;
     [Column("SortOrder")] public int SortOrder { get; set; }
     [Column("UpdatedUtc")] public DateTime UpdatedUtc { get; set; }
+    // Added in ai-v4: read with every question instead of being looked up when needed (counts against the knowledge budget).
+    [Column("Pinned"), Constraint(Default = 0)] public bool Pinned { get; set; }
 }
 
 [TableName("LigataAIStat"), PrimaryKey("Day", AutoIncrement = false), ExplicitColumns]

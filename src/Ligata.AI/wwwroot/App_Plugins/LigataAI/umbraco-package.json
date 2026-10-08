@@ -1,6 +1,6 @@
 {
   "$schema": "../../umbraco-package-schema.json",
   "name": "Ligata AI (static files)",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "extensions": []
 }

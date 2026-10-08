@@ -71,6 +71,24 @@ Measured with `sweep.mjs` + `bench.mjs` (needle at the middle of a synthetic doc
 powershell -ExecutionPolicy Bypass -File model\check-memory.ps1 -Watch
 ```
 
+## Looking things up (0.6, measured)
+
+Since 0.6 the prompt holds the instructions and a list of the pages; the model looks up the text with two tools (`search_website`, `read_pages`, see the [package README](../README.md#how-the-assistant-knows-your-website)). Gemma 4's chat template supports tool calls and llama.cpp b11456 parses them while streaming.
+
+- **The cache holds across rounds.** A round adds only the call and its results: round 2 processed 59 new tokens of 2,958 (64 of 3,008 with thinking), the next question 71. The template renders the arguments in Gemma's own syntax and the reasoning of the round is passed back, so the cached tokens match.
+- **A forced first lookup.** With `tool_choice` `auto` the model often answered from the prompt instead (the contact email in the instructions, an owner instruction about calls, a German question on an English site): 6/9, then 10–11/13 with sharper wording. The website now asks for `required` in the first round when a meaningful word of the question occurs on the website; greetings, thanks and unrelated requests stay `auto`. A forced call costs 0.3–0.8 s. Result: 13/13 twice.
+- **The team reminder goes with the results.** Results now stand between the rule and the answer; with a one-line reminder at the end of each result, "Shopify?" and "SEO in Japanese?" offer the team again.
+- **A last round must answer.** After three rounds the website's results say "no more lookups", and the gateway runs one more round with `tool_choice` `none` and the `<|tool_call>` token (id 48) forbidden by `logit_bias`: with thinking, Gemma otherwise wrote the call as answer text.
+
+`node model/lookup-check.mjs [questions.json] --host <site>` asks real questions through a website and the GPU and checks lookups, facts and the team offer (results in `lookups.jsonl`):
+
+| Site | Questions | Result | First word (median, max) | Prompt (median) |
+| --- | --- | --- | --- | --- |
+| Test site (English, 3 pages, no thinking) | `lookup-questions.json`: 13 incl. a follow-up, team, German, off-topic | **13/13**, three runs | 0.8 s, 2.1 s | 1.5k tokens |
+| Local copy of demo.ligata.ch (German + English, 13 pages per language, thinking on) | `lookup-demo.json`: 14 in both languages, a follow-up, a price that is not on the site | **14/14**, two runs | 4.9 s, 8.5 s | 1.9k tokens |
+
+On the demo the whole text is small (about 2,700 tokens, the list of pages 370), so lookups add a little time there. They pay off on bigger websites: the prompt stays at instructions plus at most about 3,000 tokens of page list, whatever the size of the website, and only what a question needs is read.
+
 ## Team handoff (measured)
 
 The AI offers the team by ending an answer with `[[team]]`, which the widget turns into buttons. `node model/handoff-check.mjs` sends 11 questions (plus one off-topic) with the system prompt the package builds (`dotnet Ligata.AI.Tests.dll --prompt`) through the real gateway, three times each:
@@ -81,7 +99,7 @@ The AI offers the team by ending an answer with `[[team]]`, which the widget tur
 | + "related but not in the knowledge → team", "when unsure, treat it as related" | 31/33 | same question still missed sometimes |
 | + one-line reminder after the knowledge (in the per-request part, so the cached prefix is unchanged) | **33/33** | the marker is never mentioned or broken |
 
-Results are appended to `model/handoff.jsonl`.
+Results are appended to `model/handoff.jsonl`. Since 0.6 the prompt expects the website's lookups, so the handoff is checked with `lookup-check.mjs` (team questions in both question files; 13/13 and 14/14 above).
 
 ## Files and downloads
 
@@ -101,6 +119,7 @@ curl.exe -L -o runtime\models\mtp-gemma-4-12B-it-Q4_0.gguf https://huggingface.c
 | `bench.mjs` | Needle + linked facts + follow-up + long answer at chosen depths, with memory |
 | `accuracy.mjs` | 70 catalogue questions (lookup/compare/sum) at temperature 0 |
 | `cache-test.mjs` | Prefix reuse: follow-up, new visitor, site switch |
+| `lookup-check.mjs` | Real questions through a website and the GPU: are things looked up, found and answered (0.6) |
 | `slots-test.mjs` | Several slots over one unified KV pool |
 | `slot-test.mjs`, `prime-test.mjs` | Disk snapshots of a site's prompt cache (rejected: llama.cpp re-processes after a restore with sliding-window attention) |
 | `perplexity.mjs` | wikitext-2 perplexity per quantization (see the caveat above) |

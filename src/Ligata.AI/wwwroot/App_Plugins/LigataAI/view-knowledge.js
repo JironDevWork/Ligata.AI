@@ -1,7 +1,13 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact, date } from './ui.js?v=0.5.2';
+import { icon, number, compact, date } from './ui.js?v=0.6.0';
 
-const kinds = { text: ['text', 'Text'], file: ['file', 'File'], page: ['page', 'Website page'] };
+const kinds = { text: ['text', 'Text'], file: ['file', 'File'] };
+
+/** The path is the prefix or below it, by whole segments (as on the server). */
+const below = (path, prefix) => {
+  const p = path.endsWith('/') ? path : path + '/';
+  return p.toLowerCase().startsWith((prefix.endsWith('/') ? prefix : prefix + '/').toLowerCase()) || (prefix === '/' && p === '/');
+};
 
 export const knowledgeView = {
   async uploadFiles(files) {
@@ -19,9 +25,9 @@ export const knowledgeView = {
           if (result.warning) warnings.push(`${file.name}: ${result.warning}`);
         } catch (e) { warnings.push(`${file.name}: ${e.message}`); }
       }
-      this.message = `${list.length - warnings.filter(w => !w.includes('switched off')).length} of ${list.length} file${list.length === 1 ? '' : 's'} added.`;
+      this.message = `${list.length - warnings.filter(w => !w.includes('looked up when needed')).length} of ${list.length} file${list.length === 1 ? '' : 's'} added.`;
       this.warning = warnings.join(' ');
-      this.schedulePreview();
+      this.loadIndex();
     });
   },
 
@@ -40,6 +46,7 @@ export const knowledgeView = {
       this.renderRoot.querySelector('dialog.editor')?.close();
       this.editing = null;
       this.warning = result.warning || '';
+      this.loadIndex();
     }, 'Knowledge saved.');
   },
 
@@ -47,12 +54,22 @@ export const knowledgeView = {
     await this.run(async () => {
       await this.request(`/knowledge/${item.id}/enabled`, 'POST', { enabled });
       this.knowledge = this.knowledge.map(k => k.id === item.id ? { ...k, enabled } : k);
+      this.loadIndex();
     });
+  },
+
+  /** Always known (read with every question, uses the budget) or looked up when needed. */
+  async pinItem(item, pinned) {
+    await this.run(async () => {
+      await this.request(`/knowledge/${item.id}/pinned`, 'POST', { enabled: pinned });
+      this.knowledge = this.knowledge.map(k => k.id === item.id ? { ...k, pinned } : k);
+      this.refreshBudget(); this.loadIndex();
+    }, pinned ? `“${item.title}” is now read with every question.` : `“${item.title}” is now looked up when needed.`);
   },
 
   async deleteItem(item) {
     if (!confirm(`Delete “${item.title}”? The assistant will no longer know this content.`)) return;
-    await this.run(async () => { await this.request('/knowledge/' + item.id, 'DELETE'); this.knowledge = this.knowledge.filter(k => k.id !== item.id); }, 'Knowledge deleted.');
+    await this.run(async () => { await this.request('/knowledge/' + item.id, 'DELETE'); this.knowledge = this.knowledge.filter(k => k.id !== item.id); this.loadIndex(); }, 'Knowledge deleted.');
   },
 
   async moveItem(index, delta) {
@@ -64,63 +81,104 @@ export const knowledgeView = {
     await this.run(() => this.request('/knowledge/order', 'POST', { ids: list.map(k => k.id) }));
   },
 
+  async recount() { await this.run(async () => { this.knowledge = (await this.request('/knowledge/recount', 'POST', {}, { timeout: 180000 })).knowledge; }, `Token counts updated by ${this.api() ? 'Claude' : 'the AI gateway'}.`); },
+
+  /** What the assistant can look up (saved settings) and, with a query, a test search. */
+  async loadIndex(query = '') {
+    try { this.index = await this.request('/knowledge/index' + (query ? '?q=' + encodeURIComponent(query) : '')); } catch { this.index = null; }
+  },
+
+  async loadPages() {
+    try { this.pages = await this.request('/pages'); } catch (e) { this.pages = []; this.error = e.message; }
+  },
+
   async openPages() {
-    await this.run(async () => { this.pages = await this.request('/pages'); this.pageSelection = new Set(); this.pageFilter = ''; });
+    await this.loadPages();
+    this.pageFilter = '';
     await this.updateComplete;
     this.renderRoot.querySelector('dialog.pages-dialog')?.showModal();
   },
 
-  async importPages(event) {
-    event.preventDefault();
-    const keys = [...this.pageSelection];
-    if (!keys.length) return;
-    await this.run(async () => {
-      const result = await this.request('/knowledge/pages', 'POST', { keys }, { timeout: 300000 });
-      this.knowledge = result.knowledge;
-      const skipped = result.results.filter(r => r.skipped).length;
-      const switchedOff = result.results.filter(r => r.warning).length;
-      this.renderRoot.querySelector('dialog.pages-dialog')?.close();
-      this.message = `${keys.length - skipped} page${keys.length - skipped === 1 ? '' : 's'} imported${skipped ? `, ${skipped} without text skipped` : ''}.`;
-      this.warning = switchedOff ? `${switchedOff} page${switchedOff === 1 ? ' was' : 's were'} saved but switched off because the knowledge budget is full.` : '';
-    });
+  /** Why a page is not read: null when it is. */
+  pageState(page) {
+    const k = this.settings.knowledge;
+    if (!page.hasTemplate) return 'no-template';
+    if (!k.usePages) return 'off';
+    if (k.excludedPaths.some(p => p.trim() && below(page.url, p.trim()))) return 'section';
+    return k.excludedPages.includes(page.key) ? 'page' : null;
   },
 
-  async recount() { await this.run(async () => { this.knowledge = (await this.request('/knowledge/recount', 'POST', {}, { timeout: 180000 })).knowledge; }, `Token counts updated by ${this.api() ? 'Claude' : 'the AI gateway'}.`); },
+  setPage(page, used) {
+    const excluded = this.settings.knowledge.excludedPages.filter(key => key !== page.key);
+    this.set('knowledge.excludedPages', used ? excluded : [...excluded, page.key]);
+  },
 
   knowledgeView() {
     const b = this.settings.behaviour;
-    const used = this.knowledge.filter(k => k.enabled).reduce((n, k) => n + k.tokens, 0);
+    const k = this.settings.knowledge;
+    const items = this.knowledge.filter(item => item.kind !== 'page');
+    const used = items.filter(item => item.enabled && item.pinned).reduce((n, item) => n + item.tokens, 0);
     const over = used > b.knowledgeBudget;
-    const estimated = this.knowledge.some(k => k.estimated);
-    const pages = (this.pages || []).filter(p => !this.pageFilter || `${p.name} ${p.url}`.toLowerCase().includes(this.pageFilter.toLowerCase()));
-    const imported = new Set(this.knowledge.filter(k => k.contentKey).map(k => k.contentKey));
+    const estimated = items.some(item => item.estimated && item.pinned);
+    const pages = this.pages || [];
+    const readable = pages.filter(p => p.hasTemplate);
+    const usedPages = readable.filter(p => !this.pageState(p)).length;
+    const shown = pages.filter(p => !this.pageFilter || `${p.name} ${p.url}`.toLowerCase().includes(this.pageFilter.toLowerCase()));
+    const i = this.index;
+    if (!this.pages && !this.loadingPages) { this.loadingPages = true; this.loadPages(); if (!this.index) this.loadIndex(); }
+    const reasons = { 'no-template': 'not a web page', off: 'website pages are off', section: 'in a left-out section', page: 'left out' };
     return html`<div class="grid">
       <section class="card">
-        <header><div><h2>Knowledge</h2><p class="muted">Everything the assistant should know: offers, prices, FAQs, opening hours, policies. Enabled sources are read with every question.</p></div>
-          <div class="row"><button class="btn" @click=${() => this.openPages()}>${icon('page')}Import website pages</button><button class="btn" @click=${() => this.openEditor(null)}>${icon('text')}Write text</button>
+        <header><div><h2>Knowledge</h2><p class="muted">The assistant looks up what it needs while it answers: it searches your website pages and the documents below and reads only what fits the question. So even a large website fits, and new pages are known as soon as they are published.</p></div></header>
+        <div class="row">
+          <span class="pill info">${icon('page')}${i ? `${number(i.pages)} page${i.pages === 1 ? '' : 's'}` : '…'}</span>
+          <span class="pill info">${icon('file')}${i ? `${number(i.documents)} document${i.documents === 1 ? '' : 's'}` : '…'}</span>
+          ${i?.languages?.length > 1 ? html`<span class="pill info">${icon('globe')}${i.languages.join(' · ')}</span>` : nothing}
+          <small class="muted grow">searchable right now (saved settings)${i?.languages?.length > 1 ? ', every language on its own' : ''}${i?.textTokens ? ` · about ${compact(i.textTokens)} tokens of text, read only when a question needs it` : ''}</small>
+        </div>
+        ${i?.siteMap ? html`<details class="section"><summary>What the assistant gets with every question</summary><pre class="code">${i.siteMap}</pre><small class="muted">The list of pages, without their text: the assistant searches and reads the text when a question needs it.</small></details>` : nothing}
+        <form class="row section" @submit=${e => { e.preventDefault(); this.run(() => this.loadIndex(this.searchQuery || '')); }}>
+          <label class="control grow" style="margin:0"><span class="sr">Test a search</span><input type="search" placeholder="Test a search, e.g. opening hours" .value=${this.searchQuery || ''} @input=${e => { this.searchQuery = e.target.value; }}></label>
+          <button class="btn" ?disabled=${this.busy}>${icon('search')}Search</button>
+        </form>
+        ${i?.hits?.length ? html`<div class="hits">${i.hits.map(hit => html`<div class="hit"><strong>${hit.title}</strong> <small class="muted">${hit.url || 'document'}</small><p>${hit.text}</p></div>`)}</div>`
+          : this.searchQuery && i?.hits ? html`<small class="muted">Nothing found. The assistant searches with other words too, and in the language of your website.</small>` : nothing}
+      </section>
+
+      <section class="card">
+        <header><div><h2>Website pages</h2><p class="muted">Every published page is included, also pages you add later. Leave out what the assistant should not use.</p></div>
+          <button class="btn" ?disabled=${!k.usePages} @click=${() => this.openPages()}>${icon('page')}Choose pages</button></header>
+        ${this.toggle('knowledge.usePages', 'Use the website’s pages', 'Off: the assistant knows only the documents and texts below.')}
+        ${k.usePages ? html`<p class="section"><strong>${this.pages ? `${number(usedPages)} of ${number(readable.length)} pages used` : 'Loading pages…'}</strong>${k.excludedPages.length ? html` <small class="muted">· ${number(k.excludedPages.length)} left out</small>` : nothing}</p>
+          <div class="section">${this.list('knowledge.excludedPaths', 'Leave out whole sections', { max: 50, placeholder: '/shop/', help: 'A path leaves out its page and every page below it, also pages added later.' })}</div>` : nothing}
+      </section>
+
+      <section class="card">
+        <header><div><h2>Documents and texts</h2><p class="muted">Price lists, FAQs, brochures: searched like your pages. Mark short essentials (opening hours, key facts) as <em>always known</em> to have them read with every question.</p></div>
+          <div class="row"><button class="btn" @click=${() => this.openEditor(null)}>${icon('text')}Write text</button>
             <label class="btn primary">${icon('upload')}Upload files<input class="sr" type="file" multiple accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,.htm" @change=${e => { this.uploadFiles(e.target.files); e.target.value = ''; }}></label></div></header>
-        <div class="row" style="margin-bottom:8px"><strong class="grow">${number(used)} of ${number(b.knowledgeBudget)} tokens used</strong>${estimated ? html`<button class="btn small" @click=${() => this.recount()}>${icon('refresh')}Count exactly</button>` : nothing}<button class="btn small quiet" @click=${() => { this.tab = 'behaviour'; }}>Change budget</button></div>
+        <div class="row" style="margin-bottom:8px"><strong class="grow">Always known: ${number(used)} of ${number(b.knowledgeBudget)} tokens</strong>${estimated ? html`<button class="btn small" @click=${() => this.recount()}>${icon('refresh')}Count exactly</button>` : nothing}<button class="btn small quiet" @click=${() => { this.tab = 'behaviour'; }}>Change budget</button></div>
         <div class="meter ${over ? 'over' : ''}" role="meter" aria-valuemin="0" aria-valuemax=${b.knowledgeBudget} aria-valuenow=${used}><i style="width:${Math.min(100, used / Math.max(1, b.knowledgeBudget) * 100)}%"></i></div>
-        <small class="muted" style="display:block;margin-top:8px">${over ? 'Enabled knowledge exceeds the budget. Switch sources off or raise the budget.' : `About ${compact(Math.max(0, b.knowledgeBudget - used))} tokens free (≈ ${compact(Math.max(0, b.knowledgeBudget - used) * 0.75)} words).`}${estimated ? ` Counts marked “est.” were estimated because ${this.api() ? 'Claude' : 'the AI gateway'} was not reachable.` : ''}</small>
+        <small class="muted" style="display:block;margin-top:8px">${over ? 'Always-known knowledge exceeds the budget. Let the assistant look some of it up instead, or raise the budget.' : 'Everything else is looked up when needed and uses no budget.'}${estimated ? ` Counts marked “est.” were estimated because ${this.api() ? 'Claude' : 'the AI gateway'} was not reachable.` : ''}</small>
       </section>
 
       <div class="drop ${this.dragOver ? 'over' : ''}" @dragover=${e => { e.preventDefault(); this.dragOver = true; }} @dragleave=${() => { this.dragOver = false; }} @drop=${e => { e.preventDefault(); this.dragOver = false; this.uploadFiles(e.dataTransfer.files); }}>
         ${icon('upload')}<strong>Drop files here</strong><small>PDF, Word (.docx), text, Markdown, CSV, JSON or HTML · up to 15 MB each. Scanned PDFs need text recognition first.</small>
       </div>
 
-      ${this.knowledge.length ? html`<div class="knowledge">${this.knowledge.map((item, index) => html`<div class="k-item ${item.enabled ? '' : 'off'}">
+      ${items.length ? html`<div class="knowledge">${items.map((item, index) => html`<div class="k-item ${item.enabled ? '' : 'off'}">
           <span class="k-kind" title=${kinds[item.kind]?.[1] || item.kind}>${icon(kinds[item.kind]?.[0] || 'file')}</span>
-          <div style="min-width:0"><div class="k-title">${item.title}</div><div class="k-meta"><span>${kinds[item.kind]?.[1] || item.kind}</span>${item.source ? html`<span>${item.source}</span>` : nothing}<span>${number(item.characters)} characters</span><span>Updated ${date(item.updatedUtc)}</span></div><div class="k-preview">${item.preview}</div></div>
+          <div style="min-width:0"><div class="k-title">${item.title}${item.pinned ? html` <span class="pill ok">${icon('pin')}Always known</span>` : nothing}</div><div class="k-meta"><span>${kinds[item.kind]?.[1] || item.kind}</span>${item.source ? html`<span>${item.source}</span>` : nothing}<span>${number(item.characters)} characters</span><span>Updated ${date(item.updatedUtc)}</span></div><div class="k-preview">${item.preview}</div></div>
           <div class="k-tokens">${number(item.tokens)}<small>${item.estimated ? 'tokens (est.)' : 'tokens'}</small></div>
           <div class="k-actions">
             <label class="switch small" title=${item.enabled ? 'Used by the assistant' : 'Not used'}><input type="checkbox" .checked=${item.enabled} ?disabled=${this.busy} @change=${e => this.toggleItem(item, e.target.checked)}><span class="sr">Use this source</span></label>
-            <button class="icon-btn" title="Move up" ?disabled=${index === 0 || this.busy} @click=${() => this.moveItem(index, -1)}>${icon('up')}</button>
-            <button class="icon-btn" title="Move down" ?disabled=${index === this.knowledge.length - 1 || this.busy} @click=${() => this.moveItem(index, 1)}>${icon('down')}</button>
-            <button class="icon-btn" title=${item.kind === 'page' ? 'View text (re-import to refresh)' : 'Edit'} @click=${() => this.openEditor(item)}>${icon('edit')}</button>
+            <button class="icon-btn ${item.pinned ? 'active' : ''}" title=${item.pinned ? 'Always known: read with every question. Click to look it up only when needed.' : 'Looked up when needed. Click to make it always known (uses the knowledge budget).'} aria-pressed=${String(!!item.pinned)} ?disabled=${this.busy} @click=${() => this.pinItem(item, !item.pinned)}>${icon('pin')}</button>
+            <button class="icon-btn" title="Move up" ?disabled=${index === 0 || this.busy} @click=${() => this.moveItem(this.knowledge.indexOf(item), -1)}>${icon('up')}</button>
+            <button class="icon-btn" title="Move down" ?disabled=${index === items.length - 1 || this.busy} @click=${() => this.moveItem(this.knowledge.indexOf(item), 1)}>${icon('down')}</button>
+            <button class="icon-btn" title="Edit" @click=${() => this.openEditor(item)}>${icon('edit')}</button>
             <button class="icon-btn" title="Delete" @click=${() => this.deleteItem(item)}>${icon('trash')}</button>
           </div></div>`)}</div>`
-        : html`<div class="card empty">${icon('book')}<h2>No knowledge yet</h2><p>Import your website pages to get started in one click, or upload a price list, FAQ or brochure.</p></div>`}
-      <small class="muted">Sources are read in this order. Keeping the order stable lets the AI server reuse its work between questions, so answers start faster.</small>
+        : html`<div class="card empty">${icon('book')}<h2>No documents yet</h2><p>Your website pages are already searchable. Add a price list, FAQ or brochure that is not on the website.</p></div>`}
 
       <dialog class="editor" @close=${() => { this.editing = null; }}>
         ${this.editing ? html`<form @submit=${e => this.saveEditor(e)}>
@@ -128,21 +186,20 @@ export const knowledgeView = {
           <div class="body">
             <label class="control"><span>Title</span><input type="text" maxlength="200" required .value=${this.editing.title} @input=${e => { this.editing = { ...this.editing, title: e.target.value }; }}></label>
             <label class="control"><span>Text</span><textarea rows="18" required .value=${this.editing.text} @input=${e => { this.editing = { ...this.editing, text: e.target.value }; }}></textarea><span class="count">${number(this.editing.text.length)} characters ≈ ${compact(this.editing.text.length / 3.6)} tokens</span></label>
-            ${this.editing.kind === 'page' ? html`<small class="muted">This text was imported from a website page. Importing the page again replaces your edits.</small>` : nothing}
           </div>
           <footer><button type="button" class="btn quiet" @click=${() => this.renderRoot.querySelector('dialog.editor').close()}>Cancel</button><button class="btn primary" ?disabled=${this.busy}>${icon('save')}Save</button></footer>
         </form>` : nothing}
       </dialog>
 
       <dialog class="pages-dialog">
-        <form @submit=${e => this.importPages(e)}>
-          <header><h2>Import website pages</h2><p class="muted">The published text of each page becomes knowledge. Import again after editing a page to refresh it.</p></header>
+        <form method="dialog">
+          <header><h2>Choose pages</h2><p class="muted">Ticked pages are used. Changes apply when you save.</p></header>
           <div class="body">
             <label class="control"><span class="sr">Filter pages</span><input type="text" placeholder="Filter pages…" .value=${this.pageFilter} @input=${e => { this.pageFilter = e.target.value; }}></label>
-            <div class="row"><button type="button" class="btn small" @click=${() => { this.pageSelection = new Set(pages.filter(p => p.hasTemplate).map(p => p.key)); }}>Select all pages</button><button type="button" class="btn small quiet" @click=${() => { this.pageSelection = new Set(); }}>Clear</button><span class="grow"></span><small>${this.pageSelection.size} selected</small></div>
-            <div class="pages">${pages.length ? pages.map(p => html`<label style="padding-left:${8 + Math.max(0, p.level - 1) * 18}px"><input type="checkbox" .checked=${this.pageSelection.has(p.key)} @change=${e => { const next = new Set(this.pageSelection); e.target.checked ? next.add(p.key) : next.delete(p.key); this.pageSelection = next; }}><span>${p.name}</span>${imported.has(p.key) ? html`<span class="pill info">imported</span>` : nothing}<small>${p.url || p.contentType}</small></label>`) : html`<p class="muted">No published pages found.</p>`}</div>
+            <div class="row"><button type="button" class="btn small" @click=${() => this.set('knowledge.excludedPages', [])}>Use all pages</button><button type="button" class="btn small quiet" @click=${() => this.set('knowledge.excludedPages', readable.map(p => p.key))}>Leave all out</button><span class="grow"></span><small>${number(usedPages)} of ${number(readable.length)} used</small></div>
+            <div class="pages">${shown.length ? shown.map(p => { const state = this.pageState(p); return html`<label style="padding-left:${8 + Math.max(0, p.level - 1) * 18}px" class=${state && state !== 'page' ? 'locked' : ''}><input type="checkbox" .checked=${!state} ?disabled=${state && state !== 'page'} @change=${e => this.setPage(p, e.target.checked)}><span>${p.name}</span>${state && state !== 'page' ? html`<span class="pill">${reasons[state]}</span>` : nothing}<small>${p.url || p.contentType}</small></label>`; }) : html`<p class="muted">No published pages found.</p>`}</div>
           </div>
-          <footer><button type="button" class="btn quiet" @click=${() => this.renderRoot.querySelector('dialog.pages-dialog').close()}>Cancel</button><button class="btn primary" ?disabled=${this.busy || !this.pageSelection.size}>${icon('page')}Import ${this.pageSelection.size || ''} page${this.pageSelection.size === 1 ? '' : 's'}</button></footer>
+          <footer><button class="btn primary">Done</button></footer>
         </form>
       </dialog>
     </div>`;

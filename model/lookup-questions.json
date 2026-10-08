@@ -1,0 +1,14 @@
+[
+  { "ask": "What is your phone number?", "expect": ["44 000 00 00"], "lookup": true, "then": [{ "ask": "And your email address?", "expect": ["hello@ligata-test"] }] },
+  { "ask": "How much does a small business website cost, and what does hosting cost per month?", "expect": ["4[,’']?800", "25"], "lookup": true },
+  { "ask": "When is your office open?", "expect": ["Monday", "8"], "lookup": true },
+  { "ask": "What is the secret test phrase on your contact page?", "expect": ["BLUE-HERON-42"], "lookup": true },
+  { "ask": "Hi!", "lookup": false },
+  { "ask": "Do you also build online shops with Shopify?", "team": true },
+  { "ask": "Do you offer SEO audits in Japanese?", "team": true },
+  { "ask": "Can I talk to a real person?", "team": true },
+  { "ask": "Was kostet bei euch eine Website?", "expect": ["4[,’'.]?800"], "lookup": true },
+  { "ask": "Where is your studio located?", "expect": ["Dielsdorf"], "lookup": true },
+  { "ask": "Can I book a call with you?", "expect": ["30"], "lookup": true },
+  { "ask": "Write me a poem about cats.", "lookup": false, "team": false }
+]

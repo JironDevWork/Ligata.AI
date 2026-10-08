@@ -1,0 +1,15 @@
+[
+  { "ask": "Wann habt ihr offen?", "expect": ["7[.:]30", "17"], "lookup": true },
+  { "ask": "What are your opening hours?", "page": "/en/", "expect": ["7[.:]30", "17|5:00 ?PM|5 ?pm"], "reject": ["\\]\\(/kontakt"], "lookup": true },
+  { "ask": "Wo ist eure Werkstatt?", "expect": ["Winterthur"], "lookup": true, "then": [{ "ask": "Und wann kann ich vorbeikommen?", "expect": ["7[.:]30|Vereinbarung|Termin"] }] },
+  { "ask": "Wie lange dauert es, bis ein Tisch fertig ist?", "expect": ["vier bis acht|4.{1,6}8"], "lookup": true },
+  { "ask": "Can I bring my own wood?", "page": "/en/", "expect": ["moisture|dry"], "lookup": true },
+  { "ask": "Do you also install furniture in Geneva?", "page": "/en/", "expect": ["travel"], "lookup": true },
+  { "ask": "Wann ist der Tag der offenen Werkstatt?", "expect": ["18"], "lookup": true },
+  { "ask": "Welches Holz empfehlt ihr für einen Esstisch?", "expect": ["Eiche|Nussbaum|Ahorn"], "lookup": true },
+  { "ask": "Was kostet ein Esstisch aus Eiche?", "reject": ["CHF ?\\d", "\\d+ ?(Franken|CHF)"], "lookup": true },
+  { "ask": "Who is Mara Keller?", "page": "/en/", "expect": ["joiner|carpenter|Schreinermeister"], "lookup": true },
+  { "ask": "Hallo!", "lookup": false },
+  { "ask": "Since when has the workshop existed?", "page": "/en/", "expect": ["2009"], "lookup": true },
+  { "ask": "Schreib mir ein Gedicht über Katzen.", "lookup": false }
+]

@@ -45,7 +45,8 @@ const server = http.createServer(async (req, res) => {
     send('started', { promptTokens: prompt, contextTokens: LIMIT });
     // Reading takes a moment, then the text streams.
     for (const done of [0.3, 0.7]) { send('progress', { processed: Math.round(prompt * done), total: prompt }); await sleep(350); }
-    const text = body.compact ? SUMMARY : `Answer ${requests.filter(r => !r.compact).length}.`;
+    // A question for a person gets the handoff marker, as the model writes it when the website has no answer.
+    const text = body.compact ? SUMMARY : /person/i.test(body.messages.at(-1).content) ? 'I could not find that here. [[team]]' : `Answer ${requests.filter(r => !r.compact).length}.`;
     for (const part of text.match(/.{1,12}/g)) { send('delta', { text: part }); await sleep(body.compact ? 60 : 10); }
     send('done', { finishReason: 'stop', usage: { promptTokens: prompt, completionTokens: tokens(text) }, context: { used: prompt + tokens(text), limit: LIMIT }, timings: {} });
     return res.end();
@@ -159,6 +160,15 @@ await check('when the server finds the conversation too long anyway, it is summa
   assert(again.summary === SUMMARY, 'the second summary includes the first one');
   // The latest exchange was short, so it stays word for word next to the summary.
   assert(/^Short follow-up\? \| Answer \d+\. \| One more question\?$/.test(last.messages.map(m => m.content).join(' | ')), 'the latest exchange and the new question: ' + last.messages.map(m => m.content.slice(0, 20)).join(' | '));
+});
+
+await check('without live chat and email, an answer the AI cannot give offers the contact email as a button', async () => {
+  await ask('Can I talk to a person?');
+  const card = widget.locator('.card.handoff');
+  await card.waitFor({ timeout: 5000 });
+  assert(await card.locator('a[href="mailto:team@example.com"]').count() === 1, 'a mailto button to the contact email');
+  assert(!(await widget.locator('.msg.bot').last().innerText()).includes('[[team]]'), 'the marker never shows');
+  await tab.screenshot({ path: path.join(out, 'memory-contact-handoff.png') });
 });
 
 await check('no script errors', async () => { assert(!errors.length, errors.join('; ')); });

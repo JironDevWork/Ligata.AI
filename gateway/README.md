@@ -57,17 +57,20 @@ How many conversations run at once and how much memory each gets is set in `mode
 | --- | --- |
 | `GET /v1/health` | Public liveness: `{ ok, model: ready \| loading \| down }` |
 | `GET /robots.txt` | Public: `Disallow: /` for every crawler. Every answer also carries `X-Robots-Tag: noindex, nofollow`, so the public hostname (e.g. ai.ligata.ch) stays out of search engines and AI crawlers |
-| `GET /v1/status` | Model, context size, queue, GPU health, this key's limits and usage |
-| `POST /v1/chat` | `{ messages, visitor, maxTokens, temperature, thinking, contextLimit }` → SSE |
+| `GET /v1/status` | Model, context size, queue, GPU health, this key's limits and usage, `features: ["tools"]` |
+| `POST /v1/chat` | `{ messages, visitor, maxTokens, temperature, thinking, contextLimit, tools?, toolChoice?, lookupRounds? }` → SSE |
+| `POST /v1/chat/tool-results` | `{ round, results: [{ id, content }] }`: the website's results for a round of lookups (see below) |
 | `POST /v1/tokenize` | `{ texts: [] }` → `{ counts: [] }` (knowledge budgets) |
 | `POST /v1/extract` | `{ data: base64 PDF }` → `{ text, pages, tokens }` |
+
+**Lookups (tools, 0.6).** The website may pass up to eight `tools` (`{ name, description, parameters }`, JSON schema). When the model calls them, the stream carries `event: tool_calls` with `{ round, calls: [{ id, name, arguments }] }`; the website runs the calls and posts the results to `/v1/chat/tool-results` within `tools.waitSeconds` (20 s). The answer keeps its place and its slot meanwhile and continues with the results (llama-server reuses the cached prompt: a round adds only the call and its results). After `lookupRounds` rounds (at most `tools.maxRounds`, 4) one more round must answer: `tool_choice` `none`, and the model's tool-call token is forbidden, because Gemma otherwise writes the call as text. `toolChoice: "required"` makes the first round look something up; `"none"` keeps the tools declared without calling them (summaries: the prompt, and so the cache, stays the same). Earlier lookups arrive in the history as an assistant message with `toolCalls: [{ id, name, arguments }]`, then one `{ role: 'tool', toolCallId, content }` per call.
 
 Message parts: `{ type: 'text', text }`, `{ type: 'image', data }` (base64 PNG/JPEG), `{ type: 'document', name, text }`. Error responses are `{ error: { code, message } }` with codes such as `invalid_key`, `visitor_busy`, `site_busy`, `queue_full`, `queue_timeout`, `daily_quota`, `model_unavailable`, `model_loading`, `context_full`, `too_many_images`, `image_too_large`, `unsupported_image`, `pdf_no_text`.
 
 ## Tests
 
 ```powershell
-npm test   # 48 tests: keys, queue, several answers at once, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
+npm test   # 57 tests: keys, queue, several answers at once, lookups, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
 ```
 
 The tests run against a mock llama-server (`test/mock-llm.mjs`) with switchable failure modes; `node test/mock-server.mjs 1298` serves the mock on a fixed port for UI development.

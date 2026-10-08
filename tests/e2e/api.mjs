@@ -126,6 +126,21 @@ await check('follow-up questions read the shared prefix from the cache', async (
   assert(second.events[0].name === 'started' && second.events[0].data.promptTokens > 0, 'started event with prompt size');
 });
 
+await check('Claude looks the website up while answering, and the lookup is repeated with the next question', async () => {
+  const before = (await mockState()).lookups || 0;
+  const first = await chat([{ role: 'user', content: `What is your phone number? ${run}` }]);
+  const lookup = first.events.find(e => e.name === 'lookup');
+  assert(first.status === 200 && lookup?.data.calls[0].name === 'search_website' && lookup.data.calls[0].arguments.query === 'phone', 'a lookup event: ' + first.text.slice(0, 300));
+  assert(first.answer.includes('Claude mock found') && first.answer.includes('BLUE-HERON-42'), 'the answer uses what the search found on the contact page: ' + first.answer);
+  assert(first.events.filter(e => e.name === 'started').length === 1 && first.done, 'one answer for the visitor');
+  const second = await chat([{ role: 'user', content: `What is your phone number? ${run}` }, { role: 'assistant', content: first.answer, lookups: [lookup.data.calls] }, { role: 'user', content: 'Thanks, and the email?' }]);
+  const { last, errors: rejected } = await mockState();
+  assert(second.status === 200 && rejected.length === 0, 'the repeated lookup is a valid conversation for the API: ' + rejected.join('; '));
+  const wire = JSON.stringify(last.messages);
+  assert(wire.includes('"type":"tool_use"') && wire.includes('"type":"tool_result"') && wire.includes('BLUE-HERON-42') && (await mockState()).lookups === before + 1, 'the earlier lookup and its result are sent again, without a new search');
+  assert(last.tools?.map(t => t.name).join() === 'search_website,read_pages', 'the tools are declared: ' + last.tools?.map(t => t.name));
+});
+
 await check('unknown answers offer the team; the marker never shows', async () => {
   const reply = await answer('Can I talk to a human about this?');
   await widget.locator('.card.handoff').waitFor({ timeout: 10000 });

@@ -48,17 +48,48 @@ public sealed class ConsentMigration(IMigrationContext context) : AsyncMigration
     }
 }
 
-public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreScopeProvider scopes, IKeyValueService keys, IUserGroupService groups, IOptions<AssistantOptions> options, ILogger<AssistantInstaller> logger)
+/// <summary>0.6: knowledge is looked up while answering; items can be marked "always known".</summary>
+public sealed class LookupMigration(IMigrationContext context) : AsyncMigrationBase(context)
+{
+    protected override Task MigrateAsync()
+    {
+        if (!ColumnExists("LigataAIKnowledge", "Pinned")) AddColumn<KnowledgeRow>("LigataAIKnowledge", "Pinned");
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreScopeProvider scopes, Umbraco.Cms.Infrastructure.Scoping.IScopeProvider database, IKeyValueService keys, IUserGroupService groups, IOptions<AssistantOptions> options, ILogger<AssistantInstaller> logger)
 {
     public const string SectionAlias = "Ligata.AI.Section";
 
     public async Task InstallAsync()
     {
         var plan = new MigrationPlan("Ligata.AI");
-        plan.From(string.Empty).To<AssistantMigration>("ai-v1").To<SupportMigration>("ai-v2").To<ConsentMigration>("ai-v3");
+        plan.From(string.Empty).To<AssistantMigration>("ai-v1").To<SupportMigration>("ai-v2").To<ConsentMigration>("ai-v3").To<LookupMigration>("ai-v4");
         var result = await new Upgrader(plan).ExecuteAsync(executor, scopes, keys);
         if (!result.Successful) throw new InvalidOperationException("Ligata AI migration failed. Inspect the Umbraco migration log.");
+        LivePages();
         await GrantSectionAsync();
+    }
+
+    /// <summary>
+    /// Until 0.6, editors imported pages as copies. Pages are now read live, every page unless left out, so the copies go:
+    /// a copy that was switched off becomes a left-out page, and its text is read from the page itself from now on.
+    /// </summary>
+    private void LivePages()
+    {
+        if (keys.GetValue("Ligata.AI.LivePages") == "1") return;
+        var store = new AssistantStore(database);
+        var pages = store.KnowledgeRows().Where(k => k.Kind == "page").ToList();
+        if (pages.Count > 0)
+        {
+            var (settings, version) = store.Settings();
+            var off = pages.Where(p => !p.Enabled && p.ContentKey is { } key && !settings.Knowledge.ExcludedPages.Contains(key)).Select(p => p.ContentKey!.Value).ToList();
+            if (off.Count > 0) store.Save(settings with { Knowledge = settings.Knowledge with { ExcludedPages = [.. settings.Knowledge.ExcludedPages, .. off] } }, version);
+            foreach (var page in pages) store.Delete(page.Id);
+            logger.LogInformation("Ligata AI: {Count} imported page copies replaced by live pages ({Off} left out).", pages.Count, off.Count);
+        }
+        keys.SetValue("Ligata.AI.LivePages", "1");
     }
 
     /// <summary>

@@ -4,7 +4,7 @@ using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace Ligata.AI.Data;
 
-public sealed record KnowledgeSummary(Guid Id, string Title, string Kind, string Source, Guid? ContentKey, int Tokens, bool Estimated, bool Enabled, int SortOrder, DateTime UpdatedUtc, int Characters, string Preview);
+public sealed record KnowledgeSummary(Guid Id, string Title, string Kind, string Source, Guid? ContentKey, int Tokens, bool Estimated, bool Enabled, int SortOrder, DateTime UpdatedUtc, int Characters, string Preview, bool Pinned = false);
 
 /// <summary>Settings, knowledge and anonymous daily counters, all in the host's CMS database.</summary>
 public sealed class AssistantStore(IScopeProvider scopes)
@@ -78,9 +78,14 @@ public sealed class AssistantStore(IScopeProvider scopes)
         if (cachedKnowledge is { } hit) return hit;
         using var scope = scopes.CreateScope(autoComplete: true);
         // SUBSTRING keeps list responses small even when items hold whole documents (SQLite and SQL Server).
-        return scope.Database.Fetch<KnowledgeRow>("SELECT Id, Title, Kind, Source, ContentKey, Characters, Tokens, Estimated, Enabled, SortOrder, UpdatedUtc, SUBSTRING(Text, 1, 300) AS Text FROM LigataAIKnowledge ORDER BY SortOrder, Id")
-            .Select(r => new KnowledgeSummary(r.Id, r.Title, r.Kind, r.Source, r.ContentKey, r.Tokens, r.Estimated, r.Enabled, r.SortOrder, r.UpdatedUtc, r.Characters, r.Text)).ToList() is var list ? cachedKnowledge = list : null!;
+        return scope.Database.Fetch<KnowledgeRow>("SELECT Id, Title, Kind, Source, ContentKey, Characters, Tokens, Estimated, Enabled, SortOrder, UpdatedUtc, Pinned, SUBSTRING(Text, 1, 300) AS Text FROM LigataAIKnowledge ORDER BY SortOrder, Id")
+            .Select(r => new KnowledgeSummary(r.Id, r.Title, r.Kind, r.Source, r.ContentKey, r.Tokens, r.Estimated, r.Enabled, r.SortOrder, r.UpdatedUtc, r.Characters, r.Text, r.Pinned)).ToList() is var list ? cachedKnowledge = list : null!;
     }
+
+    /// <summary>Increases with every change to the knowledge items, so the search index knows when to read them again.</summary>
+    public static int KnowledgeVersion => knowledgeVersion;
+    private static int knowledgeVersion;
+    private static void Changed() { cachedKnowledge = null; Interlocked.Increment(ref knowledgeVersion); }
 
     /// <summary>Enabled knowledge in a stable order. The order keeps the prompt prefix identical between questions, so the GPU can reuse it.</summary>
     public List<KnowledgeRow> EnabledKnowledge()
@@ -89,16 +94,25 @@ public sealed class AssistantStore(IScopeProvider scopes)
         return scope.Database.Fetch<KnowledgeRow>("WHERE Enabled=@0 ORDER BY SortOrder, Id", true);
     }
 
+    /// <summary>Every item with its whole text.</summary>
+    public List<KnowledgeRow> KnowledgeRows()
+    {
+        using var scope = scopes.CreateScope(autoComplete: true);
+        return scope.Database.Fetch<KnowledgeRow>("ORDER BY SortOrder, Id");
+    }
+
+    public void SetPinned(Guid id, bool pinned)
+    {
+        using var scope = scopes.CreateScope();
+        scope.Database.Execute("UPDATE LigataAIKnowledge SET Pinned=@0, UpdatedUtc=@1 WHERE Id=@2", pinned, DateTime.UtcNow, id);
+        scope.Complete();
+        Changed();
+    }
+
     public KnowledgeRow? Find(Guid id)
     {
         using var scope = scopes.CreateScope(autoComplete: true);
         return scope.Database.SingleOrDefaultById<KnowledgeRow>(id);
-    }
-
-    public KnowledgeRow? FindByContent(Guid contentKey)
-    {
-        using var scope = scopes.CreateScope(autoComplete: true);
-        return scope.Database.FirstOrDefault<KnowledgeRow>("WHERE ContentKey=@0", contentKey);
     }
 
     public KnowledgeRow Upsert(KnowledgeRow row)
@@ -123,7 +137,7 @@ public sealed class AssistantStore(IScopeProvider scopes)
                 scope.Database.Insert(row);
             }
             scope.Complete();
-            cachedKnowledge = null;
+            Changed();
             return row;
         }
     }
@@ -133,7 +147,7 @@ public sealed class AssistantStore(IScopeProvider scopes)
         using var scope = scopes.CreateScope();
         scope.Database.Execute("UPDATE LigataAIKnowledge SET Enabled=@0, UpdatedUtc=@1 WHERE Id=@2", enabled, DateTime.UtcNow, id);
         scope.Complete();
-            cachedKnowledge = null;
+        Changed();
     }
 
     public void SetTokens(Guid id, int tokens, bool estimated)
@@ -141,7 +155,7 @@ public sealed class AssistantStore(IScopeProvider scopes)
         using var scope = scopes.CreateScope();
         scope.Database.Execute("UPDATE LigataAIKnowledge SET Tokens=@0, Estimated=@1 WHERE Id=@2", tokens, estimated, id);
         scope.Complete();
-            cachedKnowledge = null;
+        Changed();
     }
 
     public void Reorder(IReadOnlyList<Guid> ids)
@@ -151,7 +165,7 @@ public sealed class AssistantStore(IScopeProvider scopes)
             using var scope = scopes.CreateScope();
             for (var i = 0; i < ids.Count; i++) scope.Database.Execute("UPDATE LigataAIKnowledge SET SortOrder=@0 WHERE Id=@1", i, ids[i]);
             scope.Complete();
-            cachedKnowledge = null;
+            Changed();
         }
     }
 
@@ -160,7 +174,7 @@ public sealed class AssistantStore(IScopeProvider scopes)
         using var scope = scopes.CreateScope();
         scope.Database.Delete<KnowledgeRow>(id);
         scope.Complete();
-            cachedKnowledge = null;
+        Changed();
     }
 
     /// <summary>Adds to today's anonymous counters. No message content, IPs or visitor identifiers are stored.</summary>

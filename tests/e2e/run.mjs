@@ -97,22 +97,37 @@ await check('behaviour: invalid values are explained, not saved', async () => {
   assert(await dash().locator('button', { hasText: 'Save changes' }).isDisabled(), 'restoring the saved value leaves nothing to save');
 });
 
-await check('knowledge: website pages are imported as text', async () => {
+await check('knowledge: every website page is searchable; single pages can be left out', async () => {
   await tab('Knowledge');
-  await dash().locator('button', { hasText: 'Import website pages' }).click();
-  await dash().locator('dialog.pages-dialog button', { hasText: 'Select all pages' }).click();
-  await dash().locator('dialog.pages-dialog button.primary').click();
-  await dash().locator('.k-item', { hasText: 'Contact' }).waitFor({ timeout: 20000 });
-  assert(await dash().locator('.k-item').count() >= 3, 'three seeded pages imported');
-  assert((await dash().locator('.k-item', { hasText: 'Prices' }).innerText()).includes('4,800'), 'page text extracted');
+  const search = async text => {
+    await dash().locator('input[type=search]').fill(text);
+    await dash().locator('button', { hasText: 'Search' }).click();
+    await page.waitForTimeout(600);
+    return dash().locator('.hit').allInnerTexts();
+  };
+  await dash().locator('text=3 of 3 pages used').waitFor({ timeout: 20000 });
+  assert((await search('BLUE-HERON-42')).some(hit => hit.includes('Contact')), 'the contact page is found without importing it');
+  await dash().locator('button', { hasText: 'Choose pages' }).click();
+  await dash().locator('dialog.pages-dialog label', { hasText: 'Contact' }).locator('input').uncheck();
+  await dash().locator('dialog.pages-dialog button', { hasText: 'Done' }).click();
+  await dash().locator('text=2 of 3 pages used').waitFor();
+  await dash().locator('button', { hasText: 'Save changes' }).click();
+  await dash().locator('.notice.success', { hasText: 'Saved' }).waitFor();
+  assert(!(await search('BLUE-HERON-42')).some(hit => hit.includes('Contact')), 'a left-out page is not searched');
+  await dash().locator('button', { hasText: 'Choose pages' }).click();
+  await dash().locator('dialog.pages-dialog button', { hasText: 'Use all pages' }).click();
+  await dash().locator('dialog.pages-dialog button', { hasText: 'Done' }).click();
+  await dash().locator('button', { hasText: 'Save changes' }).click();
+  await dash().locator('.notice.success', { hasText: 'Saved' }).waitFor();
+  assert((await search('BLUE-HERON-42')).some(hit => hit.includes('Contact')), 'and is searched again when it is used');
 });
 
 await check('knowledge: files are uploaded and counted', async () => {
-  const file = path.join(out, 'faq.md');
+  const file = path.join(out, `faq-${run}.md`);
   writeFileSync(file, '# FAQ\n\n**Do you offer maintenance?** Yes, from CHF 60 per month.\n\n**Where are you?** Dielsdorf, Switzerland.');
   await dash().locator('label.btn', { hasText: 'Upload files' }).locator('input[type=file]').setInputFiles(file);
-  await dash().locator('.k-item', { hasText: 'faq' }).waitFor({ timeout: 20000 });
-  const tokens = await dash().locator('.k-item', { hasText: 'faq' }).locator('.k-tokens').innerText();
+  await dash().locator('.k-item', { hasText: 'faq-' + run }).waitFor({ timeout: 20000 });
+  const tokens = await dash().locator('.k-item', { hasText: 'faq-' + run }).locator('.k-tokens').innerText();
   assert(/\d/.test(tokens), 'token count shown');
 });
 
@@ -126,6 +141,11 @@ await check('knowledge: written text and switching sources off', async () => {
   await item.locator('input[type=checkbox]').uncheck();
   await dash().locator('.k-item.off', { hasText: 'Opening hours ' + run }).waitFor();
   await item.locator('input[type=checkbox]').check();
+  // Short essentials can be read with every question instead of looked up.
+  await item.locator('button[aria-pressed]').click();
+  await item.locator('.pill', { hasText: 'Always known' }).waitFor();
+  await item.locator('button[aria-pressed]').click();
+  await item.locator('.pill', { hasText: 'Always known' }).waitFor({ state: 'detached' });
   await shot(page, '03-knowledge');
 });
 
@@ -202,6 +222,26 @@ await check('the conversation survives a page change, attachments are not kept',
   await site.goto(base + '/prices/');
   await widget().locator('.msg.user').first().waitFor({ timeout: 10000 });
   assert(await widget().locator('.msg.user').count() === 1, 'conversation restored');
+});
+
+await check('the assistant looks the website up while answering, and keeps what it looked up', async () => {
+  const answers = await widget().locator('.msg.bot').count();
+  // Every text the waiting row shows, however briefly (the mock looks up in a few milliseconds).
+  await site.evaluate(() => {
+    window.__waited = [];
+    const root = document.getElementById('ligata-ai').shadowRoot;
+    new MutationObserver(() => { const text = root.querySelector('.waiting .wait-text')?.textContent; if (text && window.__waited.at(-1) !== text) window.__waited.push(text); }).observe(root, { subtree: true, childList: true, characterData: true });
+  });
+  await widget().locator('textarea').fill(real ? 'What is the secret test phrase on your contact page?' : 'What is your phone number?');
+  await widget().locator('textarea').press('Enter');
+  await widget().locator('.msg.bot').nth(answers).waitFor({ timeout: answerTimeout });
+  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
+  const waited = await site.evaluate(() => window.__waited);
+  const answer = await widget().locator('.msg.bot .bubble').nth(answers).innerText();
+  assert(answer.includes('BLUE-HERON-42'), 'the answer comes from the contact page, found by search: ' + answer.slice(0, 300));
+  if (!real) assert(waited.includes('Searching the website…'), 'the visitor sees that the website is searched: ' + [...new Set(waited)].join(' | '));
+  const kept = await site.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith('ligata-ai:v2:')).map(([, v]) => v).join(''));
+  assert(kept.includes('"lookups":[[{"name":"search_website"'), 'the browser keeps what was looked up (the server looks it up again with the next question)');
 });
 
 await check('screenshots can be attached and are sent to the model', async () => {

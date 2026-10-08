@@ -12,7 +12,7 @@ const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000
 before(async () => {
   mock = await startMockLlm();
   dataDir = mkdtempSync(path.join(tmpdir(), 'ligata-ai-test-'));
-  gateway = startGateway({ port: 0, adminPort: 0, upstream: mock.url, dataDir, memoryProbeSeconds: 0, queue: { maxLength: 4, maxPerKey: 3, maxWaitSeconds: 5 }, generation: { maxSeconds: 3 }, parallel: { conversations: 3, conversationTokens: 131072, sharedPool: true } });
+  gateway = startGateway({ port: 0, adminPort: 0, upstream: mock.url, dataDir, memoryProbeSeconds: 0, queue: { maxLength: 4, maxPerKey: 3, maxWaitSeconds: 5 }, generation: { maxSeconds: 3 }, tools: { maxRounds: 4, waitSeconds: 1 }, parallel: { conversations: 3, conversationTokens: 131072, sharedPool: true } });
   await new Promise(r => gateway.server.listening ? r() : gateway.server.once('listening', r));
   base = `http://127.0.0.1:${gateway.server.address().port}`;
   const a = gateway.keys.create('Site A'); keyA = a.key; idA = a.record.id;
@@ -23,8 +23,11 @@ beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, maxActiv
 
 const call = (route, key, body, method = body ? 'POST' : 'GET') => fetch(base + route, { method, headers: { ...(key ? { Authorization: 'Bearer ' + key } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
 
-/** Posts a chat and collects SSE events. `stopAfter(event)` returning true aborts the request (visitor leaves). */
-async function chat(key, body, { stopAfter } = {}) {
+/**
+ * Posts a chat and collects SSE events. `stopAfter(event)` returning true aborts the request (visitor leaves).
+ * `onEvent(event)` runs for every event, e.g. to answer a round of lookups like the website does.
+ */
+async function chat(key, body, { stopAfter, onEvent } = {}) {
   const controller = new AbortController();
   const response = await fetch(base + '/v1/chat', { method: 'POST', signal: controller.signal, headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'Hi' }], ...body }) });
   if (!response.headers.get('content-type')?.includes('event-stream')) return { status: response.status, error: (await response.json()).error, headers: response.headers };
@@ -42,6 +45,7 @@ async function chat(key, body, { stopAfter } = {}) {
         if (!name) continue;
         const event = { name, data: JSON.parse(data) };
         events.push(event);
+        await onEvent?.(event);
         if (stopAfter?.(event)) { aborted = true; controller.abort(); return { status: 200, events, aborted }; }
       }
     }
@@ -317,4 +321,121 @@ test('split slots: each conversation may use its whole slot, and nothing is eras
     assert.deepEqual(mock.state.erased, [], 'split slots never erase another conversation');
     assert.equal(mock.state.maxActive, 3);
   } finally { gateway.config.parallel.sharedPool = true; }
+});
+
+// ---------- lookups (tools) ----------
+const tools = [{ name: 'search_website', description: 'Search this website.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }];
+/** Answers every round of lookups like the website: one result per call. */
+const answer = (key = keyA, results = c => `Result for ${c.arguments.query}`) => async event => {
+  if (event.name !== 'tool_calls') return;
+  const posted = await call('/v1/chat/tool-results', key, { round: event.data.round, results: event.data.calls.map(c => ({ id: c.id, content: results(c) })) });
+  assert.equal(posted.status, 200);
+};
+
+test('the status announces lookups', async () => {
+  assert.deepEqual((await (await call('/v1/status', keyA)).json()).features, ['tools']);
+});
+
+test('a lookup: the calls go to the website, the results back to the model, in the same answer', async () => {
+  mock.state.slots = 3;
+  const result = await chat(keyA, { visitor: 'look1', tools, messages: [{ role: 'system', content: 'Site map' }, { role: 'user', content: 'What is your phone number?' }] }, { onEvent: answer() });
+  const names = result.events.map(e => e.name);
+  assert.deepEqual([names[0], names[1], names.at(-1)], ['started', 'tool_calls', 'done'], names.join());
+  const round = result.events[1].data;
+  assert.equal(round.calls.length, 1);
+  assert.equal(round.calls[0].name, 'search_website');
+  assert.deepEqual(round.calls[0].arguments, { query: 'phone' }, 'arguments arrive parsed, from pieces');
+  assert.equal(result.text, 'Found: Result for phone');
+  assert.equal(names.filter(n => n === 'started').length, 1, 'one answer for the visitor');
+  const sent = mock.state.lastBody;
+  assert.equal(sent.tools[0].function.name, 'search_website');
+  assert.equal(sent.tool_choice, 'auto');
+  assert.deepEqual(sent.messages.slice(-2).map(m => m.role), ['assistant', 'tool']);
+  assert.equal(sent.messages.at(-2).tool_calls[0].function.arguments, '{"query":"phone"}');
+  assert.equal(sent.messages.at(-1).tool_call_id, round.calls[0].id);
+  assert.equal(new Set(mock.state.slotLog.slice(-2)).size, 1, 'both rounds run in the same slot');
+  assert.equal(result.events.at(-1).data.usage.completionTokens, 12 + 2, 'both rounds count');
+  assert.equal(gateway.scheduler.length, 0);
+});
+
+test('several lookups at once get one result each', async () => {
+  const result = await chat(keyA, { visitor: 'look2', tools, messages: [{ role: 'user', content: 'look up two things' }] }, { onEvent: answer() });
+  const round = result.events.find(e => e.name === 'tool_calls').data;
+  assert.deepEqual(round.calls.map(c => c.arguments.query), ['two things', 'opening hours']);
+  assert.equal(result.text, 'Found: Result for two things | Result for opening hours');
+});
+
+test('lookup results: only the asking website, only known calls, within limits', async () => {
+  let checked = false;
+  const result = await chat(keyA, { visitor: 'look3', tools, messages: [{ role: 'user', content: 'look up prices' }] }, { onEvent: async event => {
+    if (event.name !== 'tool_calls') return;
+    const round = event.data.round, id = event.data.calls[0].id;
+    assert.equal((await call('/v1/chat/tool-results', keyB, { round, results: [{ id, content: 'evil' }] })).status, 404, 'another site cannot answer');
+    assert.equal((await call('/v1/chat/tool-results', keyA, { round: 'nope', results: [] })).status, 404);
+    assert.equal((await call('/v1/chat/tool-results', keyA, { round, results: [{ id: 'bad id!', content: 'x' }] })).status, 400);
+    assert.equal((await call('/v1/chat/tool-results', keyA, { round, results: [{ id, content: 'x'.repeat(130000) }] })).status, 413);
+    await answer()(event);
+    checked = true;
+  } });
+  assert.ok(checked);
+  assert.equal(result.text, 'Found: Result for prices');
+});
+
+test('a website that does not answer a lookup ends the answer; a visitor leaving during a lookup frees the place', async () => {
+  const silent = await chat(keyA, { visitor: 'look4', tools, messages: [{ role: 'user', content: 'look up anything' }] });
+  assert.equal(silent.events.at(-1).name, 'error');
+  assert.equal(silent.events.at(-1).data.code, 'tool_timeout');
+  const left = await chat(keyA, { visitor: 'look5', tools, messages: [{ role: 'user', content: 'look up anything' }] }, { stopAfter: e => e.name === 'tool_calls' });
+  assert.ok(left.aborted);
+  await new Promise(r => setTimeout(r, 100));
+  assert.equal(gateway.scheduler.length, 0);
+  assert.equal((await chat(keyA, { visitor: 'look6' })).text, 'Hello from the mock.');
+});
+
+test('a model that keeps looking things up must answer with what it found', async () => {
+  mock.state.choices = [];
+  const result = await chat(keyA, { visitor: 'look7', tools, messages: [{ role: 'user', content: 'look up forever' }] }, { onEvent: answer() });
+  assert.equal(result.events.filter(e => e.name === 'tool_calls').length, 4, 'maxRounds 4: four rounds of lookups');
+  assert.deepEqual(mock.state.choices, ['auto', 'auto', 'auto', 'auto', 'none'], 'then a round without lookups');
+  assert.deepEqual(mock.state.lastBody.logit_bias, [[48, false]], 'in which the model cannot even write a tool call as text');
+  assert.equal(result.events.at(-1).name, 'done');
+  assert.ok(result.text.startsWith('Found: '), result.text);
+  const fewer = await chat(keyA, { visitor: 'look7b', tools, lookupRounds: 2, messages: [{ role: 'user', content: 'look up forever' }] }, { onEvent: answer() });
+  assert.equal(fewer.events.filter(e => e.name === 'tool_calls').length, 2, 'the website may ask for fewer rounds');
+  assert.equal(fewer.events.at(-1).name, 'done');
+});
+
+test('toolChoice none keeps the tools declared but never calls them (summaries)', async () => {
+  const result = await chat(keyA, { visitor: 'look8', tools, toolChoice: 'none', messages: [{ role: 'user', content: 'look up phone' }] });
+  assert.ok(!result.events.some(e => e.name === 'tool_calls'));
+  assert.equal(mock.state.lastBody.tool_choice, 'none');
+  assert.equal(mock.state.lastBody.tools.length, 1);
+});
+
+test('toolChoice required makes the first round look something up; later rounds may answer', async () => {
+  mock.state.choices = [];
+  const result = await chat(keyA, { visitor: 'look11', tools, toolChoice: 'required', messages: [{ role: 'user', content: 'look up prices' }] }, { onEvent: answer() });
+  assert.equal(result.text, 'Found: Result for prices');
+  assert.deepEqual(mock.state.choices, ['required', 'auto'], 'the round after the lookup may answer');
+});
+
+test('earlier lookups in the history are passed on; broken histories and tools are refused', async () => {
+  const history = [
+    { role: 'user', content: 'Phone?' },
+    { role: 'assistant', content: '', toolCalls: [{ id: 'lookup_0_0', name: 'search_website', arguments: { query: 'phone' } }] },
+    { role: 'tool', toolCallId: 'lookup_0_0', content: 'Phone +41 44 000 00 00' },
+    { role: 'assistant', content: 'Call +41 44 000 00 00.' },
+    { role: 'user', content: 'Thanks' },
+  ];
+  const result = await chat(keyA, { visitor: 'look9', tools, messages: history });
+  assert.equal(result.events.at(-1).name, 'done');
+  const sent = mock.state.lastBody.messages;
+  assert.equal(sent[1].tool_calls[0].function.arguments, '{"query":"phone"}');
+  assert.deepEqual(sent[2], { role: 'tool', tool_call_id: 'lookup_0_0', content: 'Phone +41 44 000 00 00' });
+  const refused = async (messages, extra = {}) => (await chat(keyA, { visitor: 'look10', messages, ...extra })).status;
+  assert.equal(await refused([{ role: 'tool', toolCallId: 'x', content: 'y' }, { role: 'user', content: 'q' }]), 400, 'a result without a call');
+  assert.equal(await refused([history[0], history[1], { role: 'user', content: 'q' }]), 400, 'a call without its result');
+  assert.equal(await refused([history[0], { ...history[1], toolCalls: [{ id: 'a', name: 'x y', arguments: {} }] }, { role: 'tool', toolCallId: 'a', content: '' }, { role: 'user', content: 'q' }]), 400, 'tool names are checked');
+  assert.equal(await refused([{ role: 'user', content: 'q' }], { tools: [{ name: 'x', description: 'd', parameters: { type: 'string' } }] }), 400, 'tool parameters are an object');
+  assert.equal(await refused([{ role: 'user', content: 'q' }], { tools: Array.from({ length: 9 }, () => tools[0]) }), 400, 'at most 8 tools');
 });

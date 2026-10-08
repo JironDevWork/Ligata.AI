@@ -63,9 +63,15 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         };
     }
 
-    /// <summary>Approximate tokens used before the first question: instructions plus enabled knowledge.</summary>
-    public static int BaseTokens(AssistantSettings settings, AssistantStore store, FeatureState features) =>
-        (int)Math.Ceiling(PromptBuilder.Guardrails(settings, PromptBuilder.Handoff(settings, features)).Length / 3.6) + 120 + store.Knowledge().Where(k => k.Enabled).Sum(k => k.Tokens);
+    /// <summary>
+    /// Approximate tokens used before the first question: instructions, the knowledge that is always known, the list of pages
+    /// (as last built) and the lookup tools. The first answer reports the exact number.
+    /// </summary>
+    public static int BaseTokens(AssistantSettings settings, AssistantStore store, FeatureState features)
+    {
+        var instructions = PromptBuilder.Guardrails(settings, PromptBuilder.Handoff(settings, features), lookups: true) + (KnowledgeIndex.Latest is { } snapshot ? PromptBuilder.SiteMap(snapshot) : "");
+        return (int)Math.Ceiling(instructions.Length / 3.6) + 120 + 450 + store.Knowledge().Where(k => k.Enabled && k.Pinned).Sum(k => k.Tokens);
+    }
 
     public static object Limits(GatewayStatus? status, string engine = "gpu")
     {

@@ -56,7 +56,10 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
     - email form texts and an optional visitor confirmation;
     - team notification addresses, reply-to and subject prefix, with a test email;
     - conversation lifetime (close after N days without messages, delete closed conversations after M days), spam protection and who answers.
-  - **Knowledge**: upload PDF, Word, text, Markdown, CSV, JSON or HTML, write text, or import published pages; every source shows its token cost.
+  - **Knowledge** (see [How the assistant knows your website](#how-the-assistant-knows-your-website)):
+    - every published page is used automatically, in every language, including pages added later; leave out single pages or whole sections (`/shop/`);
+    - upload PDF, Word, text, Markdown, CSV, JSON or HTML, or write text; mark short essentials as *always known*;
+    - a test search, and the list of pages the assistant gets with every question.
   - **Connection**: gateway address and API key (stored encrypted, never sent to browsers), live test. In API mode: the Claude model, whether the key is configured (never any part of it), a connection test and today's usage against the limits.
   - **Privacy**: consent status (who receives the data, how long a consent lasts, how many visitors agreed, asked and withdrew), the wording of the consent request, *Ask all visitors again*, the notice under the input and the privacy policy link, what to declare in Cookiebot, and the **privacy policy text** for this site's setup in German or English (copy or download).
   - **Insights**: anonymous daily counters for the AI (questions, answer time, busy/offline, failures) and the team (chat requests, emails, replies, average first response, questions the AI could not answer).
@@ -68,12 +71,13 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 - **Consent first**: before the first question the chat says that the assistant is an AI, which data goes where (Anthropic in the USA, or the operator of the AI server) and links the privacy policy. Nothing reaches the AI until the visitor agrees; withdrawing takes two clicks (*Conversations → Withdraw consent*). The team can be reached without agreeing.
 - **AI answers**:
   - streamed, with safe Markdown;
+  - **looked up on the website**: the assistant searches the site's pages and documents while it answers (*Searching the website…*) and links to the page in the visitor's language;
   - suggested questions;
   - screenshot and PDF attachments;
   - a **memory bar** that shows how full the assistant’s memory is, in percent rather than tokens (the backoffice preview also shows the tokens);
   - **long conversations keep going**: before a question would no longer fit, the earlier messages are summarized automatically (with a progress bar) and the conversation continues with the summary and the latest exchange. The visitor still sees every message;
   - their **place in line** while the shared GPU is busy, and *Reading…* while a long conversation or document is read (GPU mode).
-- **Talk to a person**: when the AI cannot answer, a card offers *Chat with our team* or *Send us an email*. A person icon in the header does the same at any time.
+- **Talk to a person**: when the AI cannot answer, a card offers *Chat with our team* or *Send us an email*; without live chat and the email form, it offers the contact email and contact page from the settings. A person icon in the header does the same at any time.
   - **The form**: name and email per the settings, the message prefilled with their question, and a storage notice. Spam protection only after consent.
   - **The live chat**: it continues in the same thread. The visitor sees who joins (name/photo as the team member chose), typing indicators, replies live, and when someone leaves or closes.
   - **When they're away**: a reply that arrives while the chat is closed shows an unread badge and a teaser with the reply, plus an optional chime.
@@ -85,8 +89,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.5.2.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.5.2 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.6.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.6.0 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -95,10 +99,29 @@ Normal `.AddComposers()` discovers everything.
 - **Files**: the backoffice files (`/App_Plugins/LigataAI`) and the widget (`/assets/ligata-ai/ligata-ai.js`) are static web assets: `dotnet run` serves them from the package, and publishing copies them into `wwwroot`.
 
 Then, in the backoffice:
-- **For the AI on the Ligata GPU**: **Settings → Connection** → gateway address and the key from `node cli.mjs keys create "Site name"` on the gateway machine → add knowledge.
-- **For the AI through Claude**: set `LigataAI:Mode` to `api` and the key in the site's configuration (below), restart, check **Settings → Connection → Test connection** → add knowledge.
+- **For the AI on the Ligata GPU**: **Settings → Connection** → gateway address and the key from `node cli.mjs keys create "Site name"` on the gateway machine. Your pages are used at once; leave out what the assistant should not use, add documents under **Knowledge**.
+- **For the AI through Claude**: set `LigataAI:Mode` to `api` and the key in the site's configuration (below), restart, check **Settings → Connection → Test connection**. Pages are used at once, as with the GPU.
 - **For the team**: **Settings → Team & email** → switch on live chat and/or the email form, then add team email addresses.
 - Check the preview, then use **Show on website**.
+
+## How the assistant knows your website
+
+The assistant does not read the whole website with every question. It gets its instructions, the knowledge marked *always known* and a list of the pages (titles and urls, without their text), and looks up what a question needs while it answers:
+
+- **`search_website`** searches every page and document and returns the best passages with their page url. It is a keyword index on the website's own server (BM25 over passages of about a paragraph): words match without accents and by prefix, so *kontakt* finds *Kontaktformular* and *preise* finds *Preis*.
+- **`read_pages`** reads up to three pages (by url) or documents (by title) in full.
+
+The model may search several topics at once, in up to three rounds per answer (about 7,000 tokens of results); then it answers with what it found. The visitor sees *Searching the website…* meanwhile. On the GPU, a question whose words occur on the website must be looked up before it is answered: a 12B model otherwise too often answers from the prompt alone. Greetings and unrelated requests are answered at once.
+
+- **Big websites fit**: knowledge no longer grows with the website. The list of pages takes at most about 3,000 tokens; a bigger website lists its upper levels and is found by search.
+- **Always current**: pages are read live from Umbraco's published content. Publishing, unpublishing or moving a page updates what the assistant finds at once (on every server of a load-balanced site). New pages are included automatically; editors leave out single pages or whole sections under **Knowledge**.
+- **Multilingual websites**: every language of a page is searched on its own, with its own name, url and text. The list of pages is grouped by language, results name the language, the language of the page the visitor is on wins a tie, and answers link to the page in the visitor's language.
+- **Earlier lookups stay in the conversation**: the browser keeps only what was looked up (for example `search_website("opening hours")`); the website looks it up again for every follow-up question. The model sees the same results, the browser cannot change them, and on the GPU the cached conversation stays valid.
+- **When nothing is found**, the assistant says so and offers the team (or the contact email and page). It never invents prices, dates or contact details.
+- **Always known**: short essentials (opening hours, key facts) can be read with every question instead of being looked up; they count against the knowledge budget.
+- **An AI server without lookups** (a gateway older than 0.6) still works: pages and documents then go into the prompt, in order, as far as the knowledge budget allows.
+
+Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by the live pages; a copy that was switched off becomes a left-out page.
 
 ## AI engine: own GPU or Claude API
 
@@ -137,7 +160,7 @@ Then, in the backoffice:
   - the editor's answer and conversation limits.
 
   Also set a monthly spend limit in the Anthropic Console as the final ceiling.
-- **Cost**: instructions and knowledge are sent as one cached block (prompt caching), so follow-up questions read them at a tenth of the input price. The date and page come after the cache breakpoint.
+- **Cost**: the tools, instructions, always-known knowledge and the list of pages are sent as one cached block (prompt caching), so follow-up questions read them at a tenth of the input price. The date and page come after the cache breakpoint. Lookups run on the website's server; their results count as input tokens.
 - **Thinking**: `Effort` `low` (default) keeps answers fast; Claude thinks only when a question needs it. *Think before answering* in the backoffice raises it one level. Claude Haiku 5.5 takes no temperature, so the *Creativity* slider is hidden in API mode.
 - **Availability**: the widget's frequent status checks need no network call. A rejected key or unknown model shows as offline (and in the backoffice) until *Test connection* succeeds. Anthropic overload shows as "busy" for 30 s.
 - **Privacy**: the default notice under the input becomes "Answers are generated by Claude, an AI by Anthropic …", and the branding says "AI by Ligata" instead of "Private AI". Each request carries only the pseudonymous visitor id (`metadata.user_id`), so Anthropic can act on abuse by one visitor without blocking the site.

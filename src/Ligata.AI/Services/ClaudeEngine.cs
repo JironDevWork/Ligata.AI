@@ -178,18 +178,41 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
 
     private static string ImageType(string data) => data.StartsWith("iVBOR") ? "image/png" : data.StartsWith("UklGR") ? "image/webp" : data.StartsWith("R0lGOD") ? "image/gif" : "image/jpeg";
 
-    /// <summary>The visitor's conversation as Claude messages. The request was validated by ChatRelay.Messages first.</summary>
-    public static List<MessageParam> Messages(ChatRequest request)
+    /// <summary>The lookup tools in Claude's format (the same names, descriptions and schemas as on the GPU).</summary>
+    public static List<ToolUnion> Tools() => Lookups.Tools.Select(definition =>
+    {
+        var json = JsonSerializer.SerializeToElement(definition);
+        var parameters = json.GetProperty("parameters");
+        return (ToolUnion)new Tool
+        {
+            Name = json.GetProperty("name").GetString()!,
+            Description = json.GetProperty("description").GetString(),
+            InputSchema = new() { Properties = parameters.GetProperty("properties").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone()), Required = parameters.GetProperty("required").EnumerateArray().Select(r => r.GetString()!).ToList() },
+        };
+    }).ToList();
+
+    private static Dictionary<string, JsonElement> Input(JsonElement arguments) =>
+        arguments.ValueKind == JsonValueKind.Object ? arguments.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone()) : [];
+
+    /// <summary>The visitor's conversation as Claude messages, earlier lookups looked up again. The request was validated by ChatRelay.Messages first.</summary>
+    public static List<MessageParam> Messages(ChatRequest request, Lookups? lookups = null)
     {
         var messages = new List<MessageParam>();
         if (!string.IsNullOrWhiteSpace(request.Summary)) messages.Add(new() { Role = Role.User, Content = ChatRelay.SummaryMessage(request.Summary) });
-        foreach (var message in request.Messages)
+        for (var index = 0; index < request.Messages.Count; index++)
         {
+            var message = request.Messages[index];
             var text = message.Content ?? "";
             if (message.Role == "assistant")
             {
-                // Answers that were stopped before any text arrived carry nothing the model can use.
-                if (text.Replace(PromptBuilder.TeamMarker, "").Trim().Length > 0) messages.Add(new() { Role = Role.Assistant, Content = text.Replace(PromptBuilder.TeamMarker, "").TrimEnd() });
+                // Answers that were stopped before any text arrived carry nothing the model can use (nor do their lookups).
+                if (text.Replace(PromptBuilder.TeamMarker, "").Trim().Length == 0) continue;
+                foreach (var round in ChatRelay.Replay(message, index, lookups))
+                {
+                    messages.Add(new() { Role = Role.Assistant, Content = round.Select(c => (ContentBlockParam)new ToolUseBlockParam { ID = c.Id, Name = c.Call.Name, Input = Input(c.Call.Arguments) }).ToList() });
+                    messages.Add(new() { Role = Role.User, Content = round.Select(c => (ContentBlockParam)new ToolResultBlockParam { ToolUseID = c.Id, Content = c.Result }).ToList() });
+                }
+                messages.Add(new() { Role = Role.Assistant, Content = text.Replace(PromptBuilder.TeamMarker, "").TrimEnd() });
                 continue;
             }
             var blocks = new List<ContentBlockParam>();
@@ -214,43 +237,49 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     }
 
     /// <summary>
-    /// Streams one answer to the browser. The cached prefix is everything that is the same for every visitor
-    /// (guardrails, owner instructions, knowledge); the page context follows it uncached.
+    /// Streams one answer to the browser. The cached prefix is everything that is the same for every visitor (tools,
+    /// guardrails, owner instructions, knowledge, the list of pages); the page context follows it uncached. When Claude looks
+    /// something up, the lookups run here and the answer continues with the results, up to a few rounds.
     /// </summary>
-    public async Task ChatAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string stable, string context, string visitor, bool countStats)
+    public async Task ChatAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string stable, string context, string visitor, bool countStats, Lookups? lookups = null)
     {
         var token = http.RequestAborted;
         var b = settings.Behaviour;
         var limit = Math.Min(b.ContextLimit, O.MaxContextTokens);
         var effort = Level(O.Effort, b.Thinking);
         var room = effort == Effort.High ? 16_000 : effort == Effort.Medium ? 8_000 : 2_048;
-        var messages = Messages(request);
+        var conversation = Messages(request, lookups);
+        var tools = lookups != null ? Tools() : null;
         var system = new List<TextBlockParam>
         {
             new() { Text = stable, CacheControl = new CacheControlEphemeral() },
             new() { Text = context },
         };
-        var parameters = new MessageCreateParams
+        MessageCreateParams Parameters(int round) => new()
         {
             Model = O.Model,
             // Thinking shares max_tokens with the answer, so the answer limit gets room on top.
             MaxTokens = (request.Compact ? ChatRelay.SummaryTokens : b.MaxAnswerTokens) + room,
             System = system,
-            Messages = messages,
+            Messages = conversation,
             OutputConfig = new OutputConfig { Effort = effort },
             Metadata = new Metadata { UserID = visitor.Length > 64 ? visitor[..64] : visitor },
+            // A summary keeps the tools declared (the cached prefix stays the same) but may not call them; neither may an answer after its last round of lookups.
+            Tools = tools,
+            ToolChoice = tools != null && (request.Compact || round >= Lookups.MaxRounds) ? new ToolChoiceNone() : null,
         };
 
         // Reject conversations that cannot fit before paying for them. Exact counting only near the limit.
         var images = request.Messages.Sum(m => m.Attachments?.Count(a => a.Type == "image") ?? 0);
-        var characters = stable.Length + context.Length + request.Messages.Sum(m => (m.Content?.Length ?? 0) + (m.Attachments?.Sum(a => a.Text?.Length ?? 0) ?? 0));
-        var estimate = (int)(characters / 3.2) + images * 1600 + 64;
+        var replayed = request.Messages.Select((m, i) => ChatRelay.Replay(m, i, lookups).Sum(round => round.Sum(c => c.Result.Length + 80))).Sum();
+        var characters = stable.Length + context.Length + replayed + request.Messages.Sum(m => (m.Content?.Length ?? 0) + (m.Attachments?.Sum(a => a.Text?.Length ?? 0) ?? 0));
+        var estimate = (int)(characters / 3.2) + images * 1600 + 64 + (tools != null ? 500 : 0);
         if (estimate + Math.Min(b.MaxAnswerTokens, 256) > limit * 0.85)
         {
             try
             {
-                var counted = await gate.Client.Messages.CountTokens(new MessageCountTokensParams { Model = O.Model, System = system, Messages = messages }, token);
-                estimate = (int)counted.InputTokens;
+                var counted = await gate.Client.Messages.CountTokens(new MessageCountTokensParams { Model = O.Model, System = system, Messages = conversation }, token);
+                estimate = (int)counted.InputTokens + (tools != null ? 500 : 0);
             }
             catch (Exception e) when (!token.IsCancellationRequested) { logger.LogDebug(e, "Ligata AI could not count tokens; using the estimate."); }
         }
@@ -269,73 +298,124 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         }
 
         var clock = Stopwatch.StartNew();
-        IAsyncEnumerator<RawMessageStreamEvent> stream;
-        try
-        {
-            stream = gate.Client.Messages.CreateStreaming(parameters, token).GetAsyncEnumerator(token);
-            // The request is sent on the first read: failures before the first event become a normal HTTP error.
-            if (!await stream.MoveNextAsync()) throw new GatewayException("model_failed", "The assistant returned no answer.", 502);
-        }
-        catch (Exception) when (token.IsCancellationRequested) { return; }
-        catch (Exception e)
-        {
-            var error = Map(e, gate);
-            if (error.Code == "context_full") { await Error(http, error, countStats, limit, limit); return; }
-            if (error.Code == "gateway_unavailable") logger.LogWarning(e, "Ligata AI could not reach the Claude API.");
-            await Error(http, error, countStats);
-            return;
-        }
-
-        await using var sse = new EventStream(http);
+        EventStream? sse = null;
         long prompt = 0, output = 0, cached = 0, firstToken = 0;
         string? stopReason = null;
         bool thinking = false, finished = false;
         var answer = new StringBuilder();
+        var looking = lookups?.Begin();
         try
         {
-            do
+            for (var round = 0; ; round++)
             {
-                var item = stream.Current;
-                if (item.TryPickStart(out var start))
+                IAsyncEnumerator<RawMessageStreamEvent> stream;
+                try
                 {
-                    var u = start.Message.Usage;
-                    cached = (u.CacheReadInputTokens ?? 0);
-                    prompt = u.InputTokens + cached + (u.CacheCreationInputTokens ?? 0);
-                    await sse.Send("started", new { promptTokens = prompt, contextTokens = limit, waitedMs = queued.ElapsedMilliseconds - clock.ElapsedMilliseconds });
+                    stream = gate.Client.Messages.CreateStreaming(Parameters(round), token).GetAsyncEnumerator(token);
+                    // The request is sent on the first read: failures before the first event become a normal HTTP error.
+                    if (!await stream.MoveNextAsync()) throw new GatewayException("model_failed", "The assistant returned no answer.", 502);
                 }
-                else if (item.TryPickContentBlockStart(out var block))
+                catch (Exception) when (token.IsCancellationRequested) { return; }
+                catch (Exception e) when (sse == null)
                 {
-                    if (!thinking && (block.ContentBlock.TryPickThinking(out _) || block.ContentBlock.TryPickRedactedThinking(out _))) { thinking = true; await sse.Send("thinking", new { }); }
+                    var error = Map(e, gate);
+                    if (error.Code == "context_full") { await Error(http, error, countStats, limit, limit); return; }
+                    if (error.Code == "gateway_unavailable") logger.LogWarning(e, "Ligata AI could not reach the Claude API.");
+                    await Error(http, error, countStats);
+                    return;
                 }
-                else if (item.TryPickContentBlockDelta(out var delta))
+                sse ??= new EventStream(http);
+
+                // This round's content, kept to continue after a lookup (thinking with its signature, as the API requires).
+                var blocks = new List<ContentBlockParam>();
+                var calls = new List<(string Id, string Name, string Json)>();
+                var kind = "";
+                StringBuilder text = new(), reasoning = new();
+                string signature = "", redacted = "", callId = "", callName = "";
+                long written = 0;
+                try
                 {
-                    if (delta.Delta.TryPickText(out var text) && text.Text.Length > 0)
+                    do
                     {
-                        if (firstToken == 0) firstToken = clock.ElapsedMilliseconds;
-                        if (answer.Length < 200_000) answer.Append(text.Text);
-                        await sse.Send("delta", new { text = text.Text });
+                        var item = stream.Current;
+                        if (item.TryPickStart(out var start))
+                        {
+                            var u = start.Message.Usage;
+                            prompt = u.InputTokens + (u.CacheReadInputTokens ?? 0) + (u.CacheCreationInputTokens ?? 0);
+                            if (round > 0) continue;
+                            cached = u.CacheReadInputTokens ?? 0;
+                            await sse.Send("started", new { promptTokens = prompt, contextTokens = limit, waitedMs = queued.ElapsedMilliseconds - clock.ElapsedMilliseconds });
+                        }
+                        else if (item.TryPickContentBlockStart(out var block))
+                        {
+                            text.Clear(); reasoning.Clear(); signature = ""; redacted = "";
+                            if (block.ContentBlock.TryPickText(out _)) kind = "text";
+                            else if (block.ContentBlock.TryPickThinking(out _)) kind = "thinking";
+                            else if (block.ContentBlock.TryPickRedactedThinking(out var hidden)) { kind = "redacted"; redacted = hidden.Data; }
+                            else if (block.ContentBlock.TryPickToolUse(out var use)) { kind = "tool"; callId = use.ID; callName = use.Name; }
+                            else kind = "";
+                            if (!thinking && kind is "thinking" or "redacted") { thinking = true; await sse.Send("thinking", new { }); }
+                        }
+                        else if (item.TryPickContentBlockDelta(out var delta))
+                        {
+                            if (delta.Delta.TryPickText(out var piece) && piece.Text.Length > 0)
+                            {
+                                if (firstToken == 0) firstToken = clock.ElapsedMilliseconds;
+                                if (answer.Length < 200_000) answer.Append(piece.Text);
+                                text.Append(piece.Text);
+                                await sse.Send("delta", new { text = piece.Text });
+                            }
+                            else if (delta.Delta.TryPickThinking(out var thought)) reasoning.Append(thought.Thinking);
+                            else if (delta.Delta.TryPickSignature(out var signed)) signature += signed.Signature;
+                            else if (delta.Delta.TryPickInputJson(out var input)) text.Append(input.PartialJson);
+                        }
+                        else if (item.TryPickContentBlockStop(out _))
+                        {
+                            if (kind == "text" && text.Length > 0) blocks.Add(new TextBlockParam { Text = text.ToString() });
+                            else if (kind == "thinking") blocks.Add(new ThinkingBlockParam { Thinking = reasoning.ToString(), Signature = signature });
+                            else if (kind == "redacted") blocks.Add(new RedactedThinkingBlockParam { Data = redacted });
+                            else if (kind == "tool")
+                            {
+                                calls.Add((callId, callName, text.ToString()));
+                                blocks.Add(new ToolUseBlockParam { ID = callId, Name = callName, Input = Input(Parse(text.ToString())) });
+                            }
+                            kind = "";
+                        }
+                        else if (item.TryPickDelta(out var messageDelta))
+                        {
+                            stopReason = messageDelta.Delta.StopReason?.Raw();
+                            written = messageDelta.Usage.OutputTokens;
+                        }
                     }
+                    while (await stream.MoveNextAsync());
                 }
-                else if (item.TryPickDelta(out var messageDelta))
+                finally { await stream.DisposeAsync(); }
+                output += written;
+
+                if (stopReason == "tool_use" && calls.Count > 0 && looking != null && round + 1 < Lookups.MaxRecordedRounds)
                 {
-                    stopReason = messageDelta.Delta.StopReason?.Raw();
-                    output = messageDelta.Usage.OutputTokens;
+                    var asked = calls.Select(c => new ChatLookup(c.Name, Parse(c.Json))).ToList();
+                    var results = looking.Round(asked);
+                    await sse.Send("lookup", new { calls = asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).Select(c => new { name = c.Name, arguments = c.Arguments }) });
+                    conversation.Add(new() { Role = Role.Assistant, Content = blocks });
+                    conversation.Add(new() { Role = Role.User, Content = calls.Select((c, i) => (ContentBlockParam)new ToolResultBlockParam { ToolUseID = c.Id, Content = results[i] }).ToList() });
+                    continue;
                 }
+                break;
             }
-            while (await stream.MoveNextAsync());
             gate.Healthy();
             finished = true;
 
             if (stopReason == "max_tokens" && answer.Length == 0)
             {
                 if (countStats) store.Count(s => s.Failed++);
-                await sse.Send("error", new { code = "thinking_limit", message = "The assistant thought for too long and could not finish its answer. Please try again or ask more specifically." });
+                await sse!.Send("error", new { code = "thinking_limit", message = "The assistant thought for too long and could not finish its answer. Please try again or ask more specifically." });
                 return;
             }
             if (stopReason == "refusal" && answer.Length == 0)
             {
                 if (countStats) store.Count(s => s.Failed++);
-                await sse.Send("error", new { code = "refused", message = "I can't help with that. Please ask something else about this website." });
+                await sse!.Send("error", new { code = "refused", message = "I can't help with that. Please ask something else about this website." });
                 return;
             }
             var total = clock.ElapsedMilliseconds;
@@ -346,7 +426,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                     // Questions the AI could not answer: a signal for missing knowledge (only counted, never stored).
                     if (answer.ToString().Contains(PromptBuilder.TeamMarker)) s.Suggested++;
                 });
-            await sse.Send("done", new
+            await sse!.Send("done", new
             {
                 finishReason = stopReason switch { "max_tokens" => "length", "refusal" => "refusal", _ => "stop" },
                 usage = new { promptTokens = prompt, completionTokens = output, cachedTokens = cached },
@@ -360,10 +440,18 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             var error = Map(e, gate);
             logger.LogWarning("Ligata AI: the Claude answer stream failed ({Code}).", error.Code);
             if (countStats && !finished) store.Count(s => s.Failed++);
-            try { await sse.Send("error", new { code = error.Code, message = error.Message }); } catch (Exception) { }
+            try { if (sse != null) await sse.Send("error", new { code = error.Code, message = error.Message }); } catch (Exception) { }
         }
-        finally { await stream.DisposeAsync(); }
+        finally { if (sse != null) await sse.DisposeAsync(); }
     }
+
+    /// <summary>Tool arguments as JSON (an empty object when the model wrote something else).</summary>
+    private static JsonElement Parse(string json)
+    {
+        try { using var document = JsonDocument.Parse(json.Length > 0 ? json : "{}"); return document.RootElement.ValueKind == JsonValueKind.Object ? document.RootElement.Clone() : Empty; }
+        catch (JsonException) { return Empty; }
+    }
+    private static readonly JsonElement Empty = JsonDocument.Parse("{}").RootElement.Clone();
 
     private async Task Error(HttpContext http, GatewayException error, bool countStats, int? promptTokens = null, int? contextTokens = null)
     {

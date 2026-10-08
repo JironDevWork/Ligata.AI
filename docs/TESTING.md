@@ -5,23 +5,24 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 ## Repeatable checks
 
 ```powershell
-# Gateway: 48 tests against a mock llama-server (no GPU needed)
+# Gateway: 57 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 129 assertions
+# Package domain and security checks (no database): 168 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
-# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records: 181 assertions in total
+# live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
+# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records: 237 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
-# Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
+# Browser suite in Microsoft Edge (headless): 24 checks, needs the host above and a gateway
 node gateway/test/mock-server.mjs 1298                                    # or a real llama-server
 $env:LIGATA_AI_DATA='C:/Code/Ligata.AI/.runtime/gateway-dev'; $env:LIGATA_AI_UPSTREAM='http://127.0.0.1:1298'; $env:LIGATA_AI_PORT=1220; $env:LIGATA_AI_ADMIN_PORT=1222; $env:LIGATA_AI_MEMORY_PROBE=0; node gateway/src/main.mjs
 node gateway/cli.mjs keys create "Test host" > .runtime/gateway-dev/created.txt    # with the same LIGATA_AI_DATA
 cd tests/e2e; npm ci; node run.mjs
 
-# The chat's memory (no host, no model): Reading…, the memory bar, summaries of long conversations: 6 checks
+# The chat's memory (no host, no model): Reading…, the memory bar, summaries of long conversations, contact buttons without a team: 7 checks
 node memory.mjs
 ```
 
@@ -52,6 +53,7 @@ Results (8 October 2026, version 0.4.0):
 - Regression with consent: AI suite 23/23, team suite 16/16 (also on the installed-package host), API suite 13/13, no-AI suite 5/5 (no consent asked without the AI).
 - Package checks: 114 domain and 164 total with the database.
 - 0.4.1: the GPU server's country defaults to Switzerland (`CH`); package checks 116 domain and 166 total.
+- 0.6.0: the assistant looks the website up while answering (`search_website`, `read_pages`) instead of reading all knowledge with every question; every published page is used, in every language, unless left out. Package checks 168 domain and 237 total: the search (accents, prefixes, compound words, documents, one language version per page, the visitor's language, passage overlap), the per-answer lookup budget, repeating earlier lookups word for word, the page list (grouped by language, capped for big sites), a real multilingual tree with `/en` and `/de` domains, publishing and unpublishing, left-out pages and sections, and the migration of imported copies. Gateway 57 tests (rounds of lookups in the same place and slot, results only from the asking site, timeouts, visitors leaving during a lookup, a forced answer after the last round with the tool-call token forbidden, `required` first rounds, histories with lookups). Browser: AI suite 24/24 (pages searchable without import, a left-out page is not searched, *always known*, *Searching the website…*, the browser keeps calls, not results), API suite 15/15 (Claude's `tool_use` and `tool_result` against a mock that checks their pairing), memory 7/7 (contact buttons without a team), privacy 7/7, team 16/16, team without AI 5/5. Real GPU (`model/lookup-check.mjs`, see [model/README](../model/README.md#looking-things-up-06-measured)): test site 13/13 three times, local copy of the bilingual demo with thinking 14/14 twice.
 - 0.5.2: `tests/e2e/queue.mjs` (test host against the real gateway, one test IP per visitor): six visitors ask at once, three are answered, three see *You are next* / *You are number 2/3 in line* with a wait, the operator page shows *answering 3 of 3 · 3 waiting*, and the last in line moves up and gets its answer. Wait estimates now follow the place that frees first instead of rounds of three. Bold that is still being written no longer shows raw asterisks. Gateway 48 tests.
 - 0.5.1: three conversations at once on the GPU. The model profile splits a 320k KV cache into 3 slots of 109k (11.1 GB VRAM); the gateway runs one answer per slot, gives each answer the slot that holds its conversation (else one warm with its site), and counts the answer time from when the model starts on it. Measured on the RTX 3060 (`model/parallel-test.mjs`, rows in `model/parallel.jsonl`): 54 / 37 / 38 tok/s per chat with 1 / 2 / 3 writing at once; three 109k chats at once all found their needle and wrote at 14–17 tok/s each, against a 256k shared pool where three 89k chats overflowed and one lost its cache. Sites now default to a 128k conversation limit (capped by the gateway at 109k; the untouched 64k of earlier versions reads as the new default). Gateway 47 tests (parallel answers, room in a shared pool, slot per conversation, split slots never erase); package checks 129 and 181.
 - 0.5.0: while a long prompt is read the chat says *Reading…* / *Reading your document…* (no percentage, no bar). The memory bar shows how full the memory is in percent; tokens only in the backoffice preview and not on attachment chips. Before a question would no longer fit (conversation + question + the longest answer or a summary, plus thinking in GPU mode), the widget asks for a summary of the conversation (with a progress bar) and continues with the summary and the latest exchange; a `context_full` from the server leads to one summary and a retry. `tests/e2e/memory.mjs` 6/6. On the real GPU (`model/summary-check.mjs`, English and German, 2 rounds each) summaries take 3–4 s, are about 100 words, keep 4/4 details, are in the visitor's language (the first instruction wrote an English conversation's summary in German, so it now names the visitor's language first) and the model answers 4/4 detail questions from the summary alone. Package checks 128 and 178; AI suite 23/23, privacy 7/7, team 16/16, API suite 14/14.
@@ -73,7 +75,7 @@ It simulates prompt caching from the first `cache_control` breakpoint, streams l
 ```bash
 node tests/e2e/mock-anthropic.mjs &      # :1230
 CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash tests/e2e/restart-host.sh
-cd tests/e2e && node api.mjs             # 13 checks, screenshots in .runtime/e2e/api
+cd tests/e2e && node api.mjs             # 15 checks, screenshots in .runtime/e2e/api
 node support.mjs                         # the team suite also passes in API mode (the mock hands off like the GPU mock)
 ```
 
@@ -173,9 +175,9 @@ Results are appended to `model/results.jsonl`, `model/perplexity.jsonl` and `mod
 
 ## What the suites cover
 
-**Gateway**: hashed keys and constant-time checks, revocation without restart, strict one-at-a-time FIFO across sites, queue positions and estimates, one question per visitor, per-site and global caps with `Retry-After`, queue timeouts, model offline/starting answers without queueing, streams breaking mid-answer (error event, queue continues), visitors leaving while queued or while answering (GPU work cancelled), answer time limit, context pre-check, message/role validation, image signature/size/count checks, llama-server message format, PDF text extraction (valid, not a PDF, no text), token counting, body size limits, daily quotas.
+**Gateway**: hashed keys and constant-time checks, revocation without restart, strict one-at-a-time FIFO across sites, queue positions and estimates, one question per visitor, per-site and global caps with `Retry-After`, queue timeouts, model offline/starting answers without queueing, streams breaking mid-answer (error event, queue continues), visitors leaving while queued or while answering (GPU work cancelled), answer time limit, context pre-check, message/role validation, image signature/size/count checks, llama-server message format, PDF text extraction (valid, not a PDF, no text), token counting, body size limits, daily quotas, lookups (rounds in the same place and slot, results only from the asking site, timeouts, forced answers, histories with tool calls).
 
-**Package**: consent versions (engine, revision, recipient), consent checks (unknown, withdrawn, expired, outdated), consent records (use, withdrawal without a stale cache, purge of unused and old records, no IP or content), the privacy policy templates (blocks, values, every setup), the Cookiebot exemption on the script tag, settings validation (colours, URLs, e-mail, budgets, display rules), the cacheable prompt order, guardrails, sanitised page context, HTML/Word/text extraction (scripts stripped, DTD/XXE refused), conversation validation (roles, injected system messages, lengths, attachment types/counts, switched-off uploads), encrypted key round trip and tamper rejection, pseudonymous visitor ids, one question per visitor, origin allowlist, untrusted Cloudflare header; database versioning conflicts, knowledge previews and cache invalidation, counters, section grant.
+**Package**: consent versions (engine, revision, recipient), consent checks (unknown, withdrawn, expired, outdated), consent records (use, withdrawal without a stale cache, purge of unused and old records, no IP or content), the privacy policy templates (blocks, values, every setup), the Cookiebot exemption on the script tag, settings validation (colours, URLs, e-mail, budgets, display rules), the cacheable prompt order, guardrails, sanitised page context, HTML/Word/text extraction (scripts stripped, DTD/XXE refused), conversation validation (roles, injected system messages, lengths, attachment types/counts, switched-off uploads), encrypted key round trip and tamper rejection, pseudonymous visitor ids, one question per visitor, origin allowlist, untrusted Cloudflare header; the knowledge search and lookups (budget, repeatable results, page list, languages); database versioning conflicts, knowledge previews and cache invalidation, live pages and their languages, counters, section grant.
 
 **Browser**: login, section, connection (bad key format explained, key stored and only hinted), behaviour save and validation, website-page import, file upload with token counts, written knowledge and switching sources off, themes and the live preview using unsaved settings, a real preview chat, going live, automatic injection without secrets in the HTML, status dot, suggested question with streamed and safely rendered Markdown, the memory meter, conversation surviving page changes, screenshot attachment, unsupported files, same-visitor double submit refused, full-screen mobile layout without overflow, a static page on another origin through CORS (German interface), disallowed origins refused, offline state with contact options (with `STOP_GATEWAY_CMD`), and no script errors.
 

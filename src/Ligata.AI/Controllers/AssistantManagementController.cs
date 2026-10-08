@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using Ligata.AI.Data;
 using Ligata.AI.Models;
@@ -27,13 +28,12 @@ public sealed record ConnectionRequest(string? GatewayUrl, string? ApiKey, int V
 public sealed record KnowledgeRequest(Guid? Id, string Title, string Text);
 public sealed record EnabledRequest(bool Enabled);
 public sealed record OrderRequest(List<Guid> Ids);
-public sealed record PagesRequest(List<Guid> Keys);
 public sealed record BudgetRequest(AssistantSettings Settings);
 
 [ApiVersion("1.0"), Route("umbraco/management/api/v{version:apiVersion}/ligata-ai")]
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(AssistantEditorFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, ApiKeyVault vault, ContentKnowledge content, ChatRelay relay, IOptions<AssistantOptions> options,
+public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, ApiKeyVault vault, ContentKnowledge content, KnowledgeIndex index, ChatRelay relay, IOptions<AssistantOptions> options,
     IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore, ConsentStore consents) : ManagementApiControllerBase
 {
     private static object Problem(string message, Dictionary<string, string>? errors = null) => new { message, errors };
@@ -133,9 +133,9 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         try
         {
-            var enabled = store.Knowledge().Where(k => k.Enabled).Sum(k => k.Tokens);
-            if (enabled > request.Settings.Behaviour.KnowledgeBudget)
-                throw new AssistantValidationException(new() { ["behaviour.knowledgeBudget"] = $"Your enabled knowledge uses {enabled:N0} tokens. Raise the budget or switch knowledge off first." });
+            var pinned = store.Knowledge().Where(k => k.Enabled && k.Pinned).Sum(k => k.Tokens);
+            if (pinned > request.Settings.Behaviour.KnowledgeBudget)
+                throw new AssistantValidationException(new() { ["behaviour.knowledgeBudget"] = $"Your always-known knowledge uses {pinned:N0} tokens. Raise the budget or let the assistant look some of it up instead." });
             return Ok(new { version = store.Save(request.Settings, request.Version) });
         }
         catch (AssistantValidationException e) { return BadRequest(Problem("Check the highlighted settings.", e.Errors)); }
@@ -178,14 +178,30 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     [HttpDelete("connection/key")]
     public IActionResult ClearKey() { store.SetKey(null, null); return Ok(new { connection = Connection() }); }
 
-    /// <summary>Token cost of the instructions with the given (possibly unsaved) settings.</summary>
+    /// <summary>
+    /// Token cost of the instructions with the given (possibly unsaved) settings: guardrails, the list of pages and the
+    /// lookup tools. lookupTokens is what lookups may add to one answer.
+    /// </summary>
     [HttpPost("budget")]
     public async Task<IActionResult> Budget([FromBody] BudgetRequest request, CancellationToken token)
     {
-        var team = PromptBuilder.Handoff(request.Settings, request.Settings.Effective(options.Value.Features));
-        var instructions = PromptBuilder.Guardrails(request.Settings, team) + PromptBuilder.Context(request.Settings, "A page title of typical length here", "/a/typical/page/path/", DateTime.Now, team);
+        var settings = request.Settings;
+        try { AssistantValidation.Settings(settings); } catch (AssistantValidationException) { settings = store.Settings().Settings; }
+        var (stable, context, lookups) = await relay.PromptAsync(settings, settings.Effective(options.Value.Features), "A page title of typical length here", "/a/typical/page/path/", token);
+        // The knowledge that is always known is shown on its own; tools are declared next to the instructions.
+        var pinned = PromptBuilder.Knowledge(store.EnabledKnowledge().Where(k => k.Pinned && k.Kind != "page"));
+        var instructions = stable.Replace(pinned, "") + context + (lookups != null ? JsonSerializer.Serialize(Lookups.Tools) : "");
         var (tokens, estimated) = await Count(instructions, token);
-        return Ok(new { instructionTokens = tokens + 16, estimated });
+        return Ok(new { instructionTokens = tokens + 16, estimated, lookupTokens = lookups != null ? Lookups.Tokens : 0, lookups = lookups != null });
+    }
+
+    /// <summary>What the assistant can look up right now (saved settings), and a test search for editors.</summary>
+    [HttpGet("knowledge/index")]
+    public async Task<IActionResult> Index([FromQuery] string? q, CancellationToken token)
+    {
+        var snapshot = await index.SnapshotAsync(store.Settings().Settings.Knowledge, token);
+        var hits = string.IsNullOrWhiteSpace(q) ? [] : snapshot.Search(q.Length > 200 ? q[..200] : q, 8).Select(h => new { h.Document.Title, h.Document.Url, h.Document.Kind, text = h.Text.Length > 400 ? h.Text[..400] + "…" : h.Text, score = Math.Round(h.Score, 2) });
+        return Ok(new { pages = snapshot.Pages, documents = snapshot.Documents.Count - snapshot.Pages, passages = snapshot.Passages, languages = snapshot.Cultures, siteMap = PromptBuilder.SiteMap(snapshot).Trim(), textTokens = (int)(snapshot.Documents.Sum(d => (long)d.Text.Length) / 3.6), hits });
     }
 
     private async Task<(int Tokens, bool Estimated)> Count(string text, CancellationToken token)
@@ -202,18 +218,19 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         var (settings, _) = store.Settings();
         var source = PromptBuilder.Knowledge([row]);
         (row.Tokens, row.Estimated) = await Count(source, token);
-        var others = store.Knowledge().Where(k => k.Enabled && k.Id != row.Id).Sum(k => k.Tokens);
+        // Only knowledge that is always known counts against the budget; everything else is looked up when needed.
+        var others = store.Knowledge().Where(k => k.Enabled && k.Pinned && k.Id != row.Id).Sum(k => k.Tokens);
         string? warning = null;
-        if (row.Enabled && others + row.Tokens > settings.Behaviour.KnowledgeBudget)
+        if (row.Enabled && row.Pinned && others + row.Tokens > settings.Behaviour.KnowledgeBudget)
         {
-            row.Enabled = false;
-            warning = $"Saved but switched off: it needs {row.Tokens:N0} tokens and only {Math.Max(0, settings.Behaviour.KnowledgeBudget - others):N0} of your knowledge budget are free.";
+            row.Pinned = false;
+            warning = $"Saved, but looked up when needed instead of always known: it needs {row.Tokens:N0} tokens and only {Math.Max(0, settings.Behaviour.KnowledgeBudget - others):N0} of your knowledge budget are free.";
         }
         try { return Ok(new { item = Summary(store.Upsert(row)), warning }); }
         catch (AssistantValidationException e) { return BadRequest(Problem(e.Message, e.Errors)); }
     }
 
-    private static KnowledgeSummary Summary(KnowledgeRow r) => new(r.Id, r.Title, r.Kind, r.Source, r.ContentKey, r.Tokens, r.Estimated, r.Enabled, r.SortOrder, r.UpdatedUtc, r.Characters, r.Text.Length > 300 ? r.Text[..300] : r.Text);
+    private static KnowledgeSummary Summary(KnowledgeRow r) => new(r.Id, r.Title, r.Kind, r.Source, r.ContentKey, r.Tokens, r.Estimated, r.Enabled, r.SortOrder, r.UpdatedUtc, r.Characters, r.Text.Length > 300 ? r.Text[..300] : r.Text, r.Pinned);
 
     [HttpPost("knowledge"), RequestSizeLimit(8_000_000)]
     public Task<IActionResult> SaveText([FromBody] KnowledgeRequest request, CancellationToken token)
@@ -247,15 +264,28 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     public IActionResult Enable(Guid id, [FromBody] EnabledRequest request)
     {
         var row = store.Find(id); if (row == null) return NotFound();
-        if (request.Enabled)
-        {
-            var (settings, _) = store.Settings();
-            var others = store.Knowledge().Where(k => k.Enabled && k.Id != id).Sum(k => k.Tokens);
-            if (others + row.Tokens > settings.Behaviour.KnowledgeBudget)
-                return BadRequest(Problem($"Not enough knowledge budget: this item needs {row.Tokens:N0} tokens, {Math.Max(0, settings.Behaviour.KnowledgeBudget - others):N0} are free. Switch something else off or raise the budget under Behaviour."));
-        }
+        if (request.Enabled && row.Pinned && OverBudget(row) is { } problem) return BadRequest(Problem(problem));
         store.SetEnabled(id, request.Enabled);
         return NoContent();
+    }
+
+    /// <summary>Always known (read with every question, counts against the knowledge budget) or looked up when needed.</summary>
+    [HttpPost("knowledge/{id:guid}/pinned")]
+    public IActionResult Pin(Guid id, [FromBody] EnabledRequest request)
+    {
+        var row = store.Find(id); if (row == null) return NotFound();
+        if (request.Enabled && row.Enabled && OverBudget(row) is { } problem) return BadRequest(Problem(problem));
+        store.SetPinned(id, request.Enabled);
+        return NoContent();
+    }
+
+    private string? OverBudget(KnowledgeRow row)
+    {
+        var (settings, _) = store.Settings();
+        var others = store.Knowledge().Where(k => k.Enabled && k.Pinned && k.Id != row.Id).Sum(k => k.Tokens);
+        return others + row.Tokens > settings.Behaviour.KnowledgeBudget
+            ? $"Not enough knowledge budget: this item needs {row.Tokens:N0} tokens, {Math.Max(0, settings.Behaviour.KnowledgeBudget - others):N0} are free. Let the assistant look something else up instead, or raise the budget under Behaviour."
+            : null;
     }
 
     [HttpPost("knowledge/order")]
@@ -277,24 +307,9 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         catch (GatewayException e) { return BadRequest(Problem("Counting needs the AI gateway: " + e.Message)); }
     }
 
+    /// <summary>Published pages in tree order; the backoffice marks the ones the assistant may read (settings.knowledge).</summary>
     [HttpGet("pages")]
     public async Task<IActionResult> Pages() => Ok(await content.PagesAsync());
-
-    [HttpPost("knowledge/pages")]
-    public async Task<IActionResult> ImportPages([FromBody] PagesRequest request, CancellationToken token)
-    {
-        var results = new List<object>();
-        foreach (var key in request.Keys.Distinct().Take(200))
-        {
-            var page = await content.PageTextAsync(key);
-            if (page == null || string.IsNullOrWhiteSpace(page.Value.Text)) { results.Add(new { key, skipped = "No published text on this page." }); continue; }
-            var row = store.FindByContent(key) ?? new KnowledgeRow { Id = Guid.NewGuid(), Kind = "page", ContentKey = key, Enabled = true };
-            row.Title = page.Value.Title; row.Source = page.Value.Url; row.Text = page.Value.Text;
-            var saved = await SaveItem(row, token);
-            results.Add(saved is OkObjectResult ok ? ok.Value! : new { key, skipped = "Could not be saved." });
-        }
-        return Ok(new { results, knowledge = store.Knowledge() });
-    }
 
     /// <summary>Same as the public config, for the live preview (works while the assistant is switched off).</summary>
     [HttpGet("config")]

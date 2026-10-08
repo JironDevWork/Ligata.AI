@@ -42,6 +42,11 @@ export const defaults = {
   // sharedPool: true when the slots share one pool (-kvu); 'auto' reads model/profile.json (unified: false splits it,
   // and then each slot owns its part: one conversation may use ctx / slots, conversationTokens does not apply).
   parallel: { conversations: 3, conversationTokens: 131072, sharedPool: 'auto' },
+  // Lookups while answering: the model calls a website's tools (search its pages, read a page), the gateway sends the
+  // calls to the website and continues with the results in the same place and slot. After maxRounds rounds of lookups (or
+  // fewer, as the website asks) the model must answer with what it found; reserveTokens is what lookups may add to one
+  // answer (for the shared pool's accounting).
+  tools: { maxRounds: 4, waitSeconds: 20, maxResultChars: 120000, reserveTokens: 8192 },
   // Default per-key limits; each key can override them.
   keyDefaults: { requestsPerDay: 2000, maxContextTokens: 262144, maxQueued: 10 },
   // Measured vision cost of one image, used before the exact count is known.

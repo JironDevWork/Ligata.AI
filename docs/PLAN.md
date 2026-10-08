@@ -20,7 +20,7 @@ visitor browser ──► client Umbraco site (Ligata.AI package) ──► Liga
 | Fairness / abuse | Max one queued or active request per visitor (HMAC of IP, per site), per-key queue cap, global queue cap, per-key daily quota, request size limits | “Every IP has one request max”, without sending raw IPs to the gateway. |
 | Secrets | Gateway keys `lai_<id>_<secret>`, stored only as SHA-256 hashes on the gateway. On the site, the key is protected with ASP.NET Data Protection in the DB (or config/env), and is never sent to browsers | Browsers talk only to their own Umbraco site. The gateway is server-to-server only. |
 | Attachments | Screenshots (PNG/JPEG/WebP ≤ 5 MB, downscaled in the browser) go to the vision model. PDFs (≤ 10 MB, ≤ 60 pages) are converted to text by the gateway. Nothing is stored; attachments live only in page memory and request memory | Meets “not stored”. Text PDFs are far cheaper in context than page images. |
-| Knowledge | Uploaded files (PDF/TXT/MD/CSV/HTML/JSON), free-text snippets, and published website pages become plain-text knowledge with exact token counts. It is injected into the system prompt, with a configurable token budget and a live context meter | No fine-tuning needed. With 128k–256k context, retrieval is unnecessary at this scale, and prefix caching makes it cheap after the first question. |
+| Knowledge | Every published page (in every language) and uploaded or written documents are searchable on the site's own server (keyword index, BM25 over passages). The model gets a list of the pages and looks up what a question needs with two tools, `search_website` and `read_pages`, while it answers (0.6). Short essentials can be *always known* (in the prompt, within a token budget) | The prompt no longer grows with the website, pages are always current, and new pages are included without an editor. Until 0.5 everything enabled was in the prompt, which filled the conversation's memory on big sites. |
 | Widget | Vanilla JS + Shadow DOM, configurable themes and tokens, bottom-right by default (0.4.3; consent banners such as Cookiebot sit bottom left), works on static exports (Cloudflare Pages) | Isolated from host CSS, no framework dependency. |
 | Backoffice | Own **AI Assistant** section with Overview, Appearance (live preview), Behaviour, Knowledge (budget meter), Connection, Test chat | “A user-friendly and neat Umbraco tab”. |
 
@@ -37,4 +37,4 @@ visitor browser ──► client Umbraco site (Ligata.AI package) ──► Liga
 
 ## Out of scope for the first release
 
-Fine-tuning/LoRA training, vector retrieval, audio input, persistent chat transcripts (only anonymous daily counters are stored), and multi-GPU scheduling.
+Fine-tuning/LoRA training, vector retrieval (keyword search with prefix matching suffices for website content and needs no embedding model), audio input, persistent chat transcripts (only anonymous daily counters are stored), and multi-GPU scheduling.

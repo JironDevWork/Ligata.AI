@@ -35,6 +35,8 @@ public sealed class AssistantComposer : IComposer
         builder.Services.AddScoped<SupportAgentFilter>();
         builder.Services.AddScoped<ChatRelay>();
         builder.Services.AddScoped<ContentKnowledge>();
+        builder.Services.AddScoped<KnowledgeIndex>();
+        builder.AddNotificationHandler<ContentCacheRefresherNotification, KnowledgeIndexRefresher>();
         builder.Services.AddSingleton<RequestGuard>();
         builder.Services.AddSingleton<ApiKeyVault>();
         builder.Services.AddSingleton<SupportHub>();

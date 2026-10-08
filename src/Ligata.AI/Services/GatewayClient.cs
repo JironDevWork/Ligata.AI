@@ -78,11 +78,23 @@ public sealed class GatewayClient(HttpClient http, AssistantStore store, ApiKeyV
         }
     }
 
+    // Whether the gateway lets the model look things up (0.6+), as last reported by its status.
+    private static (DateTime At, bool Tools)? features;
+
+    /// <summary>The gateway runs lookups (tools). Known from the last status, refreshed at most every minute.</summary>
+    public async Task<bool> SupportsToolsAsync(CancellationToken token)
+    {
+        if (features is { } known && DateTime.UtcNow - known.At < TimeSpan.FromMinutes(1)) return known.Tools;
+        try { await StatusAsync(token); } catch (GatewayException) { return features?.Tools ?? false; }
+        return features?.Tools ?? false;
+    }
+
     public async Task<GatewayStatus> StatusAsync(CancellationToken token)
     {
         using var response = await SendAsync(Request(HttpMethod.Get, "/v1/status"), HttpCompletionOption.ResponseContentRead, token, TimeSpan.FromSeconds(8));
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
         var root = document.RootElement; var model = root.GetProperty("model"); var queue = root.GetProperty("queue");
+        features = (DateTime.UtcNow, root.TryGetProperty("features", out var list) && list.ValueKind == JsonValueKind.Array && list.EnumerateArray().Any(f => f.ValueKind == JsonValueKind.String && f.GetString() == "tools"));
         return new GatewayStatus(model.GetProperty("state").GetString() ?? "down", model.GetProperty("name").GetString(), model.GetProperty("contextTokens").GetInt32(), model.GetProperty("vision").GetBoolean(),
             queue.GetProperty("waiting").GetInt32(), queue.GetProperty("running").GetBoolean(), queue.GetProperty("estimatedWaitSeconds").GetInt32(),
             root.GetProperty("gpu").GetProperty("healthy").GetBoolean(), root.GetProperty("limits").Clone(), root.GetProperty("usage").Clone());
@@ -106,4 +118,10 @@ public sealed class GatewayClient(HttpClient http, AssistantStore store, ApiKeyV
     /// <summary>Starts a streamed chat. The caller owns the response and copies its event stream to the browser.</summary>
     public Task<HttpResponseMessage> ChatAsync(object body, CancellationToken token) =>
         SendAsync(Request(HttpMethod.Post, "/v1/chat", body), HttpCompletionOption.ResponseHeadersRead, token);
+
+    /// <summary>The results of one round of lookups; the gateway continues the answer that waits for them.</summary>
+    public async Task ToolResultsAsync(string round, object results, CancellationToken token)
+    {
+        using var response = await SendAsync(Request(HttpMethod.Post, "/v1/chat/tool-results", new { round, results }), HttpCompletionOption.ResponseContentRead, token, TimeSpan.FromSeconds(15));
+    }
 }

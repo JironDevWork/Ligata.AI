@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { QueueError } from './queue.mjs';
 import { LlmError } from './llm.mjs';
 import { DocumentError, pdfToText } from './pdf.mjs';
@@ -45,13 +46,53 @@ function fail(response, error) {
   send(response, status, { error: { code, message, ...(error.extra || {}), ...(error.details && code === 'context_full' ? error.details : {}) } }, retryAfter ? { 'Retry-After': String(retryAfter) } : {});
 }
 
-/** Converts the package's message format into llama-server's OpenAI format, validating every part. */
+const NAME = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The website's tools in llama-server's (OpenAI) format: [{ name, description, parameters }] with a JSON-schema object each.
+ * The website runs them; the gateway only passes the calls on (see chat).
+ */
+export function normalizeTools(input) {
+  if (input == null) return undefined;
+  if (!Array.isArray(input) || !input.length || input.length > 8) throw new HttpError(400, 'invalid_tools', 'Provide between 1 and 8 tools.');
+  if (JSON.stringify(input).length > 16000) throw new HttpError(413, 'invalid_tools', 'The tool definitions are too large.');
+  return input.map(tool => {
+    if (!NAME.test(tool?.name || '') || typeof tool.description !== 'string' || tool.parameters?.type !== 'object') throw new HttpError(400, 'invalid_tools', 'Each tool needs a name, a description and object parameters.');
+    return { type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } };
+  });
+}
+
+/** One earlier lookup in llama-server's format: the arguments as JSON text (the chat template renders them in the model's own syntax). */
+function toolCall(call, index) {
+  if (!NAME.test(call?.id || '') || !NAME.test(call?.name || '') || !call.arguments || typeof call.arguments !== 'object' || Array.isArray(call.arguments)) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} has an invalid tool call.`);
+  const json = JSON.stringify(call.arguments);
+  if (json.length > 4000) throw new HttpError(413, 'invalid_messages', `Message ${index + 1} has a tool call that is too large.`);
+  return { id: call.id, type: 'function', function: { name: call.name, arguments: json } };
+}
+
+/**
+ * Converts the package's message format into llama-server's OpenAI format, validating every part. Earlier lookups arrive as
+ * an assistant message with toolCalls [{ id, name, arguments }] followed by one { role: 'tool', toolCallId, content } per call.
+ */
 export function normalizeMessages(input, limits) {
   if (!Array.isArray(input) || !input.length || input.length > limits.maxMessages) throw new HttpError(400, 'invalid_messages', 'Provide between 1 and ' + limits.maxMessages + ' messages.');
-  let images = 0;
+  let images = 0, open = null;
   const messages = input.map((message, index) => {
-    if (!['system', 'user', 'assistant'].includes(message?.role)) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} has an invalid role.`);
+    if (!['system', 'user', 'assistant', 'tool'].includes(message?.role)) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} has an invalid role.`);
     if (message.role === 'system' && index !== 0) throw new HttpError(400, 'invalid_messages', 'Only the first message may be a system message.');
+    if (message.role === 'tool') {
+      if (!open?.has(message.toolCallId) || typeof message.content !== 'string' || message.content.length > (limits.maxToolResultChars ?? 120000)) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} is not the result of an earlier tool call.`);
+      open.delete(message.toolCallId);
+      return { role: 'tool', tool_call_id: message.toolCallId, content: message.content };
+    }
+    if (open?.size) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} follows tool calls without their results.`);
+    open = null;
+    if (message.role === 'assistant' && message.toolCalls != null) {
+      if (!Array.isArray(message.toolCalls) || !message.toolCalls.length || message.toolCalls.length > 8 || (message.content != null && typeof message.content !== 'string')) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} has invalid tool calls.`);
+      const calls = message.toolCalls.map(call => toolCall(call, index));
+      open = new Set(calls.map(call => call.id));
+      return { role: 'assistant', content: message.content || '', tool_calls: calls };
+    }
     if (typeof message.content === 'string') return { role: message.role, content: message.content };
     if (!Array.isArray(message.content) || message.content.length > 20) throw new HttpError(400, 'invalid_messages', `Message ${index + 1} has invalid content.`);
     const parts = message.content.map(part => {
@@ -73,6 +114,7 @@ export function normalizeMessages(input, limits) {
     });
     return { role: message.role, content: parts };
   });
+  if (open?.size) throw new HttpError(400, 'invalid_messages', 'Tool calls are missing their results.');
   if (messages.at(-1).role !== 'user') throw new HttpError(400, 'invalid_messages', 'The last message must be from the visitor.');
   return { messages, images };
 }
@@ -89,6 +131,16 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
     scheduler.configure({ parallel: parallel(props), capacity: shared() ? props.contextTokens - slots.reserve : Infinity });
   };
 
+  // Lookups waiting for the website's results, by round id. The answer keeps its place and slot meanwhile.
+  const rounds = new Map();
+  const waitForResults = (id, keyId, signal) => new Promise((resolve, reject) => {
+    const finish = (settle, value) => { clearTimeout(timer); signal.removeEventListener('abort', aborted); rounds.delete(id); settle(value); };
+    const aborted = () => finish(reject, signal.reason ?? new QueueError('cancelled', 'The visitor left.', 499, 0));
+    const timer = setTimeout(() => finish(reject, new LlmError('tool_timeout', 'The website did not answer the assistant\'s lookup in time.', 504)), config.tools.waitSeconds * 1000);
+    rounds.set(id, { keyId, resolve: results => finish(resolve, results) });
+    if (signal.aborted) aborted(); else signal.addEventListener('abort', aborted, { once: true });
+  });
+
   const routes = {
     'GET /v1/health': async () => ({ status: 200, body: { ok: true, model: await llm.health() } }),
 
@@ -102,7 +154,20 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
         gpu: { healthy: !monitor.latest?.spilling },
         limits: { ...key.limits, maxImages: config.limits.maxImages, maxImageBytes: config.limits.maxImageBytes, maxPdfBytes: config.limits.maxPdfBytes, maxPdfPages: config.limits.maxPdfPages, maxTokensCap: config.generation.maxTokensCap },
         usage: keys.usageOf(key),
+        // tools: the model may look things up while answering (POST /v1/chat with tools, then /v1/chat/tool-results).
+        features: ['tools'],
       } };
+    },
+
+    /** The website's results for one round of lookups: { round, results: [{ id, content }] }. */
+    'POST /v1/chat/tool-results': async ({ key, body }) => {
+      const waiting = typeof body.round === 'string' ? rounds.get(body.round) : null;
+      if (!waiting || waiting.keyId !== key.id) throw new HttpError(404, 'unknown_round', 'No answer is waiting for these results.');
+      const results = Array.isArray(body.results) ? body.results : null;
+      if (!results || results.length > 8 || results.some(r => !NAME.test(r?.id || '') || typeof r.content !== 'string')) throw new HttpError(400, 'invalid_results', 'Provide up to 8 results as { id, content }.');
+      if (results.reduce((n, r) => n + r.content.length, 0) > config.tools.maxResultChars) throw new HttpError(413, 'too_large', 'The results are too large.');
+      waiting.resolve(new Map(results.map(r => [r.id, r.content])));
+      return { status: 200, body: { ok: true } };
     },
 
     'POST /v1/tokenize': async ({ body }) => {
@@ -126,13 +191,19 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
   };
 
   async function chat(request, response, key, body) {
-    const { messages, images } = normalizeMessages(body.messages, config.limits);
+    const { messages, images } = normalizeMessages(body.messages, { ...config.limits, maxToolResultChars: config.tools.maxResultChars });
+    const tools = normalizeTools(body.tools);
+    // none: the tools stay declared (same prompt, same cache) but may not be called, e.g. while a conversation is summarized.
+    // required: the first round must look something up (the website knows the question touches its content); later rounds may answer.
+    const toolChoice = tools && ['none', 'required'].includes(body.toolChoice) ? body.toolChoice : undefined;
+    // After this many rounds of lookups the model must answer with what it found (one more round without lookups).
+    const lookupRounds = Math.min(Math.max(Math.floor(Number(body.lookupRounds)) || config.tools.maxRounds, 1), config.tools.maxRounds);
     if (images && !(await llm.props().catch(() => ({ vision: false }))).vision) throw new HttpError(422, 'vision_unavailable', 'Image understanding is not available right now.');
     const props = await llm.props();
     configure(props);
     const contextLimit = Math.min(conversationTokens(props), key.limits.maxContextTokens, Number(body.contextLimit) || Infinity);
     const maxTokens = Math.min(Math.max(Number(body.maxTokens) || config.generation.defaultMaxTokens, 16), config.generation.maxTokensCap);
-    const promptTokens = await llm.countPrompt(messages, config.imageTokens);
+    const promptTokens = await llm.countPrompt(messages, config.imageTokens, tools);
     if (promptTokens + Math.min(maxTokens, 256) > contextLimit) throw new HttpError(413, 'context_full', 'This conversation no longer fits into the assistant\'s memory. Start a new chat.', { promptTokens, contextTokens: contextLimit });
     if (!keys.hasQuota(key)) throw new HttpError(429, 'daily_quota', 'This website has reached its daily question limit. Please try again tomorrow.', {}, );
 
@@ -151,7 +222,7 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
     const visitor = typeof body.visitor === 'string' ? body.visitor.slice(0, 128) : '';
     try {
       await scheduler.enqueue({
-        keyId: key.id, visitor, maxQueued: key.limits.maxQueued, signal: abort.signal, tokens: promptTokens + maxTokens,
+        keyId: key.id, visitor, maxQueued: key.limits.maxQueued, signal: abort.signal, tokens: promptTokens + maxTokens + (tools && toolChoice !== 'none' ? config.tools.reserveTokens : 0),
         onUpdate: ({ position, estimate }) => position > 0 && event('queued', { position, estimatedWaitSeconds: estimate }),
         run: async signal => {
           keys.take(key);
@@ -168,28 +239,49 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
           try {
             slots.record(slot, promptTokens);
             event('started', { promptTokens, contextTokens: contextLimit, waitedMs: Date.now() - started });
-            let completion = 0, firstToken = 0, wrote = false;
-            for await (const part of llm.chat(messages, { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking, slot: slots.slots.length > 1 ? slot : undefined }, limit)) {
-              if (!working) { working = true; clearTimeout(timer); timer = setTimeout(expire, config.generation.maxSeconds * 1000); }
-              if (part.type === 'progress') { if (part.total > 2048) event('progress', { processed: Math.max(part.processed || 0, part.cache || 0), total: part.total }); }
-              else if (part.type === 'reasoning') event('thinking', {});
-              else if (part.type === 'delta') { firstToken ||= Date.now(); wrote = true; event('delta', { text: part.text }); }
-              else {
-                const prompt = part.usage?.prompt_tokens ?? promptTokens;
-                completion = part.usage?.completion_tokens ?? part.timings?.predicted_n ?? 0;
-                keys.record(key, part.timings?.prompt_n ?? prompt, completion);
-                slots.record(slot, prompt + completion);
-                // The token limit ran out while the model was still thinking: no answer text at all.
-                if (!wrote && part.finishReason === 'length') { event('error', { code: 'thinking_limit', message: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.' }); continue; }
-                event('done', {
-                  finishReason: part.finishReason,
-                  usage: { promptTokens: prompt, completionTokens: completion, cachedTokens: part.timings?.cache_n ?? 0 },
-                  context: { used: prompt + completion, limit: contextLimit },
-                  timings: { promptPerSecond: Math.round(part.timings?.prompt_per_second || 0), tokensPerSecond: Math.round((part.timings?.predicted_per_second || 0) * 10) / 10, firstTokenMs: firstToken ? firstToken - started : null, totalMs: Date.now() - started },
-                });
+            let completion = 0, firstToken = 0, wrote = false, cachedTokens = 0, lookups = 0;
+            const options = { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking, tools, toolChoice, slot: slots.slots.length > 1 ? slot : undefined };
+            // One round per lookup: the model calls tools, the website answers, the model continues where it stopped.
+            for (let round = 0; ; round++) {
+              let text = '', result = null;
+              const choice = tools && round >= lookupRounds ? 'none' : round > 0 && toolChoice === 'required' ? 'auto' : toolChoice;
+              for await (const part of llm.chat(messages, { ...options, toolChoice: choice }, limit)) {
+                if (!working) { working = true; clearTimeout(timer); timer = setTimeout(expire, config.generation.maxSeconds * 1000); }
+                if (part.type === 'progress') { if (part.total > 2048) event('progress', { processed: Math.max(part.processed || 0, part.cache || 0), total: part.total }); }
+                else if (part.type === 'reasoning') event('thinking', {});
+                else if (part.type === 'delta') { firstToken ||= Date.now(); wrote = true; text += part.text; event('delta', { text: part.text }); }
+                else result = part;
               }
+              const prompt = result.usage?.prompt_tokens ?? promptTokens;
+              const written = result.usage?.completion_tokens ?? result.timings?.predicted_n ?? 0;
+              completion += written;
+              if (round === 0) cachedTokens = result.timings?.cache_n ?? 0;
+              keys.record(key, result.timings?.prompt_n ?? prompt, written);
+              slots.record(slot, prompt + written);
+              if (result.finishReason === 'tool_calls' && result.toolCalls?.length && tools) {
+                if (round >= lookupRounds) throw new LlmError('model_failed', 'The assistant kept looking things up without answering.', 502);
+                const id = randomBytes(12).toString('base64url');
+                lookups += result.toolCalls.length;
+                event('tool_calls', { round: id, calls: result.toolCalls });
+                const results = await waitForResults(id, key.id, limit);
+                // The call as the model wrote it (with its thinking, so the cached tokens match) and one result per call.
+                messages.push({ role: 'assistant', content: text, tool_calls: result.toolCalls.map(call => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } })), ...(result.reasoning ? { reasoning_content: result.reasoning } : {}) });
+                for (const call of result.toolCalls) messages.push({ role: 'tool', tool_call_id: call.id, content: results.get(call.id) ?? 'No result.' });
+                const next = await llm.countPrompt(messages, config.imageTokens, tools);
+                if (next + Math.min(maxTokens, 256) > contextLimit) throw new LlmError('context_full', 'This conversation no longer fits into the assistant\'s memory. Start a new chat.', 413, { promptTokens: next, contextTokens: contextLimit });
+                continue;
+              }
+              // The token limit ran out while the model was still thinking: no answer text at all.
+              if (!wrote && result.finishReason === 'length') { event('error', { code: 'thinking_limit', message: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.' }); break; }
+              event('done', {
+                finishReason: result.finishReason,
+                usage: { promptTokens: prompt, completionTokens: completion, cachedTokens },
+                context: { used: prompt + written, limit: contextLimit },
+                timings: { promptPerSecond: Math.round(result.timings?.prompt_per_second || 0), tokensPerSecond: Math.round((result.timings?.predicted_per_second || 0) * 10) / 10, firstTokenMs: firstToken ? firstToken - started : null, totalMs: Date.now() - started },
+              });
+              break;
             }
-            log('chat', { key: key.id, promptTokens, completion, ms: Date.now() - started });
+            log('chat', { key: key.id, promptTokens, completion, lookups, ms: Date.now() - started });
           } finally { clearTimeout(timer); slots.release(slot); }
         },
       });

@@ -25,6 +25,8 @@ public sealed record AssistantSettings
     public ContactSettings Contact { get; init; } = new();
     public NotificationSettings Notifications { get; init; } = new();
     public PrivacySettings Privacy { get; init; } = new();
+    /// <summary>Which website pages the assistant may look up.</summary>
+    public KnowledgeSettings Knowledge { get; init; } = new();
 
     /// <summary>Licensed (appsettings) and switched on (backoffice).</summary>
     public FeatureState Effective(FeatureOptions licensed) => new(licensed.Assistant && Features.Assistant, licensed.LiveChat && Features.LiveChat, licensed.Email && Features.Email);
@@ -111,6 +113,21 @@ public sealed record ContactSettings
     public string ConfirmationText { get; init; } = "";
 }
 
+/// <summary>
+/// The assistant looks up what it needs while answering: every published page (with a template) is searchable, so pages
+/// added later are included automatically. Editors leave out single pages or whole sections.
+/// </summary>
+public sealed record KnowledgeSettings
+{
+    public bool UsePages { get; init; } = true;
+    /// <summary>Pages left out. Their subpages stay unless a path below covers them.</summary>
+    public List<Guid> ExcludedPages { get; init; } = [];
+    /// <summary>Sections left out with every page below them, also pages added later (path prefixes such as /shop/).</summary>
+    public List<string> ExcludedPaths { get; init; } = [];
+
+    public bool Includes(Guid key, string url) => UsePages && url != "" && !ExcludedPages.Contains(key) && !ExcludedPaths.Any(p => AssistantValidation.Below(url, p));
+}
+
 /// <summary>Editable parts of the consent visitors give before the AI reads their messages (the rest is in LigataAI:Privacy).</summary>
 public sealed record PrivacySettings
 {
@@ -178,7 +195,7 @@ public sealed record AssistantBehaviour
     public const int DefaultContextLimit = 131072;
     /// <summary>The default before 0.5.1, when one GPU conversation could fill the whole 256k pool; untouched, it reads as today's default.</summary>
     public const int EarlierDefaultContextLimit = 65536;
-    /// <summary>Maximum tokens of enabled knowledge.</summary>
+    /// <summary>Maximum tokens of knowledge read with every question ("always known"); everything else is looked up when needed.</summary>
     public int KnowledgeBudget { get; init; } = 24576;
     public bool AllowImages { get; init; } = true;
     public bool AllowPdfs { get; init; } = true;

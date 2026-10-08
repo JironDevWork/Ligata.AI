@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.5.2';
+import { icon, number, compact } from './ui.js?v=0.6.0';
 
 export const overviewView = {
   budgetCard(title = 'Context budget', compactView = false) {
@@ -14,9 +14,9 @@ export const overviewView = {
       </div>
       <div class="legend">
         <div><i style="background:var(--c-instructions)"></i><span><b>${number(p.instructions)}</b><small>Instructions & guardrails</small></span></div>
-        <div><i style="background:var(--c-knowledge)"></i><span><b>${number(p.knowledge)} <small>/ ${number(b.knowledgeBudget)}</small></b><small>Knowledge (budget)</small></span></div>
+        <div><i style="background:var(--c-knowledge)"></i><span><b>${number(p.knowledge)} <small>/ ${number(b.knowledgeBudget)}</small></b><small>Always known (budget)</small></span></div>
         <div><i style="background:var(--c-chat)"></i><span><b>${number(p.chat)}</b><small>Free for the conversation & attachments</small></span></div>
-        <div><i style="background:var(--c-answer)"></i><span><b>${number(p.answer)}</b><small>Reserved for one answer</small></span></div>
+        <div><i style="background:var(--c-answer)"></i><span><b>${number(p.answer)}</b><small>Reserved for one answer and its lookups</small></span></div>
       </div>
       ${p.over ? html`<div class="notice error">${icon('warn')}<div>Instructions, knowledge and the answer reserve exceed the conversation limit. Switch knowledge off or raise the limit under Behaviour.</div></div>` : nothing}
       ${!compactView && p.chat < 4096 && !p.over ? html`<small class="muted">Less than 4,096 tokens remain for the conversation. Visitors may hit the limit after a few questions or one attachment.</small>` : nothing}

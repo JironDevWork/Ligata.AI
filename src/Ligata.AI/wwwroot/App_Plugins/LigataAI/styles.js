@@ -38,7 +38,7 @@ export const styles = css`
   .card>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.card>header p{margin-top:3px}
   .section{display:grid;gap:14px}.section+.section,.card>:not(header):not(.section)+.section{margin-top:22px;padding-top:22px;border-top:1px solid var(--line)}.card>.grid+small{display:block;margin-top:14px}
   .control{display:grid;gap:6px;align-content:start}.control>span{font-weight:600;font-size:13px}.control small{margin-top:-2px}
-  .control input[type=text],.control input[type=url],.control input[type=email],.control input[type=password],.control input[type=number],.control select,.control textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--surface);transition:border-color .15s,box-shadow .15s}
+  .control input[type=text],.control input[type=search],.control input[type=url],.control input[type=email],.control input[type=password],.control input[type=number],.control select,.control textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--surface);transition:border-color .15s,box-shadow .15s}
   .control textarea{resize:vertical;line-height:1.5}.control input:focus,.control select:focus,.control textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .control.invalid input,.control.invalid textarea,.control.invalid select{border-color:var(--danger)}.control .error{color:var(--danger);font-size:12px}
   .control .count{justify-self:end;font-size:11.5px;color:var(--muted)}
@@ -73,6 +73,9 @@ export const styles = css`
   dialog{border:0;border-radius:16px;padding:0;width:min(760px,calc(100vw - 40px));max-height:calc(100vh - 60px);box-shadow:0 30px 80px rgba(0,0,0,.3);color:inherit;background:var(--surface)}
   dialog::backdrop{background:rgba(15,18,30,.45)}dialog form{display:grid;grid-template-rows:auto 1fr auto;max-height:calc(100vh - 60px)}dialog header{padding:18px 22px;border-bottom:1px solid var(--line)}dialog .body{padding:18px 22px;overflow:auto;display:grid;gap:14px}dialog footer{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
   .pages{display:grid;gap:2px;max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px}.pages label{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;cursor:pointer}.pages label:hover{background:var(--subtle)}.pages small{margin-left:auto}
+  .pages label.locked{cursor:default;color:var(--muted)}.icon-btn.active{color:var(--accent);background:var(--accent-soft)}
+  details summary{cursor:pointer;font-weight:600;margin-bottom:8px}details pre.code{max-height:320px;margin-bottom:6px}
+  .hits{display:grid;gap:8px;margin-top:12px}.hit{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.hit p{margin:4px 0 0;font-size:13px;color:var(--muted);white-space:pre-line;max-height:7.5em;overflow:hidden}
   .chart{display:flex;align-items:flex-end;gap:3px;height:140px;padding-top:10px}.chart div{flex:1;min-width:4px;display:flex;flex-direction:column-reverse;gap:1px;height:100%}.chart i{display:block;border-radius:3px 3px 0 0;min-height:0}.chart .answered{background:var(--c-chat)}.chart .failed{background:var(--danger)}.chart .busy{background:var(--c-answer)}
   pre.code.policy{max-height:420px;margin-top:14px;font-size:12px;line-height:1.55}
   pre.code{margin:0;padding:12px 14px;border-radius:10px;background:var(--subtle);border:1px solid var(--line);font-size:12.5px;overflow:auto;white-space:pre-wrap}

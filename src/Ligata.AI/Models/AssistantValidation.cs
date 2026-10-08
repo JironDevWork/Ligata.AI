@@ -84,6 +84,9 @@ public static partial class AssistantValidation
         Check(Modes.Contains(d.Mode), "display.mode", "Choose where the assistant appears.");
         Check(d.Paths.Count <= 50 && d.Paths.All(p => p.StartsWith('/') && p.Length <= 300 && !p.Contains("//")), "display.paths", "Paths must start with / (for example /contact/).");
         Check(SafeUrl(s.GatewayUrl, allowRelative: false) && s.GatewayUrl.Length <= 300, "gatewayUrl", "The gateway URL must be an http(s) address.");
+        var k = s.Knowledge;
+        Check(k != null && k.ExcludedPages.Count <= 5000, "knowledge.excludedPages", "At most 5,000 pages can be left out.");
+        Check(k == null || (k.ExcludedPaths.Count <= 50 && k.ExcludedPaths.All(p => p.StartsWith('/') && p.Length <= 300 && !p.Contains("//"))), "knowledge.excludedPaths", "Paths must start with / (for example /shop/).");
 
         var t = s.Support; var c = s.Contact; var n = s.Notifications;
         Length(t.TeamName, 60, "support.teamName", "The team name");
@@ -109,16 +112,18 @@ public static partial class AssistantValidation
         if (errors.Count > 0) throw new AssistantValidationException(errors);
     }
 
-    public static bool ShowsOn(AssistantDisplay display, string path)
+    /// <summary>The path is the prefix or below it, by whole segments (/kontakt/ covers /kontakt/team/, not /kontaktformular/).</summary>
+    public static bool Below(string path, string prefix)
     {
         path = path.EndsWith('/') ? path : path + "/";
-        bool Matches(string prefix) => path.StartsWith(prefix.EndsWith('/') ? prefix : prefix + "/", StringComparison.OrdinalIgnoreCase) || (prefix == "/" && path == "/");
-        return display.Mode switch
-        {
-            "all" => true,
-            "include" => display.Paths.Any(Matches),
-            "exclude" => !display.Paths.Any(Matches),
-            _ => false,
-        };
+        return path.StartsWith(prefix.EndsWith('/') ? prefix : prefix + "/", StringComparison.OrdinalIgnoreCase) || (prefix == "/" && path == "/");
     }
+
+    public static bool ShowsOn(AssistantDisplay display, string path) => display.Mode switch
+    {
+        "all" => true,
+        "include" => display.Paths.Any(p => Below(path, p)),
+        "exclude" => !display.Paths.Any(p => Below(path, p)),
+        _ => false,
+    };
 }

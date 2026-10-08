@@ -37,6 +37,20 @@ export function startMockAnthropic(port = 1230) {
       }
     }
     if (body.system && !Array.isArray(body.system) && typeof body.system !== 'string') return 'system: invalid';
+    // Tools: every tool_use must be answered by a tool_result with its id in the next (user) message, and only there.
+    const names = new Set((body.tools || []).map(t => t.name));
+    if (body.tools && body.tools.some(t => !/^[a-zA-Z0-9_-]{1,64}$/.test(t.name || '') || t.input_schema?.type !== 'object')) return 'tools: invalid tool definition';
+    if (body.tool_choice && !['auto', 'any', 'tool', 'none'].includes(body.tool_choice.type)) return 'tool_choice: invalid';
+    for (const [i, message] of body.messages.entries()) {
+      const blocks = typeof message.content === 'string' ? [] : message.content;
+      const uses = blocks.filter(b => b.type === 'tool_use');
+      if (uses.some(u => !names.has(u.name) || !/^[a-zA-Z0-9_-]+$/.test(u.id || '') || typeof u.input !== 'object')) return `messages.${i}: tool_use with an unknown tool or invalid id`;
+      if (message.role === 'user' && blocks.some(b => b.type === 'tool_use')) return `messages.${i}: tool_use only in assistant messages`;
+      const results = new Set(blocks.filter(b => b.type === 'tool_result').map(b => b.tool_use_id));
+      const previous = i > 0 && typeof body.messages[i - 1].content !== 'string' ? body.messages[i - 1].content.filter(b => b.type === 'tool_use').map(b => b.id) : [];
+      if ([...results].some(id => !previous.includes(id))) return `messages.${i}: tool_result without a matching tool_use in the previous message`;
+      if (uses.length && (i + 1 >= body.messages.length || !uses.every(u => (typeof body.messages[i + 1].content === 'string' ? [] : body.messages[i + 1].content).some(b => b.type === 'tool_result' && b.tool_use_id === u.id)))) return `messages.${i + 1}: tool_use ids were found without tool_result blocks immediately after`;
+    }
     return null;
   }
 
@@ -44,6 +58,10 @@ export function startMockAnthropic(port = 1230) {
     const last = body.messages.at(-1);
     const blocks = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : last.content;
     const asked = blocks.filter(b => b.type === 'text').map(b => b.text).join(' ');
+    // With the website's tools, phone questions are looked up first; results are answered from.
+    const found = blocks.filter(b => b.type === 'tool_result').map(b => typeof b.content === 'string' ? b.content : (b.content || []).map(c => c.text).join(''));
+    if (found.length) return { parts: ['Claude ', 'mock found: ', found.join(' | ').replace(/\s+/g, ' ').slice(0, 300)] };
+    if (body.tools?.some(t => t.name === 'search_website') && body.tool_choice?.type !== 'none' && /phone|telefon/i.test(asked)) return { lookup: { name: 'search_website', input: { query: 'phone' } }, parts: [] };
     if (/refuse-me/i.test(asked)) return { refusal: true, parts: [] };
     // Thinks until max_tokens runs out, without any answer text.
     if (/think-forever/i.test(asked)) return { exhausted: true, parts: [] };
@@ -94,7 +112,7 @@ export function startMockAnthropic(port = 1230) {
     if (prefix) state.cachedPrefix = prefix;
     const input = Math.max(1, tokens(body.system) + tokens(body.messages) - read - created);
 
-    const { parts, refusal, exhausted } = answerFor(body);
+    const { parts, refusal, exhausted, lookup } = answerFor(body);
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
     const send = (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify({ type: event, ...data })}\n\n`);
     const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -119,7 +137,15 @@ export function startMockAnthropic(port = 1230) {
       }
       send('content_block_stop', { index });
     }
-    send('message_delta', { delta: { stop_reason: refusal ? 'refusal' : exhausted ? 'max_tokens' : 'end_turn', stop_sequence: null }, usage: { output_tokens: exhausted ? body.max_tokens : parts.length * 3 } });
+    if (lookup) {
+      // The arguments arrive as JSON text in pieces, like the real API streams them.
+      const json = JSON.stringify(lookup.input);
+      send('content_block_start', { index, content_block: { type: 'tool_use', id: 'toolu_mock_' + state.requests, name: lookup.name, input: {} } });
+      for (const piece of [json.slice(0, 4), json.slice(4)]) { await wait(20); send('content_block_delta', { index, delta: { type: 'input_json_delta', partial_json: piece } }); }
+      send('content_block_stop', { index });
+      state.lookups = (state.lookups || 0) + 1;
+    }
+    send('message_delta', { delta: { stop_reason: lookup ? 'tool_use' : refusal ? 'refusal' : exhausted ? 'max_tokens' : 'end_turn', stop_sequence: null }, usage: { output_tokens: exhausted ? body.max_tokens : parts.length * 3 + (lookup ? 10 : 0) } });
     send('message_stop', {});
     response.end();
   });

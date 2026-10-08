@@ -23,13 +23,14 @@ if (args.Contains("--prompt"))
         Features = new() { Assistant = true, LiveChat = true, Email = true },
         Behaviour = new AssistantBehaviour { SiteName = "Ligata Test Studio", Instructions = "We are a small web studio. Recommend booking a free 30-minute call for project questions." },
     };
-    var pages = new List<KnowledgeRow>
+    var pages = new List<KnowledgeDocument>
     {
-        new() { Title = "Ligata Test Studio", Kind = "page", Source = "/", Text = "We are a small web studio in Dielsdorf near Zurich. We build fast Umbraco websites for small businesses.\nOur office is open Monday to Friday, 8:00 to 17:00." },
-        new() { Title = "Prices", Kind = "page", Source = "/prices/", Text = "A small business website starts at CHF 4,800. Hosting costs CHF 25 per month. A free 30-minute call can be booked at /kontakt/." },
-        new() { Title = "Contact", Kind = "page", Source = "/contact/", Text = "Email: hello@ligata-test.example. Phone: +41 44 000 00 00." },
+        new("page", "Ligata Test Studio", "/", 1, "We are a small web studio in Dielsdorf near Zurich. We build fast Umbraco websites for small businesses.\nOur office is open Monday to Friday, 8:00 to 17:00."),
+        new("page", "Prices", "/prices/", 2, "A small business website starts at CHF 4,800. Hosting costs CHF 25 per month. A free 30-minute call can be booked at /kontakt/."),
+        new("page", "Contact", "/contact/", 2, "Email: hello@ligata-test.example. Phone: +41 44 000 00 00."),
     };
-    Console.Write(PromptBuilder.System(site, pages, "Ligata Test Studio", "/", DateTime.Now, team: true));
+    // The model looks the pages up: the prompt lists them, the tools (--tools) find their text.
+    Console.Write(args.Contains("--tools") ? JsonSerializer.Serialize(Lookups.Tools) : PromptBuilder.System(site, [], new KnowledgeSnapshot(pages), "Ligata Test Studio", "/", DateTime.Now, team: true));
     return;
 }
 
@@ -122,10 +123,90 @@ Assert(compactRequest.Count == 4 && Wire(compactRequest[^1]).Contains("summary o
 Rejects<ChatValidationException>(() => ChatRelay.Messages(new ChatRequest([user], "Home", "/", Summary: new string('s', ChatRelay.MaxSummaryCharacters + 1)), defaults, "S"), "Summary length limit.");
 var claudeSummary = ClaudeEngine.Messages(new ChatRequest([user, reply], "Home", "/", Summary: "Earlier: prices.", Compact: true));
 Assert(claudeSummary.Count == 4 && Wire(claudeSummary[0]).Contains("Earlier: prices.") && Wire(claudeSummary[^1]).Contains("summary of the whole conversation"), "API mode: the summary first, the instruction last.");
-Assert(ChatRelay.ReserveTokens(defaults.Behaviour, api: false) == 2048 + 512 && ChatRelay.ReserveTokens(defaults.Behaviour with { Thinking = true }, api: false) == 2048 + ChatRelay.ThinkingRoom + 512
-    && ChatRelay.ReserveTokens(defaults.Behaviour with { MaxAnswerTokens = 4096, Thinking = true }, api: true) == 4096 + 512,
+Assert(ChatRelay.ReserveTokens(defaults.Behaviour, api: false, lookups: false) == 2048 + 512 && ChatRelay.ReserveTokens(defaults.Behaviour with { Thinking = true }, api: false, lookups: false) == 2048 + ChatRelay.ThinkingRoom + 512
+    && ChatRelay.ReserveTokens(defaults.Behaviour with { MaxAnswerTokens = 4096, Thinking = true }, api: true, lookups: false) == 4096 + 512,
     "The widget keeps room for the longest answer or a summary (plus thinking where it shares the context) before it summarizes.");
-Assert(JsonSerializer.Serialize(defaults.Public(65536, new { }, 1000, new FeatureState(true, false, false), new RecaptchaSettings()), AssistantJson.Options).Contains("\"reserveTokens\":2560"), "The reserve reaches the widget.");
+Assert(ChatRelay.ReserveTokens(defaults.Behaviour, api: false) == 2048 + Lookups.Tokens + 512 && Lookups.Tokens * 3.5 >= Lookups.Characters, "…and for what one answer may look up.");
+Assert(JsonSerializer.Serialize(defaults.Public(65536, new { }, 1000, new FeatureState(true, false, false), new RecaptchaSettings()), AssistantJson.Options).Contains($"\"reserveTokens\":{2560 + Lookups.Tokens}"), "The reserve reaches the widget.");
+
+// ---------- lookups: the model searches the website while answering ----------
+var ahorn = new KnowledgeSnapshot(
+[
+    new("page", "Atelier Ahorn", "/", 1, "Wir bauen Möbel aus Ahorn und Eiche in Dielsdorf.\nUnsere Werkstatt ist Montag bis Freitag von 8 bis 17 Uhr offen."),
+    new("page", "Preise", "/preise/", 2, "Ein Esstisch aus Eiche kostet ab CHF 2'400.\n\nLieferung in der ganzen Schweiz: CHF 150."),
+    new("page", "Kontakt", "/kontakt/", 2, "Telefon: +41 44 000 00 00\nE-Mail: werkstatt@ahorn.example\nNutzen Sie unser Kontaktformular für Offerten."),
+    new("page", "Über uns", "/ueber-uns/", 2, "Gegründet 1998 von Anna Ahorn. " + string.Join(" ", Enumerable.Range(0, 400).Select(i => $"Satz {i} über unsere Geschichte und Handwerk."))),
+    new("file", "Pflegeanleitung", "", 0, "Geölte Oberflächen zweimal im Jahr nachölen. Keine Mikrofasertücher verwenden."),
+]);
+Assert(KnowledgeSnapshot.Terms("Öffnungszeiten & Straße, 044-000") is ["offnungszeiten", "strasse", "044", "000"], "Words are folded (accents, ß) and digits kept: " + string.Join(",", KnowledgeSnapshot.Terms("Öffnungszeiten & Straße, 044-000")));
+Assert(ahorn.Search("kontakt telefon")[0].Document.Url == "/kontakt/", "Exact words find the page.");
+Assert(ahorn.Search("Kontaktformular offerte")[0].Document.Url == "/kontakt/" && ahorn.Search("formular").Any(h => h.Document.Url == "/kontakt/"), "Prefixes and parts of compound words match (Kontaktformular, Offerten).");
+Assert(ahorn.Search("Was kostet ein Tisch aus Eiche?")[0].Document.Url == "/preise/", "Questions work: function words are ignored, the content words rank the passage.");
+Assert(ahorn.Search("mikrofaser")[0].Document.Kind == "file", "Documents are searched like pages.");
+Assert(ahorn.Search("der die das").Count == 0 || ahorn.Search("der die das").All(h => h.Score >= 0), "Only function words: nothing breaks.");
+Assert(ahorn.Search("xyzzy").Count == 0, "Nothing found is empty.");
+Assert(KnowledgeSnapshot.Split(string.Join("\n", Enumerable.Range(0, 300).Select(i => $"Line {i} with some words."))).All(p => p.Length <= 1500) && ahorn.Passages > 5, "Long pages are split into passages of about a paragraph.");
+Assert(ahorn.Find("/kontakt")?.Title == "Kontakt" && ahorn.Find("https://www.ahorn.example/kontakt/?x=1")?.Title == "Kontakt" && ahorn.Find("Preise")?.Url == "/preise/" && ahorn.Find("pflegeanleitung")?.Kind == "file" && ahorn.Find("kontakt")?.Url == "/kontakt/" && ahorn.Find("/nirgends/") == null,
+    "Pages are found by url (with or without domain and slash) or title; documents by title.");
+var lookups = new Lookups(ahorn);
+ChatLookup Call(string name, string json) => new(name, JsonDocument.Parse(json).RootElement.Clone());
+var firstLookups = lookups.Begin().Round([Call(Lookups.Search, """{"query":"Telefon"}"""), Call(Lookups.Read, """{"pages":["/preise/","Kontakt","/nirgends/"]}""")]);
+Assert(firstLookups[0].StartsWith("Results for \"Telefon\"") && firstLookups[0].Contains("## Kontakt (/kontakt/)") && firstLookups[0].Contains("+41 44 000 00 00"), "Search results name the page and its url: " + firstLookups[0]);
+Assert(firstLookups[1].Contains("## Preise (/preise/)") && firstLookups[1].Contains("CHF 2'400") && firstLookups[1].Contains("## Kontakt (/kontakt/)") && firstLookups[1].Contains("Not found: /nirgends/"), "Pages are read whole, unknown ones explained: " + firstLookups[1]);
+Assert(lookups.Begin().Round([Call(Lookups.Search, """{"query":"Telefon"}"""), Call(Lookups.Read, """{"pages":["/preise/","Kontakt","/nirgends/"]}""")]).SequenceEqual(firstLookups), "The same lookups on the same content give the same results (the history repeats them).");
+Assert(lookups.Begin().Round([Call(Lookups.Read, """{"pages":["/ueber-uns/"]}""")])[0].Contains("[the rest of this page is longer"), "Long pages are cut, with a hint to search.");
+var budget = lookups.Begin();
+var spent = Enumerable.Range(0, 3).SelectMany(_ => budget.Round([Call(Lookups.Read, """{"pages":["/ueber-uns/","/preise/","/"]}""")])).Sum(r => r.Length);
+Assert(spent <= Lookups.Characters + 300 && budget.Round([Call(Lookups.Search, """{"query":"Preise"}""")])[0].StartsWith("No more lookups"), "One answer looks up at most a few rounds and characters.");
+Assert(lookups.Begin().Round(Enumerable.Range(0, 7).Select(_ => Call(Lookups.Search, """{"query":"Eiche"}""")).ToList())[6].StartsWith("Too many lookups"), "At most six lookups at once.");
+Assert(lookups.Begin().Round([Call("delete_everything", "{}"), Call(Lookups.Search, "{}")]) is [var unknown, var empty] && unknown.Contains("no tool called") && empty.StartsWith("Give a few key words"), "Unknown tools and missing arguments are explained to the model.");
+Assert(!Lookups.Valid(Call("x", "{}")) && !Lookups.Valid(Call(Lookups.Search, "[]")) && !Lookups.Valid(Call(Lookups.Search, $$"""{"query":"{{new string('a', 1000)}}"}""")) && Lookups.Valid(Call(Lookups.Search, """{"query":"a"}""")), "Only known, small lookups are kept in the browser.");
+
+Assert(lookups.Touches("Wann habt ihr offen?") && lookups.Touches("Was kostet das?") && lookups.Touches("Kontaktformular?") && !lookups.Touches("Schreib mir ein Gedicht über Katzen.") && !lookups.Touches("Write me a poem about the moon"),
+    "A question that mentions the website's words must be looked up first (GPU); unrelated requests stay free.");
+Assert(!new Lookups(new KnowledgeSnapshot([new("page", "Kontakt", "/kontakt/", 1, "E-Mail: hallo@ahorn.example")])).Touches("Hallo!"), "Greetings never force a lookup, even when the word is on the website.");
+
+var bilingual = new KnowledgeSnapshot(
+[
+    new("page", "Startseite", "/", 1, "Zitat\nMara Keller\nSchreinermeisterin", "de-CH", "home"),
+    new("page", "Home", "/en/", 1, "Quote\nMara Keller\nMaster joiner", "en-US", "home"),
+    new("page", "Journal", "/journal/", 2, "Autorin: Mara Keller", "de-CH", "journal"),
+    new("page", "Journal", "/en/journal/", 2, "Author: Mara Keller", "en-US", "journal"),
+]);
+var keller = bilingual.Search("Mara Keller", 8, "en-US");
+Assert(keller.Count == 2 && keller.All(h => h.Document.Culture == "en-US"), "One language version per page in the results, the visitor's language winning a tie: " + string.Join(", ", keller.Select(h => h.Document.Url)));
+Assert(bilingual.Search("Schreinermeisterin", 8, "en-US")[0].Document.Url == "/", "A word in one language still finds that language's page.");
+Assert(bilingual.CultureOf("/en/journal/x/") == "en-US" && bilingual.CultureOf("/journal/") == "de-CH" && bilingual.CultureOf("/") == "de-CH" && ahorn.CultureOf("/kontakt/") == null, "The visitor's language comes from the page they are on.");
+var boundary = KnowledgeSnapshot.Split(new string('a', 980) + "\nMara Keller\nMaster joiner\n" + new string('b', 300)).ToList();
+Assert(boundary.Count == 2 && boundary[1].StartsWith("Mara Keller\nMaster joiner"), "A short line at a passage boundary is in both passages, so a name stays with its role.");
+
+var siteMap = PromptBuilder.SiteMap(ahorn);
+Assert(siteMap.Contains("- Atelier Ahorn: /") && siteMap.Contains("  - Preise: /preise/") && siteMap.Contains("- Pflegeanleitung") && !siteMap.Contains("CHF 2'400"), "The prompt lists pages (indented) and documents, without their text: " + siteMap);
+var bigSite = new KnowledgeSnapshot([.. Enumerable.Range(0, 900).Select(i => new KnowledgeDocument("page", $"Page {i} with a long title", $"/section-{i % 30}/page-{i}/", i < 30 ? 2 : 3, "Text"))]);
+var bigMap = PromptBuilder.SiteMap(bigSite);
+Assert(bigMap.Length / 3.6 <= PromptBuilder.SiteMapTokens + 100 && bigMap.Contains("more pages: find them with search_website") && bigMap.Contains("Page 0 with"), "A big website lists its upper levels within the limit and is searched for the rest.");
+var lookupPrompt = PromptBuilder.System(configured, [], ahorn, "Kontakt", "/kontakt/", new DateTime(2026, 10, 7), team: true);
+Assert(lookupPrompt.Contains("search_website") && lookupPrompt.Contains("Look up before every answer") && lookupPrompt.Contains("neither the knowledge nor your lookups answer it") && lookupPrompt.Contains("If neither the knowledge nor a lookup answers") && !lookupPrompt.Contains("Esstisch"), "With lookups the prompt explains the tools and holds no page text.");
+Assert(lookupPrompt.IndexOf("# Pages of this website") < lookupPrompt.IndexOf("# Current situation"), "The list of pages belongs to the cacheable prefix.");
+Assert(PromptBuilder.Everything(ahorn, 60).Length < PromptBuilder.Everything(ahorn, 100_000).Length && PromptBuilder.Everything(ahorn, 100_000).Contains("Esstisch"), "Without lookups, pages go into the prompt as far as the budget allows.");
+Assert(new KnowledgeSettings().Includes(Guid.NewGuid(), "/a/") && !new KnowledgeSettings { UsePages = false }.Includes(Guid.NewGuid(), "/a/") && !new KnowledgeSettings { ExcludedPaths = ["/shop/"] }.Includes(Guid.NewGuid(), "/shop/cart/") && new KnowledgeSettings { ExcludedPaths = ["/shop/"] }.Includes(Guid.NewGuid(), "/shopping/"),
+    "Every page is used unless it or its section is left out.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Knowledge = new() { ExcludedPaths = ["shop"] } }), "Left-out sections are paths.");
+
+// A conversation with earlier lookups: the browser keeps the calls, the server repeats them.
+var looked = new ChatMessage("assistant", "Rufen Sie an: +41 44 000 00 00.", null, [[Call(Lookups.Search, """{"query":"Telefon"}""")]]);
+var history = new ChatRequest([new("user", "Telefon?", null), looked, new("user", "Und die E-Mail?", null)], "Home", "/");
+var replayed = ChatRelay.Messages(history, defaults, "SYSTEM", lookups);
+var replayWire = Wire(replayed);
+Assert(replayed.Count == 6 && replayWire.Contains("\"toolCalls\":[{\"id\":\"l1r0c0\",\"name\":\"search_website\",\"arguments\":{\"query\":\"Telefon\"}}]") && replayWire.Contains("\"toolCallId\":\"l1r0c0\"") && replayWire.Contains("werkstatt@ahorn.example"),
+    "Earlier lookups go to the gateway as calls with their results, looked up again: " + replayWire[..Math.Min(600, replayWire.Length)]);
+Assert(ChatRelay.Messages(history, defaults, "SYSTEM").Count == 4, "Without lookups (an older gateway) the calls are left out.");
+Rejects<ChatValidationException>(() => ChatRelay.Messages(new ChatRequest([new("user", "x", null, [[Call(Lookups.Search, "{}")]])], "H", "/"), defaults, "S", lookups), "Only answers carry lookups.");
+Rejects<ChatValidationException>(() => ChatRelay.Messages(new ChatRequest([new("user", "x", null), looked with { Lookups = [[Call("rm", "{}")]] }, new("user", "y", null)], "H", "/"), defaults, "S", lookups), "Unknown tools in the history are refused.");
+Rejects<ChatValidationException>(() => ChatRelay.Messages(new ChatRequest([new("user", "x", null), looked with { Lookups = Enumerable.Range(0, 7).Select(_ => new List<ChatLookup> { Call(Lookups.Search, """{"query":"a"}""") }).ToList() }, new("user", "y", null)], "H", "/"), defaults, "S", lookups), "At most six rounds are kept.");
+var claudeReplay = Wire(ClaudeEngine.Messages(history, lookups));
+Assert(ClaudeEngine.Messages(history, lookups).Count == 5 && claudeReplay.Contains("\"type\":\"tool_use\"") && claudeReplay.Contains("\"tool_use_id\":\"l1r0c0\"") && claudeReplay.Contains("werkstatt@ahorn.example"), "API mode: the same lookups as tool_use and tool_result blocks: " + claudeReplay[..Math.Min(500, claudeReplay.Length)]);
+Assert(ClaudeEngine.Tools().Count == 2 && Wire(ClaudeEngine.Tools()).Contains("\"name\":\"read_pages\""), "API mode: the same tools.");
 
 // ---------- API mode (Claude) ----------
 Assert(ClaudeEngine.DisplayName("claude-haiku-5-5") == "Claude Haiku 5.5" && ClaudeEngine.DisplayName("claude-opus-5") == "Claude Opus 5", "Model names are readable.");
@@ -239,6 +320,8 @@ var noAiJson = JsonSerializer.Serialize(withTeam.Public(65536, new { }, 0, teamO
 Assert(!noAiJson.Contains(AssistantIdentity.DefaultGreeting) && !noAiJson.Contains("generated by an AI") && JsonSerializer.Serialize((withTeam with { Identity = withTeam.Identity with { Greeting = "Hallo!" } }).Public(65536, new { }, 0, teamOnly, new RecaptchaSettings()), AssistantJson.Options).Contains("Hallo!"), "Without AI the untouched AI greeting and notice are replaced; custom texts stay.");
 Assert(PromptBuilder.Guardrails(withTeam, true).Contains(PromptBuilder.TeamMarker) && !PromptBuilder.Guardrails(withTeam, false).Contains(PromptBuilder.TeamMarker), "The handoff marker is only requested when a team channel exists.");
 Assert(PromptBuilder.Handoff(withTeam, withTeam.Effective(allOn)) && !PromptBuilder.Handoff(withTeam with { Support = withTeam.Support with { SuggestWhenUnsure = false } }, withTeam.Effective(allOn)) && !PromptBuilder.Handoff(defaults, defaults.Effective(allOn)), "Handoff follows the setting and the channels.");
+var contactOnly = defaults with { Identity = defaults.Identity with { FallbackEmail = "info@example.ch" } };
+Assert(PromptBuilder.Handoff(contactOnly, contactOnly.Effective(allOn)) && !PromptBuilder.Handoff(contactOnly, contactOnly.Effective(new FeatureOptions { Assistant = false })), "Without live chat and email, a contact email or page is offered instead (as buttons).");
 
 // ---------- reCAPTCHA (shared with Ligata.Forms settings) ----------
 var captchaConfig = new RecaptchaSettings { SiteKey = "s", SecretKey = "k", AllowedHostnames = ["www.example.ch"], MinimumScore = 0.5 };
@@ -358,6 +441,93 @@ using (var scope = app.Services.CreateScope())
     Assert(!store.Knowledge().Single(k => k.Id == row.Id).Enabled && store.EnabledKnowledge().All(k => k.Id != row.Id), "Disabled knowledge is not sent to the model (cache invalidated).");
     store.Delete(row.Id);
     Assert(store.Find(row.Id) == null, "Knowledge deletion.");
+
+    // ---------- lookups over the live website ----------
+    var knowledgeIndex = services.GetRequiredService<KnowledgeIndex>();
+    var sitePages = await services.GetRequiredService<ContentKnowledge>().PagesAsync();
+    var contactKey = sitePages.Single(p => p.Name == "Contact").Key;
+    var everyPage = await knowledgeIndex.SnapshotAsync(new KnowledgeSettings());
+    Assert(everyPage.Pages == 3 && everyPage.Search("BLUE-HERON-42").FirstOrDefault()?.Document.Url == sitePages.Single(p => p.Name == "Contact").Url, "Every published page is searchable without importing it: " + everyPage.Pages);
+    Assert(sitePages[0].Name == "Ligata Test Studio" && sitePages.Skip(1).All(p => p.Level == 2), "Pages come in tree order.");
+    var withoutContact = await knowledgeIndex.SnapshotAsync(new KnowledgeSettings { ExcludedPages = [contactKey] });
+    Assert(withoutContact.Pages == 2 && withoutContact.Search("BLUE-HERON-42").Count == 0 && !PromptBuilder.SiteMap(withoutContact).Contains("Contact"), "A left-out page is neither listed nor searched.");
+    Assert((await knowledgeIndex.SnapshotAsync(new KnowledgeSettings { UsePages = false })).Pages == 0, "Website pages can be switched off.");
+    var delivery = store.Upsert(new KnowledgeRow { Id = Guid.NewGuid(), Title = "Delivery", Text = "We deliver on Saturdays with the GREEN-VAN.", Tokens = 12, Enabled = true });
+    Assert((await knowledgeIndex.SnapshotAsync(new KnowledgeSettings())).Search("GREEN-VAN").Any(), "A saved document is searchable at once.");
+    store.SetPinned(delivery.Id, true);
+    Assert(!(await knowledgeIndex.SnapshotAsync(new KnowledgeSettings())).Search("GREEN-VAN").Any() && store.Knowledge().Single(k => k.Id == delivery.Id).Pinned, "Always-known documents are in the prompt, not searched.");
+    store.Delete(delivery.Id);
+    var contents = services.GetRequiredService<IContentService>();
+    var contactPage = contents.GetById(contactKey)!;
+    var contactBody = contactPage.GetValue<string>("bodyText");
+    contactPage.SetValue("bodyText", contactBody + "<p>New code: RED-FOX-7.</p>");
+    contents.Save(contactPage); contents.Publish(contactPage, ["*"]);
+    Assert((await knowledgeIndex.SnapshotAsync(new KnowledgeSettings())).Search("RED-FOX-7").Any(), "A published change is found at once.");
+    contactPage.SetValue("bodyText", contactBody); contents.Save(contactPage); contents.Publish(contactPage, ["*"]);
+    Assert(!(await knowledgeIndex.SnapshotAsync(new KnowledgeSettings())).Search("RED-FOX-7").Any(), "…and so is its removal.");
+    // A multilingual website: every language of a page is searched on its own, with its own name, url and text.
+    {
+        var languages = services.GetRequiredService<ILanguageService>();
+        if (await languages.GetAsync("de-CH") == null) await languages.CreateAsync(new Language("de-CH", "Deutsch (Schweiz)"), Constants.Security.SuperUserKey);
+        var strings = services.GetRequiredService<IShortStringHelper>();
+        var types = services.GetRequiredService<IContentTypeService>();
+        var pageTemplate = (await services.GetRequiredService<ITemplateService>().GetAsync("testPage"))!;
+        var textArea = (await services.GetRequiredService<IDataTypeService>().GetByEditorAliasAsync(Constants.PropertyEditors.Aliases.TextArea)).First();
+        var variantType = types.Get("testVariantPage");
+        if (variantType == null)
+        {
+            variantType = new ContentType(strings, -1) { Alias = "testVariantPage", Name = "Variant page", AllowedAsRoot = true, Icon = "icon-globe", Variations = ContentVariation.Culture };
+            variantType.AddPropertyType(new PropertyType(strings, textArea, "bodyText") { Name = "Body text", Variations = ContentVariation.Culture }, "content", "Content");
+            variantType.AllowedTemplates = [pageTemplate]; variantType.SetDefaultTemplate(pageTemplate);
+            if (!(await types.CreateAsync(variantType, Constants.Security.SuperUserKey)).Success) throw new Exception("Seeding the variant page type failed.");
+            variantType.AllowedContentTypes = [new ContentTypeSort(variantType.Key, 0, variantType.Alias)];
+            await types.UpdateAsync(variantType, Constants.Security.SuperUserKey);
+        }
+        var world = contents.Create("World", -1, "testVariantPage");
+        world.SetCultureName("World", "en-US"); world.SetCultureName("Welt", "de-CH"); world.TemplateId = pageTemplate.Id;
+        world.SetValue("bodyText", "<p>Welcome to the multilingual studio.</p>", "en-US"); world.SetValue("bodyText", "<p>Willkommen im mehrsprachigen Atelier.</p>", "de-CH");
+        contents.Save(world); contents.Publish(world, ["en-US", "de-CH"]);
+        var opening = contents.Create("Opening hours", world.Id, "testVariantPage");
+        opening.SetCultureName("Opening hours", "en-US"); opening.SetCultureName("Öffnungszeiten", "de-CH"); opening.TemplateId = pageTemplate.Id;
+        opening.SetValue("bodyText", "<p>We are open Tuesday to Saturday, code GREY-OWL-5.</p>", "en-US"); opening.SetValue("bodyText", "<p>Wir haben Dienstag bis Samstag geöffnet, Code GRAU-EULE-5.</p>", "de-CH");
+        contents.Save(opening); contents.Publish(opening, ["en-US", "de-CH"]);
+        var englishOnly = contents.Create("News", world.Id, "testVariantPage");
+        englishOnly.SetCultureName("News", "en-US"); englishOnly.TemplateId = pageTemplate.Id;
+        englishOnly.SetValue("bodyText", "<p>Only in English: PINK-SWAN-3.</p>", "en-US");
+        contents.Save(englishOnly); contents.Publish(englishOnly, ["en-US"]);
+        var domains = await services.GetRequiredService<IDomainService>().UpdateDomainsAsync(world.Key, new Umbraco.Cms.Core.Models.ContentEditing.DomainsUpdateModel { Domains = [new() { DomainName = "/en", IsoCode = "en-US" }, new() { DomainName = "/de", IsoCode = "de-CH" }] });
+        Assert(domains.Success, "Culture domains for the multilingual fixture: " + domains.Status);
+        try
+        {
+            var multilingual = await knowledgeIndex.SnapshotAsync(new KnowledgeSettings());
+            var versions = multilingual.Documents.Where(d => d.Text.Contains("GREY-OWL-5") || d.Text.Contains("GRAU-EULE-5")).ToList();
+            Assert(versions.Count == 2 && versions.Any(d => d.Culture == "de-CH" && d.Title == "Öffnungszeiten" && d.Text.Contains("GRAU-EULE-5") && !d.Text.Contains("GREY-OWL")) && versions.Any(d => d.Culture == "en-US" && d.Title == "Opening hours"),
+                "Each language is its own page with its own name and text: " + string.Join("; ", multilingual.Documents.Select(d => $"{d.Culture} {d.Title} {d.Url}")));
+            Assert(versions.Select(d => d.Url).Distinct().Count() == 2, "…and its own url: " + string.Join(", ", versions.Select(d => d.Url)));
+            Assert(multilingual.Documents.Count(d => d.Text.Contains("PINK-SWAN-3")) == 1 && multilingual.Cultures.Contains("de-CH") && multilingual.Cultures.Contains("en-US"), "A page published in one language only is there once.");
+            Assert(multilingual.Search("Öffnungszeiten geöffnet")[0].Document.Culture == "de-CH" && multilingual.Search("opening hours open")[0].Document.Culture == "en-US", "A question finds the page in its own language.");
+            var multiMap = PromptBuilder.SiteMap(multilingual);
+            Assert(multiMap.Contains("several languages") && multiMap.Contains("de-CH") && multiMap.Contains("Öffnungszeiten"), "The list of pages is grouped by language: " + multiMap);
+            Assert(new Lookups(multilingual).Begin().Round([new ChatLookup(Lookups.Search, JsonDocument.Parse("""{"query":"Öffnungszeiten"}""").RootElement.Clone())])[0].Contains(", de-CH)"), "Results name the language of each page.");
+            Assert((await knowledgeIndex.SnapshotAsync(new KnowledgeSettings { ExcludedPages = [opening.Key] })).Documents.All(d => !d.Text.Contains("GREY-OWL-5") && !d.Text.Contains("GRAU-EULE-5")), "Leaving a page out leaves out all its languages.");
+        }
+        finally
+        {
+            await services.GetRequiredService<IDomainService>().UpdateDomainsAsync(world.Key, new Umbraco.Cms.Core.Models.ContentEditing.DomainsUpdateModel { Domains = [] });
+            contents.Delete(world);
+        }
+    }
+
+    // Until 0.6 pages were imported as copies: they become live pages, switched-off copies become left-out pages.
+    var (beforeLive, beforeVersion) = store.Settings();
+    var offCopy = store.Upsert(new KnowledgeRow { Id = Guid.NewGuid(), Kind = "page", ContentKey = contactKey, Title = "Contact", Source = "/contact/", Text = "old copy", Tokens = 5, Enabled = false });
+    var onCopy = store.Upsert(new KnowledgeRow { Id = Guid.NewGuid(), Kind = "page", ContentKey = sitePages[0].Key, Title = "Home", Source = "/", Text = "old copy", Tokens = 5, Enabled = true });
+    var keyValues = services.GetRequiredService<IKeyValueService>();
+    keyValues.SetValue("Ligata.AI.LivePages", "0");
+    await services.GetRequiredService<AssistantInstaller>().InstallAsync();
+    Assert(store.Find(offCopy.Id) == null && store.Find(onCopy.Id) == null && store.Settings().Settings.Knowledge.ExcludedPages.SequenceEqual([contactKey]) && keyValues.GetValue("Ligata.AI.LivePages") == "1", "Imported page copies are replaced by live pages.");
+    store.Save(beforeLive, store.Settings().Version);
+
     store.Count(s => s.Questions++);
     Assert(store.Stats(1).Sum(s => s.Questions) >= 1, "Anonymous daily counters.");
     var groups = services.GetRequiredService<IUserGroupService>();

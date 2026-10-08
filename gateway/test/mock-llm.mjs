@@ -24,10 +24,11 @@ export function startMockLlm() {
     if (request.url === '/props') return json(200, { default_generation_settings: { n_ctx: state.contextTokens }, modalities: { vision: state.vision }, model_path: 'mock.gguf', build_info: 'mock', total_slots: state.slots });
     const erase = /^\/slots\/(\d+)\?action=erase$/.exec(request.url);
     if (erase) { state.erased.push(Number(erase[1])); return json(200, { id_slot: Number(erase[1]), n_erased: 1 }); }
-    if (request.url === '/tokenize') return json(200, { tokens: Array.from({ length: count(body.content) }, (_, i) => i) });
+    // Gemma's tool call marker is one special token (id 48), like llama-server reports it with parse_special.
+    if (request.url === '/tokenize') return json(200, { tokens: body.parse_special && body.content === '<|tool_call>' ? [48] : Array.from({ length: count(body.content) }, (_, i) => i) });
     if (request.url === '/apply-template') return json(200, { prompt: body.messages.map(m => `<${m.role}>${m.content}`).join('\n') });
     if (request.url === '/v1/chat/completions') {
-      state.requests++; state.lastBody = body; state.slotLog.push(body.id_slot);
+      state.requests++; state.lastBody = body; state.slotLog.push(body.id_slot); (state.choices ||= []).push(body.tool_choice);
       if (state.mode === 'context') return json(400, { error: { type: 'exceed_context_size_error', n_prompt_tokens: 9999, n_ctx: state.contextTokens } });
       if (state.mode === 'error') return json(500, { error: { message: 'boom' } });
       state.active++; state.maxActive = Math.max(state.maxActive, state.active);
@@ -45,7 +46,25 @@ export function startMockLlm() {
           response.end('data: [DONE]\n\n');
           return;
         }
-        const tokens = /person|human|unknown|mensch|weiss nicht/i.test(asked) ? ['Sorry, ', 'I could ', 'not find ', 'that in ', 'my information. ', 'Our team ', 'can help.', '\n[[', 'te', 'am]]'] : state.tokens;
+        // With tools, "look up X" (or "phone") calls search_website, split into pieces like llama-server streams it; a tool result is
+        // answered from its text. "look up forever" keeps calling. tool_choice none never calls.
+        const lookup = body.tools && body.tool_choice !== 'none' && last?.role === 'user' && /look up|phone|telefon/i.test(asked);
+        if (lookup || (body.tools && body.tool_choice !== 'none' && last?.role === 'tool' && /look up forever/i.test(JSON.stringify(body.messages)))) {
+          const query = /look up (.+)/i.exec(asked)?.[1] || 'phone';
+          const calls = /two things/i.test(asked) ? [query, 'opening hours'] : [query];
+          for (const [index, q] of calls.entries()) {
+            const json = JSON.stringify({ query: q });
+            response.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index, id: 'call' + index + 'x' + state.requests, type: 'function', function: { name: 'search_website', arguments: json.slice(0, 5) } }] } }] })}\n\n`);
+            await new Promise(r => setTimeout(r, state.delayMs));
+            response.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index, function: { arguments: json.slice(5) } }] } }] })}\n\n`);
+          }
+          const prompt = count(JSON.stringify(body.messages));
+          response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: prompt, completion_tokens: 12 }, timings: { prompt_n: prompt, cache_n: 0, predicted_n: 12 } })}\n\n`);
+          response.end('data: [DONE]\n\n');
+          return;
+        }
+        const found = last?.role === 'tool' ? body.messages.filter(m => m.role === 'tool').map(m => m.content).join(' | ') : null;
+        const tokens = found != null ? ['Found: ', found] : /person|human|unknown|mensch|weiss nicht/i.test(asked) ? ['Sorry, ', 'I could ', 'not find ', 'that in ', 'my information. ', 'Our team ', 'can help.', '\n[[', 'te', 'am]]'] : state.tokens;
         for (const [i, token] of tokens.entries()) {
           await new Promise(r => setTimeout(r, state.delayMs));
           if (closed) return;
