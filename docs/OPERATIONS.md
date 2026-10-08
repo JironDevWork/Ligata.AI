@@ -80,7 +80,7 @@ Sites on this machine use `http://127.0.0.1:1210`. For others, add a public host
 
 ### Updating llama.cpp or the model
 
-Download the new build/model into `runtime`, adjust `model/profile.json`, check with `node model/sweep.mjs --profiles <name> --depths 1000,32000,120000` and `node model/soak.mjs`, then `pm2 restart ligata-ai-llm`.
+Download the new build/model into `runtime`, adjust `model/profile.json`, check with `node model/sweep.mjs --profiles <name> --depths 1000,32000,120000` and `node model/soak.mjs`, then `pm2 restart ligata-ai-llm` and afterwards `pm2 restart ligata-ai` (the gateway reads the profile at start).
 
 ## On a client website (Umbraco)
 

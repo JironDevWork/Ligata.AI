@@ -5,7 +5,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 ## Repeatable checks
 
 ```powershell
-# Gateway: 57 tests against a mock llama-server (no GPU needed)
+# Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
 # Package domain and security checks (no database): 181 assertions

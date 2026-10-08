@@ -112,12 +112,14 @@ export class Scheduler {
     clearTimeout(job.timeout);
     job.startedAt = Date.now();
     this.active.push(job);
-    try { job.resolve(await job.run(job.controller.signal)); }
+    try {
+      job.resolve(await job.run(job.controller.signal));
+      this.durations.push(Date.now() - job.startedAt);
+      if (this.durations.length > 20) this.durations.shift();
+    }
     catch (error) { job.reject(error); }
     finally {
       job.detach();
-      this.durations.push(Date.now() - job.startedAt);
-      if (this.durations.length > 20) this.durations.shift();
       this.completed++;
       this.active.splice(this.active.indexOf(job), 1);
       queueMicrotask(() => { this.pump(); this.notify(); });

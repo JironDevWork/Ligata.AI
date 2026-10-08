@@ -109,3 +109,12 @@ test('the next in line takes the place that frees first', async () => {
   assert.equal(s.estimate(3), 25, 'third waiting: after the first waiting one, in the early place');
   await Promise.all([early, late]);
 });
+
+test('wait estimates count only answers that ran, not ones that failed at once', async () => {
+  const s = scheduler();
+  const fresh = s.averageSeconds();
+  for (let i = 0; i < 5; i++) await s.enqueue({ keyId: 'k', visitor: 'f' + i, run: async () => { throw new Error('model down'); } }).catch(() => {});
+  assert.equal(s.averageSeconds(), fresh);
+  await s.enqueue({ keyId: 'k', visitor: 'ok', run: () => wait(30) });
+  assert.ok(s.averageSeconds() > 0 && s.averageSeconds() < 1);
+});

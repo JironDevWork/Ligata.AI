@@ -33,15 +33,20 @@ export class Llm {
   }
 
   async props() {
-    if (this.cachedProps) return this.cachedProps;
+    if (this.cachedProps && Date.now() - this.cachedProps.at < 60_000) return this.cachedProps;
     const data = await this.json('/props');
+    const previous = this.cachedProps;
     this.cachedProps = {
+      at: Date.now(),
       contextTokens: data.default_generation_settings?.n_ctx ?? 0,
       vision: !!data.modalities?.vision,
       model: String(data.model_alias || data.model_path || '').split(/[\\/]/).pop(),
       build: data.build_info,
       slots: data.total_slots || 1,
     };
+    // Restarted with another profile between two checks: start over with slot bookkeeping and token ids.
+    const fingerprint = p => p && [p.contextTokens, p.slots, p.model, JSON.stringify(p.build)].join('|');
+    if (previous && fingerprint(previous) !== fingerprint(this.cachedProps)) { this.epoch++; this.toolTokens = null; }
     return this.cachedProps;
   }
 
@@ -52,11 +57,14 @@ export class Llm {
         method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(this.requestTimeoutMs)]) : AbortSignal.timeout(this.requestTimeoutMs),
       });
-    } catch (error) { if (signal?.aborted) throw error; throw unavailable(); }
+    } catch (error) { if (signal?.aborted) throw error; this.down(); throw unavailable(); }
     if (response.status === 503) throw new LlmError('model_loading', 'The assistant model is starting. Please try again in a minute.', 503);
     if (!response.ok) throw new LlmError('model_failed', `The model rejected the request (${response.status}).`, 502, { body: (await response.text()).slice(0, 500) });
     return response.json();
   }
+
+  /** llama-server could not be reached: the next check asks again, and its return starts a new epoch. */
+  down() { this.cachedHealth = { at: 0, value: 'down' }; this.cachedProps = null; }
 
   /** Frees a slot's cached prompt in the shared KV pool. */
   async eraseSlot(id) {
@@ -64,9 +72,9 @@ export class Llm {
     if (!response.ok) throw new LlmError('slot_erase_failed', 'Could not free a prompt cache slot.', 502);
   }
 
-  async countText(text) {
+  async countText(text, signal) {
     if (!text) return 0;
-    return (await this.json('/tokenize', { content: text })).tokens.length;
+    return (await this.json('/tokenize', { content: text }, signal)).tokens.length;
   }
 
   /**
@@ -86,13 +94,13 @@ export class Llm {
   }
 
   /** Exact prompt size: render the chat template (with the tools it declares), then tokenize. Images are added by estimate. */
-  async countPrompt(messages, imageTokens, tools) {
+  async countPrompt(messages, imageTokens, tools, signal) {
     let images = 0;
     const textOnly = messages.map(m => typeof m.content === 'string' || m.content == null ? m : {
       ...m, content: m.content.map(p => (p.type === 'image_url' ? (images++, '') : p.text)).join('\n'),
     });
-    const { prompt } = await this.json('/apply-template', { messages: textOnly, ...(tools ? { tools } : {}), chat_template_kwargs: { enable_thinking: false } });
-    return (await this.countText(prompt)) + images * imageTokens;
+    const { prompt } = await this.json('/apply-template', { messages: textOnly, ...(tools ? { tools } : {}), chat_template_kwargs: { enable_thinking: false } }, signal);
+    return (await this.countText(prompt, signal)) + images * imageTokens;
   }
 
   /**
@@ -112,7 +120,7 @@ export class Llm {
         ...(banned.length ? { logit_bias: banned.map(id => [id, false]) } : {}),
         ...(options.slot !== undefined ? { id_slot: options.slot } : {}),
       }, signal);
-    } catch (error) { if (signal?.aborted) throw signal.reason ?? error; throw unavailable(); }
+    } catch (error) { if (signal?.aborted) throw signal.reason ?? error; this.down(); throw unavailable(); }
     if (response.status !== 200) {
       const text = await readAll(response.body).catch(() => '');
       let error = {};

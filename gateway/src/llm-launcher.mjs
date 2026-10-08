@@ -29,10 +29,12 @@ function killStray() {
 const env = { ...process.env };
 delete env.GGML_CUDA_ENABLE_UNIFIED_MEMORY;
 
+// HTTP workers: every streaming answer holds one for its whole duration; health checks, token counts and cache erases need
+// their own (llama.cpp's default is slots + 2 at least; with 4 and three answers, control calls queued and the model looked offline).
 let child = null, stopping = false, restarts = 0;
 function start() {
   killStray();
-  const args = [...buildArgs({ ...profile, slotSavePath, modelsDir: path.join(runtime, 'models') }), '--host', '127.0.0.1', '--port', String(profile.port), '--threads-http', '4'];
+  const args = [...buildArgs({ ...profile, slotSavePath, modelsDir: path.join(runtime, 'models') }), '--host', '127.0.0.1', '--port', String(profile.port), '--threads-http', String(Math.max(8, (profile.slots || 1) + 6))];
   log('starting', { model: profile.model, ctx: profile.ctx, kv: profile.kv, mtp: !!profile.mtp });
   const started = Date.now();
   child = spawn(exe, args, { cwd: runtime, env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });

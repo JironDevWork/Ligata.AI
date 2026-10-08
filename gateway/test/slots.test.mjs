@@ -71,3 +71,24 @@ test('split slots (no shared pool) never erase anything', async () => {
   for (const site of ['a', 'b', 'c', 'd']) { const id = await slots.assign(site, 80000, erase); slots.record(id, 80000); slots.release(id); }
   assert.deepEqual(erased, []);
 });
+
+test('llama-server coming back clears the caches but never gives a running answer\'s slot away', async () => {
+  const slots = new SlotManager({ count: 3, contextTokens: 300000, shared: false });
+  const erase = async () => {};
+  const a = await slots.assign('a', 1000, erase); await slots.assign('b', 1000, erase); const c = await slots.assign('c', 1000, erase);
+  slots.reset();
+  slots.release(c);
+  assert.equal(await slots.assign('d', 1000, erase), c, 'the slot that is free, not one still answering');
+  await assert.rejects(slots.assign('e', 1000, erase), /No free slot/);
+  assert.equal(slots.slots[a].site, null, 'what the caches held is forgotten');
+});
+
+test('two answers starting together while a cache is erased get different slots', async () => {
+  const slots = new SlotManager({ count: 3, contextTokens: 100000, maxIdleTokens: 1000, reserve: 0 });
+  const x = await slots.assign('x', 5000, async () => {}); slots.record(x, 5000); slots.release(x);
+  let open; const erasing = new Promise(r => { open = r; });
+  const first = slots.assign('y', 1000, () => erasing), second = slots.assign('z', 1000, () => erasing);
+  open();
+  const [p, q] = await Promise.all([first, second]);
+  assert.notEqual(p, q);
+});

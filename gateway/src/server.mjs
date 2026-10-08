@@ -190,7 +190,7 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
     },
   };
 
-  async function chat(request, response, key, body) {
+  async function chat(request, response, key, body, abort) {
     const { messages, images } = normalizeMessages(body.messages, { ...config.limits, maxToolResultChars: config.tools.maxResultChars });
     const tools = normalizeTools(body.tools);
     // none: the tools stay declared (same prompt, same cache) but may not be called, e.g. while a conversation is summarized.
@@ -203,12 +203,11 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
     configure(props);
     const contextLimit = Math.min(conversationTokens(props), key.limits.maxContextTokens, Number(body.contextLimit) || Infinity);
     const maxTokens = Math.min(Math.max(Number(body.maxTokens) || config.generation.defaultMaxTokens, 16), config.generation.maxTokensCap);
-    const promptTokens = await llm.countPrompt(messages, config.imageTokens, tools);
+    const promptTokens = await llm.countPrompt(messages, config.imageTokens, tools, abort.signal);
     if (promptTokens + Math.min(maxTokens, 256) > contextLimit) throw new HttpError(413, 'context_full', 'This conversation no longer fits into the assistant\'s memory. Start a new chat.', { promptTokens, contextTokens: contextLimit });
     if (!keys.hasQuota(key)) throw new HttpError(429, 'daily_quota', 'This website has reached its daily question limit. Please try again tomorrow.', {}, );
 
-    const abort = new AbortController();
-    response.on('close', () => { if (!response.writableFinished) abort.abort(new QueueError('cancelled', 'The visitor left.', 499, 0)); });
+    if (abort.signal.aborted) { log('cancelled', { key: key.id }); return; }
     let open = false;
     const event = (name, data) => {
       if (!open) {
@@ -229,7 +228,7 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
           // A slot for this answer: the conversation's own, else one warm with the site's knowledge. Frees room in the pool if needed.
           const fresh = await llm.props();
           configure(fresh);
-          const slot = await slots.assign(key.id, promptTokens + maxTokens, id => llm.eraseSlot(id), visitor || null);
+          const slot = await slots.assign(key.id, promptTokens + maxTokens + (tools && toolChoice !== 'none' ? config.tools.reserveTokens : 0), id => llm.eraseSlot(id), visitor || null);
           // maxSeconds counts from the moment llama-server works on this answer. Running next to others, it can first
           // wait for another conversation's long prompt to be read (llama-server reads prompts one after the other).
           const timeout = new AbortController();
@@ -289,7 +288,8 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
       if (error.code === 'cancelled' || abort.signal.aborted) { log('cancelled', { key: key.id }); return; }
       if (error.name === 'TimeoutError') error = new LlmError('answer_timeout', 'The answer took too long and was stopped.', 504);
       if (!open) throw error;
-      event('error', { code: error.code || 'internal_error', message: error.status ? error.message : 'The answer failed.', ...(error.retryAfter ? { retryAfter: error.retryAfter } : {}) });
+      event('error', { code: error.code || 'internal_error', message: error.status ? error.message : 'The answer failed.', ...(error.retryAfter ? { retryAfter: error.retryAfter } : {}),
+        ...(error.code === 'context_full' && error.details ? { promptTokens: error.details.promptTokens, contextTokens: error.details.contextTokens } : {}) });
       log('chat_error', { key: key.id, code: error.code });
     } finally {
       clearInterval(heartbeat);
@@ -314,9 +314,13 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
       if (!key) { await new Promise(r => setTimeout(r, 250)); throw new HttpError(401, 'invalid_key', 'A valid API key is required.'); }
       const body = request.method === 'POST' ? await readBody(request, config.limits.maxBodyBytes) : {};
       if (route === 'POST /v1/chat') {
+        // Listen for the visitor leaving from the start: a request that closes while its prompt is counted must not be queued.
+        const abort = new AbortController();
+        response.on('close', () => { if (!response.writableFinished) abort.abort(new QueueError('cancelled', 'The visitor left.', 499, 0)); });
+        if (response.destroyed) abort.abort(new QueueError('cancelled', 'The visitor left.', 499, 0));
         const state = await llm.health(0);
         if (state !== 'ready') throw new LlmError(state === 'loading' ? 'model_loading' : 'model_unavailable', state === 'loading' ? 'The assistant model is starting. Please try again in a minute.' : 'The assistant model is offline right now. Please try again in a few minutes.', 503);
-        return await chat(request, response, key, body);
+        return await chat(request, response, key, body, abort);
       }
       const result = await routes[route]({ key, body, request });
       send(response, result.status, result.body);

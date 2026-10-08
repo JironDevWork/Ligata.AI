@@ -19,7 +19,7 @@ before(async () => {
   keyB = gateway.keys.create('Site B').key;
 });
 after(async () => { await gateway.stop(); await mock.close(); rmSync(dataDir, { recursive: true, force: true }); });
-beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, maxActive: 0, active: 0, aborted: 0, contextTokens: 8192, vision: true, slots: 1, erased: [], slotLog: [] }); gateway.llm.cachedProps = null; });
+beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, templateDelayMs: 0, maxActive: 0, active: 0, aborted: 0, contextTokens: 8192, vision: true, slots: 1, erased: [], slotLog: [] }); gateway.llm.cachedProps = null; });
 
 const call = (route, key, body, method = body ? 'POST' : 'GET') => fetch(base + route, { method, headers: { ...(key ? { Authorization: 'Bearer ' + key } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
 
@@ -438,4 +438,31 @@ test('earlier lookups in the history are passed on; broken histories and tools a
   assert.equal(await refused([history[0], { ...history[1], toolCalls: [{ id: 'a', name: 'x y', arguments: {} }] }, { role: 'tool', toolCallId: 'a', content: '' }, { role: 'user', content: 'q' }]), 400, 'tool names are checked');
   assert.equal(await refused([{ role: 'user', content: 'q' }], { tools: [{ name: 'x', description: 'd', parameters: { type: 'string' } }] }), 400, 'tool parameters are an object');
   assert.equal(await refused([{ role: 'user', content: 'q' }], { tools: Array.from({ length: 9 }, () => tools[0]) }), 400, 'at most 8 tools');
+});
+
+test('a visitor leaving while the prompt is still counted leaves no answer behind and may ask again at once', async () => {
+  mock.state.templateDelayMs = 300;
+  const before = mock.state.requests;
+  const controller = new AbortController();
+  const leaving = fetch(base + '/v1/chat', { method: 'POST', signal: controller.signal, headers: { Authorization: 'Bearer ' + keyA, 'Content-Type': 'application/json' }, body: JSON.stringify({ visitor: 'early', messages: [{ role: 'user', content: 'Hi' }] }) }).catch(() => null);
+  await new Promise(r => setTimeout(r, 100));
+  controller.abort();
+  await leaving;
+  await new Promise(r => setTimeout(r, 700));
+  assert.equal(mock.state.requests, before, 'no answer was generated for nobody');
+  assert.equal(gateway.scheduler.length, 0);
+  mock.state.templateDelayMs = 0;
+  assert.equal((await chat(keyA, { visitor: 'early' })).text, 'Hello from the mock.', 'the same visitor is not told to wait for an answer nobody reads');
+});
+
+test('an answer that no longer fits after a lookup says how big it got', async () => {
+  mock.state.contextTokens = 700;
+  const result = await chat(keyA, { visitor: 'grow', tools, messages: [{ role: 'user', content: 'look up prices' }] }, {
+    onEvent: async e => { if (e.name === 'tool_calls') await call('/v1/chat/tool-results', keyA, { round: e.data.round, results: e.data.calls.map(c => ({ id: c.id, content: 'x'.repeat(6000) })) }); },
+  });
+  const error = result.events.at(-1);
+  assert.equal(error.name, 'error');
+  assert.equal(error.data.code, 'context_full');
+  assert.ok(error.data.promptTokens > 700 && error.data.contextTokens === 700, JSON.stringify(error.data));
+  assert.equal(gateway.scheduler.length, 0);
 });

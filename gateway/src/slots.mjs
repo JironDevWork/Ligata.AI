@@ -20,7 +20,8 @@ export class SlotManager {
     this.slots = Array.from({ length: Math.max(1, count) }, (_, id) => ({ id, site: null, visitor: null, tokens: 0, used: 0, busy: false, reserved: 0 }));
   }
 
-  reset() { for (const slot of this.slots) Object.assign(slot, { site: null, visitor: null, tokens: 0, used: 0, busy: false, reserved: 0 }); }
+  /** llama-server came back: its caches are gone, but answers still running keep their slots until they release them. */
+  reset() { for (const slot of this.slots) Object.assign(slot, { site: null, visitor: null, tokens: 0, used: 0 }); }
 
   /**
    * Chooses a free slot for a request and frees room in the shared pool: the slot of the same conversation, else
@@ -35,9 +36,11 @@ export class SlotManager {
       || recent(free.filter(s => s.site === site))
       || free.find(s => !s.site)
       || [...free].sort((a, b) => a.used - b.used)[0];
+    // Taken before the first await, so an answer starting at the same moment cannot get it too.
+    slot.busy = true; slot.reserved = needed;
     // Split slots (no -kvu) each own their part of the pool: nothing to make room for.
     if (this.shared && this.slots.length > 1) {
-      const running = this.slots.filter(s => s.busy).reduce((n, s) => n + s.reserved, 0);
+      const running = this.slots.filter(s => s.busy && s !== slot).reduce((n, s) => n + s.reserved, 0);
       const idle = free.filter(s => s !== slot && s.tokens > 0).sort((a, b) => a.used - b.used);
       let cached = idle.reduce((n, s) => n + s.tokens, 0);
       for (const other of idle) {
@@ -50,7 +53,6 @@ export class SlotManager {
     }
     if (slot.site !== site) Object.assign(slot, { site, tokens: 0 }); // llama-server overwrites a foreign prefix
     slot.visitor = visitor;
-    slot.busy = true; slot.reserved = needed;
     slot.used = ++this.clock; slot.at = Date.now(); // a counter orders uses within the same millisecond
     return slot.id;
   }
