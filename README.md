@@ -43,7 +43,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
   - **Appearance**:
     - six themes and ten editable colours, light/dark/automatic mode, position; every preset passes WCAG AA, and a live check flags colour pairs that are hard to read;
     - bubble icon, size and label, teaser, window size, corners, font;
-    - memory meter, queue position, animations, a chime for team replies and branding.
+    - memory bar, queue position, animations, a chime for team replies and branding.
     - A **live preview** uses unsaved settings, answers real AI questions and simulates team requests.
   - **Behaviour**:
     - name, avatar, greeting, suggested questions, language;
@@ -70,8 +70,9 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
   - streamed, with safe Markdown;
   - suggested questions;
   - screenshot and PDF attachments;
-  - a **memory meter**;
-  - their **place in line** while the shared GPU is busy, with reading progress for long documents (GPU mode).
+  - a **memory bar** that shows how full the assistant’s memory is, in percent rather than tokens (the backoffice preview also shows the tokens);
+  - **long conversations keep going**: before a question would no longer fit, the earlier messages are summarized automatically (with a progress bar) and the conversation continues with the summary and the latest exchange. The visitor still sees every message;
+  - their **place in line** while the shared GPU is busy, and *Reading…* while a long conversation or document is read (GPU mode).
 - **Talk to a person**: when the AI cannot answer, a card offers *Chat with our team* or *Send us an email*. A person icon in the header does the same at any time.
   - **The form**: name and email per the settings, the message prefilled with their question, and a storage notice. Spam protection only after consent.
   - **The live chat**: it continues in the same thread. The visitor sees who joins (name/photo as the team member chose), typing indicators, replies live, and when someone leaves or closes.
@@ -84,8 +85,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.4.5.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.4.5 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.5.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.5.0 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.

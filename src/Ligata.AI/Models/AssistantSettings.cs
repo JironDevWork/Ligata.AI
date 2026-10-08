@@ -40,6 +40,8 @@ public sealed record AssistantSettings
         PrivacyNotice = AssistantIdentity.IsDefaultNotice(Identity.PrivacyNotice) ? "" : Identity.PrivacyNotice,
         Identity.PrivacyUrl, Identity.FallbackMessage, Identity.FallbackEmail, Identity.FallbackUrl,
         Appearance, Behaviour.AllowImages, Behaviour.AllowPdfs, ContextLimit = contextLimit, Limits = limits, BaseTokens = baseTokens,
+        // Kept free for the answer or a summary: the widget summarizes the earlier messages before a conversation would no longer fit.
+        ReserveTokens = Services.ChatRelay.ReserveTokens(Behaviour, engine == "api"),
         Features = new { features.Assistant, features.LiveChat, features.Email },
         Engine = features.Assistant ? engine : null,
         Team = features.Team ? new

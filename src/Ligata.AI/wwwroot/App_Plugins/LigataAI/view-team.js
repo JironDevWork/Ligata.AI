@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon } from './ui.js?v=0.4.5';
+import { icon } from './ui.js?v=0.5.0';
 
 const fieldModes = [['hidden', 'Hidden'], ['optional', 'Optional'], ['required', 'Required']];
 const displayModes = [

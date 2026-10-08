@@ -29,7 +29,7 @@
 
   // ---------- language ----------
   const strings = {
-    en: { open: 'Open chat', close: 'Close chat', minimize: 'Minimize', newChat: 'New conversation', send: 'Send', stop: 'Stop', attach: 'Attach a screenshot or PDF', placeholder: 'Ask a question…', placeholderTeam: 'Write a message…', online: 'Online', busy: 'Busy right now', starting: 'Starting up', offline: 'Offline', degraded: 'Running slowly', checking: 'Connecting…', queue: n => n === 1 ? 'You are next' : `You are number ${n} in line`, wait: s => s < 60 ? `about ${Math.max(5, Math.round(s / 5) * 5)} s` : `about ${Math.round(s / 60)} min`, thinking: 'Thinking…', reading: p => `Reading the conversation… ${p}%`, readingDocument: p => `Reading your document… ${p}%`, typing: 'Writing…', memory: 'Memory', free: 'free', memoryHelp: (u, l) => `This conversation uses ${u} of ${l} tokens the assistant can keep in mind. When it is full, start a new conversation.`, retry: 'Try again', reconnect: 'Reconnect', removeAttachment: 'Remove attachment', pages: n => `${n} page${n === 1 ? '' : 's'}`, tokens: n => `${n} tokens`, processing: 'Reading file…', dropHere: 'Drop screenshots or PDFs here', contact: 'Contact us', email: 'Email us', poweredBy: 'Private AI by Ligata', poweredByApi: 'AI by Ligata', poweredByTeam: 'Chat by Ligata', notKept: 'no longer attached', you: 'You', copy: 'Copy', copied: 'Copied', privacy: 'Privacy',
+    en: { open: 'Open chat', close: 'Close chat', minimize: 'Minimize', newChat: 'New conversation', send: 'Send', stop: 'Stop', attach: 'Attach a screenshot or PDF', placeholder: 'Ask a question…', placeholderTeam: 'Write a message…', online: 'Online', busy: 'Busy right now', starting: 'Starting up', offline: 'Offline', degraded: 'Running slowly', checking: 'Connecting…', queue: n => n === 1 ? 'You are next' : `You are number ${n} in line`, wait: s => s < 60 ? `about ${Math.max(5, Math.round(s / 5) * 5)} s` : `about ${Math.round(s / 60)} min`, thinking: 'Thinking…', reading: 'Reading…', readingDocument: 'Reading your document…', compacting: 'Summarizing the conversation so far…', compacted: 'Earlier messages were summarized so the conversation can continue.', image: 'Image', typing: 'Writing…', memory: 'Memory', free: 'free', memoryHelp: p => `This conversation fills ${p} of the assistant’s memory. When it is full, the assistant summarizes the earlier messages and continues.`, retry: 'Try again', reconnect: 'Reconnect', removeAttachment: 'Remove attachment', pages: n => `${n} page${n === 1 ? '' : 's'}`, tokens: n => `${n} tokens`, processing: 'Reading file…', dropHere: 'Drop screenshots or PDFs here', contact: 'Contact us', email: 'Email us', poweredBy: 'Private AI by Ligata', poweredByApi: 'AI by Ligata', poweredByTeam: 'Chat by Ligata', notKept: 'no longer attached', you: 'You', copy: 'Copy', copied: 'Copied', privacy: 'Privacy',
       talkToTeam: 'Talk to a person', conversations: 'Conversations', back: 'Back', ourTeam: 'Our team', chatWithTeam: n => `Chat with ${n}`, chatWithOurTeam: 'Chat with our team', leaveMessage: 'Leave a message', sendEmail: 'Send us an email', handoffTitle: 'Would you like to talk to our team?', noThanks: 'No thanks',
       teamOnline: n => n === 1 ? 'A team member is online' : `${n} team members are online`, teamFast: 'usually replies within minutes', teamOffline: 'Nobody is online right now. We will reply by email.', teamOfflineShort: 'We reply by email', teamHere: 'Here for you',
       name: 'Name', optional: 'optional', emailField: 'Email', message: 'Message', messageHint: 'How can we help?', sendRequest: 'Send request', sendMail: 'Send message', sending: 'Sending…', cancel: 'Cancel', chatTab: 'Chat', emailTab: 'Email',
@@ -39,9 +39,9 @@
       joined: n => `${n} joined the conversation`, joinedAnon: 'A team member joined the conversation', left: n => `${n} left the conversation`, leftAnon: 'The team member left the conversation', closedTeam: 'The team closed this conversation.', closedInactive: 'This conversation was closed after a while without messages.', closedYou: 'You ended this conversation.', reopened: 'The conversation was reopened.', requested: 'You asked to talk to the team', isTyping: n => `${n} is typing…`, typingNow: 'typing…', teamTyping: 'The team is typing…',
       endChat: 'End chat', endConfirm: 'End this chat with the team?', closedNotice: 'This conversation is closed.', startNew: 'Start a new conversation', emailSent: e => `Message sent. We will reply to ${e}.`, emailSentShort: 'Message sent', viaEmail: 'by email',
       statusWaiting: 'Waiting for the team', statusActive: 'Team is here', statusReplied: 'Team replied', statusClosed: 'Closed', statusSent: 'Sent', statusAI: 'AI assistant', remove: 'Remove from this device', removeConfirm: 'Remove this conversation from this device?', emptyList: 'No conversations yet.', notSent: 'Not sent', previewSent: 'Preview: this would notify your team. Real requests appear in the Inbox.', homeHint: 'How would you like to reach us?', homeGreeting: 'Hi! How can we help you?', newMessage: 'New message', aiAnswer: 'AI',
-      errors: { network: 'The assistant cannot be reached right now.', thinking_limit: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.', refused: 'I can’t help with that. Please ask something else about this website.', visitor_busy: 'Please wait for the current answer before asking the next question.', rate_limited: 'You are sending messages too quickly. Please wait a moment.', site_busy: 'Many people are asking right now. Please try again in a minute.', queue_full: 'The assistant is very busy right now. Please try again in a minute.', queue_timeout: 'The assistant is too busy to answer right now. Please try again shortly.', daily_quota: 'The assistant has answered its maximum number of questions for today.', model_unavailable: 'The assistant is offline right now.', model_loading: 'The assistant is starting up. Please try again in a minute.', gateway_unavailable: 'The assistant is offline right now.', context_full: 'This conversation is too long for the assistant to keep in mind. Start a new conversation.', answer_timeout: 'The answer took too long and was stopped. Try a shorter question.', model_failed: 'Something went wrong while answering. Please try again.', disabled: 'The assistant is switched off.', image_too_large: 'This image is too large.', unsupported_image: 'Only PNG, JPEG and WebP images are supported.', unsupported_file: 'Only screenshots (PNG, JPEG, WebP) and PDFs can be attached.', too_many_images: 'This conversation already has the maximum number of images. Start a new one to send more.', too_many_files: 'You can attach up to four files per message.', pdf_too_large: 'This PDF is too large.', pdf_no_text: 'This PDF has no readable text (it may be scanned). Attach screenshots of the pages instead.', pdf_encrypted: 'This PDF is password-protected.', invalid_pdf: 'This PDF could not be read.', documents_disabled: 'PDFs are not accepted here.', images_disabled: 'Images are not accepted here.', message_too_long: 'This message is too long.', origin_denied: 'The assistant is not available on this website.', default: 'Something went wrong. Please try again.',
+      errors: { network: 'The assistant cannot be reached right now.', thinking_limit: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.', refused: 'I can’t help with that. Please ask something else about this website.', visitor_busy: 'Please wait for the current answer before asking the next question.', rate_limited: 'You are sending messages too quickly. Please wait a moment.', site_busy: 'Many people are asking right now. Please try again in a minute.', queue_full: 'The assistant is very busy right now. Please try again in a minute.', queue_timeout: 'The assistant is too busy to answer right now. Please try again shortly.', daily_quota: 'The assistant has answered its maximum number of questions for today.', model_unavailable: 'The assistant is offline right now.', model_loading: 'The assistant is starting up. Please try again in a minute.', gateway_unavailable: 'The assistant is offline right now.', context_full: 'This message does not fit into the assistant’s memory. Remove an attachment, shorten it or start a new conversation.', compact_failed: 'The conversation could not be summarized. Please try again or start a new conversation.', answer_timeout: 'The answer took too long and was stopped. Try a shorter question.', model_failed: 'Something went wrong while answering. Please try again.', disabled: 'The assistant is switched off.', image_too_large: 'This image is too large.', unsupported_image: 'Only PNG, JPEG and WebP images are supported.', unsupported_file: 'Only screenshots (PNG, JPEG, WebP) and PDFs can be attached.', too_many_images: 'This conversation already has the maximum number of images. Start a new one to send more.', too_many_files: 'You can attach up to four files per message.', pdf_too_large: 'This PDF is too large.', pdf_no_text: 'This PDF has no readable text (it may be scanned). Attach screenshots of the pages instead.', pdf_encrypted: 'This PDF is password-protected.', invalid_pdf: 'This PDF could not be read.', documents_disabled: 'PDFs are not accepted here.', images_disabled: 'Images are not accepted here.', message_too_long: 'This message is too long.', origin_denied: 'The assistant is not available on this website.', default: 'Something went wrong. Please try again.',
         too_many_open: 'You already have open conversations with the team. Continue one of them.', inbox_full: 'The team is receiving too many requests right now. Please try again later.', captcha_failed: 'The spam check failed. Please try again.', captcha_unavailable: 'The spam check is not available right now. Please try again in a moment.', captcha_consent: 'Please allow the spam check to send.', channel_disabled: 'This contact option is switched off.', invalid_email: 'Please enter a valid email address.', invalid_name: 'Please check your name.', invalid_message: 'Please write a message.', closed: 'This conversation was closed. Start a new one.', not_found: 'This conversation is no longer available.', conversation_full: 'This conversation is very long. Please start a new one.', send_failed: 'Your message could not be sent.' } },
-    de: { open: 'Chat öffnen', close: 'Chat schliessen', minimize: 'Minimieren', newChat: 'Neues Gespräch', send: 'Senden', stop: 'Stopp', attach: 'Screenshot oder PDF anhängen', placeholder: 'Stell eine Frage …', placeholderTeam: 'Schreib eine Nachricht …', online: 'Online', busy: 'Gerade ausgelastet', starting: 'Startet', offline: 'Offline', degraded: 'Läuft langsam', checking: 'Verbinde …', queue: n => n === 1 ? 'Du bist als Nächstes dran' : `Du bist Nummer ${n} in der Warteschlange`, wait: s => s < 60 ? `etwa ${Math.max(5, Math.round(s / 5) * 5)} s` : `etwa ${Math.round(s / 60)} min`, thinking: 'Denkt nach …', reading: p => `Liest das Gespräch … ${p} %`, readingDocument: p => `Liest dein Dokument … ${p} %`, typing: 'Schreibt …', memory: 'Gedächtnis', free: 'frei', memoryHelp: (u, l) => `Dieses Gespräch belegt ${u} von ${l} Tokens, die der Assistent im Kopf behalten kann. Wenn es voll ist, beginne ein neues Gespräch.`, retry: 'Erneut versuchen', reconnect: 'Neu verbinden', removeAttachment: 'Anhang entfernen', pages: n => `${n} Seite${n === 1 ? '' : 'n'}`, tokens: n => `${n} Tokens`, processing: 'Datei wird gelesen …', dropHere: 'Screenshots oder PDFs hier ablegen', contact: 'Kontakt', email: 'E-Mail schreiben', poweredBy: 'Private KI von Ligata', poweredByApi: 'KI von Ligata', poweredByTeam: 'Chat von Ligata', notKept: 'nicht mehr angehängt', you: 'Du', copy: 'Kopieren', copied: 'Kopiert', privacy: 'Datenschutz',
+    de: { open: 'Chat öffnen', close: 'Chat schliessen', minimize: 'Minimieren', newChat: 'Neues Gespräch', send: 'Senden', stop: 'Stopp', attach: 'Screenshot oder PDF anhängen', placeholder: 'Stell eine Frage …', placeholderTeam: 'Schreib eine Nachricht …', online: 'Online', busy: 'Gerade ausgelastet', starting: 'Startet', offline: 'Offline', degraded: 'Läuft langsam', checking: 'Verbinde …', queue: n => n === 1 ? 'Du bist als Nächstes dran' : `Du bist Nummer ${n} in der Warteschlange`, wait: s => s < 60 ? `etwa ${Math.max(5, Math.round(s / 5) * 5)} s` : `etwa ${Math.round(s / 60)} min`, thinking: 'Denkt nach …', reading: 'Liest …', readingDocument: 'Liest dein Dokument …', compacting: 'Fasst das bisherige Gespräch zusammen …', compacted: 'Frühere Nachrichten wurden zusammengefasst, damit das Gespräch weitergehen kann.', image: 'Bild', typing: 'Schreibt …', memory: 'Gedächtnis', free: 'frei', memoryHelp: p => `Dieses Gespräch belegt ${p} des Gedächtnisses des Assistenten. Wenn es voll ist, fasst der Assistent die früheren Nachrichten zusammen und macht weiter.`, retry: 'Erneut versuchen', reconnect: 'Neu verbinden', removeAttachment: 'Anhang entfernen', pages: n => `${n} Seite${n === 1 ? '' : 'n'}`, tokens: n => `${n} Tokens`, processing: 'Datei wird gelesen …', dropHere: 'Screenshots oder PDFs hier ablegen', contact: 'Kontakt', email: 'E-Mail schreiben', poweredBy: 'Private KI von Ligata', poweredByApi: 'KI von Ligata', poweredByTeam: 'Chat von Ligata', notKept: 'nicht mehr angehängt', you: 'Du', copy: 'Kopieren', copied: 'Kopiert', privacy: 'Datenschutz',
       talkToTeam: 'Mit einer Person sprechen', conversations: 'Gespräche', back: 'Zurück', ourTeam: 'Unser Team', chatWithTeam: n => `Chat mit ${n}`, chatWithOurTeam: 'Mit unserem Team chatten', leaveMessage: 'Nachricht hinterlassen', sendEmail: 'Schreib uns eine E-Mail', handoffTitle: 'Möchtest du mit unserem Team sprechen?', noThanks: 'Nein, danke',
       teamOnline: n => n === 1 ? 'Eine Person aus dem Team ist online' : `${n} Personen aus dem Team sind online`, teamFast: 'antwortet meist innert Minuten', teamOffline: 'Gerade ist niemand online. Wir antworten dir per E-Mail.', teamOfflineShort: 'Wir antworten per E-Mail', teamHere: 'Für dich da',
       name: 'Name', optional: 'optional', emailField: 'E-Mail', message: 'Nachricht', messageHint: 'Wie können wir helfen?', sendRequest: 'Anfrage senden', sendMail: 'Nachricht senden', sending: 'Wird gesendet …', cancel: 'Abbrechen', chatTab: 'Chat', emailTab: 'E-Mail',
@@ -51,9 +51,9 @@
       joined: n => `${n} ist dem Gespräch beigetreten`, joinedAnon: 'Eine Person aus dem Team ist beigetreten', left: n => `${n} hat das Gespräch verlassen`, leftAnon: 'Die Person aus dem Team hat das Gespräch verlassen', closedTeam: 'Das Team hat dieses Gespräch beendet.', closedInactive: 'Dieses Gespräch wurde nach längerer Zeit ohne Nachrichten beendet.', closedYou: 'Du hast dieses Gespräch beendet.', reopened: 'Das Gespräch wurde wieder geöffnet.', requested: 'Du möchtest mit dem Team sprechen', isTyping: n => `${n} schreibt …`, typingNow: 'schreibt …', teamTyping: 'Das Team schreibt …',
       endChat: 'Chat beenden', endConfirm: 'Diesen Chat mit dem Team beenden?', closedNotice: 'Dieses Gespräch ist beendet.', startNew: 'Neues Gespräch beginnen', emailSent: e => `Nachricht gesendet. Wir antworten an ${e}.`, emailSentShort: 'Nachricht gesendet', viaEmail: 'per E-Mail',
       statusWaiting: 'Wartet auf das Team', statusActive: 'Team ist da', statusReplied: 'Team hat geantwortet', statusClosed: 'Beendet', statusSent: 'Gesendet', statusAI: 'KI-Assistent', remove: 'Von diesem Gerät entfernen', removeConfirm: 'Dieses Gespräch von diesem Gerät entfernen?', emptyList: 'Noch keine Gespräche.', notSent: 'Nicht gesendet', previewSent: 'Vorschau: Hier würde dein Team benachrichtigt. Echte Anfragen erscheinen in der Inbox.', homeHint: 'Wie möchtest du uns erreichen?', homeGreeting: 'Hallo! Wie können wir dir helfen?', newMessage: 'Neue Nachricht', aiAnswer: 'KI',
-      errors: { network: 'Der Assistent ist gerade nicht erreichbar.', thinking_limit: 'Der Assistent hat zu lange nachgedacht und keine Antwort fertiggestellt. Bitte versuch es erneut oder frag genauer.', refused: 'Dabei kann ich nicht helfen. Frag gerne etwas anderes zu dieser Website.', visitor_busy: 'Bitte warte auf die aktuelle Antwort, bevor du die nächste Frage stellst.', rate_limited: 'Du sendest zu schnell Nachrichten. Bitte warte einen Moment.', site_busy: 'Gerade fragen sehr viele Leute. Bitte versuche es in einer Minute erneut.', queue_full: 'Der Assistent ist gerade sehr ausgelastet. Bitte versuche es in einer Minute erneut.', queue_timeout: 'Der Assistent ist gerade zu ausgelastet. Bitte versuche es gleich noch einmal.', daily_quota: 'Der Assistent hat heute bereits die maximale Anzahl Fragen beantwortet.', model_unavailable: 'Der Assistent ist gerade offline.', model_loading: 'Der Assistent startet gerade. Bitte versuche es in einer Minute erneut.', gateway_unavailable: 'Der Assistent ist gerade offline.', context_full: 'Dieses Gespräch ist zu lang, um es im Kopf zu behalten. Beginne ein neues Gespräch.', answer_timeout: 'Die Antwort hat zu lange gedauert und wurde abgebrochen. Versuche eine kürzere Frage.', model_failed: 'Beim Antworten ist etwas schiefgelaufen. Bitte versuche es erneut.', disabled: 'Der Assistent ist ausgeschaltet.', image_too_large: 'Dieses Bild ist zu gross.', unsupported_image: 'Nur PNG-, JPEG- und WebP-Bilder werden unterstützt.', unsupported_file: 'Anhängen kannst du Screenshots (PNG, JPEG, WebP) und PDFs.', too_many_images: 'Dieses Gespräch enthält bereits die maximale Anzahl Bilder. Beginne ein neues, um weitere zu senden.', too_many_files: 'Pro Nachricht kannst du bis zu vier Dateien anhängen.', pdf_too_large: 'Dieses PDF ist zu gross.', pdf_no_text: 'Dieses PDF enthält keinen lesbaren Text (vielleicht gescannt). Hänge stattdessen Screenshots der Seiten an.', pdf_encrypted: 'Dieses PDF ist passwortgeschützt.', invalid_pdf: 'Dieses PDF konnte nicht gelesen werden.', documents_disabled: 'PDFs werden hier nicht angenommen.', images_disabled: 'Bilder werden hier nicht angenommen.', message_too_long: 'Diese Nachricht ist zu lang.', origin_denied: 'Der Assistent ist auf dieser Website nicht verfügbar.', default: 'Etwas ist schiefgelaufen. Bitte versuche es erneut.',
+      errors: { network: 'Der Assistent ist gerade nicht erreichbar.', thinking_limit: 'Der Assistent hat zu lange nachgedacht und keine Antwort fertiggestellt. Bitte versuch es erneut oder frag genauer.', refused: 'Dabei kann ich nicht helfen. Frag gerne etwas anderes zu dieser Website.', visitor_busy: 'Bitte warte auf die aktuelle Antwort, bevor du die nächste Frage stellst.', rate_limited: 'Du sendest zu schnell Nachrichten. Bitte warte einen Moment.', site_busy: 'Gerade fragen sehr viele Leute. Bitte versuche es in einer Minute erneut.', queue_full: 'Der Assistent ist gerade sehr ausgelastet. Bitte versuche es in einer Minute erneut.', queue_timeout: 'Der Assistent ist gerade zu ausgelastet. Bitte versuche es gleich noch einmal.', daily_quota: 'Der Assistent hat heute bereits die maximale Anzahl Fragen beantwortet.', model_unavailable: 'Der Assistent ist gerade offline.', model_loading: 'Der Assistent startet gerade. Bitte versuche es in einer Minute erneut.', gateway_unavailable: 'Der Assistent ist gerade offline.', context_full: 'Diese Nachricht passt nicht ins Gedächtnis des Assistenten. Entferne einen Anhang, kürze sie oder beginne ein neues Gespräch.', compact_failed: 'Das Gespräch konnte nicht zusammengefasst werden. Bitte versuch es erneut oder beginne ein neues Gespräch.', answer_timeout: 'Die Antwort hat zu lange gedauert und wurde abgebrochen. Versuche eine kürzere Frage.', model_failed: 'Beim Antworten ist etwas schiefgelaufen. Bitte versuche es erneut.', disabled: 'Der Assistent ist ausgeschaltet.', image_too_large: 'Dieses Bild ist zu gross.', unsupported_image: 'Nur PNG-, JPEG- und WebP-Bilder werden unterstützt.', unsupported_file: 'Anhängen kannst du Screenshots (PNG, JPEG, WebP) und PDFs.', too_many_images: 'Dieses Gespräch enthält bereits die maximale Anzahl Bilder. Beginne ein neues, um weitere zu senden.', too_many_files: 'Pro Nachricht kannst du bis zu vier Dateien anhängen.', pdf_too_large: 'Dieses PDF ist zu gross.', pdf_no_text: 'Dieses PDF enthält keinen lesbaren Text (vielleicht gescannt). Hänge stattdessen Screenshots der Seiten an.', pdf_encrypted: 'Dieses PDF ist passwortgeschützt.', invalid_pdf: 'Dieses PDF konnte nicht gelesen werden.', documents_disabled: 'PDFs werden hier nicht angenommen.', images_disabled: 'Bilder werden hier nicht angenommen.', message_too_long: 'Diese Nachricht ist zu lang.', origin_denied: 'Der Assistent ist auf dieser Website nicht verfügbar.', default: 'Etwas ist schiefgelaufen. Bitte versuche es erneut.',
         too_many_open: 'Du hast bereits offene Gespräche mit dem Team. Führe eines davon weiter.', inbox_full: 'Das Team erhält gerade sehr viele Anfragen. Bitte versuche es später erneut.', captcha_failed: 'Die Spamprüfung ist fehlgeschlagen. Bitte versuche es erneut.', captcha_unavailable: 'Die Spamprüfung ist gerade nicht verfügbar. Bitte versuche es gleich noch einmal.', captcha_consent: 'Bitte erlaube die Spamprüfung, um zu senden.', channel_disabled: 'Diese Kontaktmöglichkeit ist ausgeschaltet.', invalid_email: 'Bitte gib eine gültige E-Mail-Adresse ein.', invalid_name: 'Bitte prüfe deinen Namen.', invalid_message: 'Bitte schreib eine Nachricht.', closed: 'Dieses Gespräch wurde beendet. Beginne ein neues.', not_found: 'Dieses Gespräch ist nicht mehr verfügbar.', conversation_full: 'Dieses Gespräch ist sehr lang. Bitte beginne ein neues.', send_failed: 'Deine Nachricht konnte nicht gesendet werden.' } },
-    fr: { open: 'Ouvrir le chat', close: 'Fermer le chat', minimize: 'Réduire', newChat: 'Nouvelle conversation', send: 'Envoyer', stop: 'Arrêter', attach: 'Joindre une capture ou un PDF', placeholder: 'Posez une question…', placeholderTeam: 'Écrivez un message…', online: 'En ligne', busy: 'Très sollicité', starting: 'Démarrage', offline: 'Hors ligne', degraded: 'Ralenti', checking: 'Connexion…', queue: n => n === 1 ? 'Vous êtes le prochain' : `Vous êtes numéro ${n} dans la file`, wait: s => s < 60 ? `environ ${Math.max(5, Math.round(s / 5) * 5)} s` : `environ ${Math.round(s / 60)} min`, thinking: 'Réflexion…', reading: p => `Lecture de la conversation… ${p} %`, readingDocument: p => `Lecture de votre document… ${p} %`, typing: 'Rédaction…', memory: 'Mémoire', free: 'libre', memoryHelp: (u, l) => `Cette conversation utilise ${u} des ${l} tokens que l’assistant peut retenir. Quand elle est pleine, commencez-en une nouvelle.`, retry: 'Réessayer', reconnect: 'Reconnecter', removeAttachment: 'Retirer la pièce jointe', pages: n => `${n} page${n === 1 ? '' : 's'}`, tokens: n => `${n} tokens`, processing: 'Lecture du fichier…', dropHere: 'Déposez des captures ou des PDF ici', contact: 'Nous contacter', email: 'Nous écrire', poweredBy: 'IA privée par Ligata', poweredByApi: 'IA par Ligata', poweredByTeam: 'Chat par Ligata', notKept: 'plus joint', you: 'Vous', copy: 'Copier', copied: 'Copié', privacy: 'Confidentialité',
+    fr: { open: 'Ouvrir le chat', close: 'Fermer le chat', minimize: 'Réduire', newChat: 'Nouvelle conversation', send: 'Envoyer', stop: 'Arrêter', attach: 'Joindre une capture ou un PDF', placeholder: 'Posez une question…', placeholderTeam: 'Écrivez un message…', online: 'En ligne', busy: 'Très sollicité', starting: 'Démarrage', offline: 'Hors ligne', degraded: 'Ralenti', checking: 'Connexion…', queue: n => n === 1 ? 'Vous êtes le prochain' : `Vous êtes numéro ${n} dans la file`, wait: s => s < 60 ? `environ ${Math.max(5, Math.round(s / 5) * 5)} s` : `environ ${Math.round(s / 60)} min`, thinking: 'Réflexion…', reading: 'Lecture…', readingDocument: 'Lecture de votre document…', compacting: 'Résumé de la conversation en cours…', compacted: 'Les messages précédents ont été résumés pour que la conversation puisse continuer.', image: 'Image', typing: 'Rédaction…', memory: 'Mémoire', free: 'libre', memoryHelp: p => `Cette conversation occupe ${p} de la mémoire de l’assistant. Quand elle est pleine, l’assistant résume les messages précédents et continue.`, retry: 'Réessayer', reconnect: 'Reconnecter', removeAttachment: 'Retirer la pièce jointe', pages: n => `${n} page${n === 1 ? '' : 's'}`, tokens: n => `${n} tokens`, processing: 'Lecture du fichier…', dropHere: 'Déposez des captures ou des PDF ici', contact: 'Nous contacter', email: 'Nous écrire', poweredBy: 'IA privée par Ligata', poweredByApi: 'IA par Ligata', poweredByTeam: 'Chat par Ligata', notKept: 'plus joint', you: 'Vous', copy: 'Copier', copied: 'Copié', privacy: 'Confidentialité',
       talkToTeam: 'Parler à une personne', conversations: 'Conversations', back: 'Retour', ourTeam: 'Notre équipe', chatWithTeam: n => `Discuter avec ${n}`, chatWithOurTeam: 'Discuter avec notre équipe', leaveMessage: 'Laisser un message', sendEmail: 'Envoyez-nous un e-mail', handoffTitle: 'Voulez-vous parler à notre équipe ?', noThanks: 'Non merci',
       teamOnline: n => n === 1 ? 'Un membre de l’équipe est en ligne' : `${n} membres de l’équipe sont en ligne`, teamFast: 'répond généralement en quelques minutes', teamOffline: 'Personne n’est en ligne pour le moment. Nous répondrons par e-mail.', teamOfflineShort: 'Réponse par e-mail', teamHere: 'À votre écoute',
       name: 'Nom', optional: 'facultatif', emailField: 'E-mail', message: 'Message', messageHint: 'Comment pouvons-nous aider ?', sendRequest: 'Envoyer la demande', sendMail: 'Envoyer le message', sending: 'Envoi…', cancel: 'Annuler', chatTab: 'Chat', emailTab: 'E-mail',
@@ -63,8 +63,8 @@
       joined: n => `${n} a rejoint la conversation`, joinedAnon: 'Un membre de l’équipe a rejoint la conversation', left: n => `${n} a quitté la conversation`, leftAnon: 'Le membre de l’équipe a quitté la conversation', closedTeam: 'L’équipe a fermé cette conversation.', closedInactive: 'Cette conversation a été fermée après une période d’inactivité.', closedYou: 'Vous avez terminé cette conversation.', reopened: 'La conversation a été rouverte.', requested: 'Vous avez demandé à parler à l’équipe', isTyping: n => `${n} écrit…`, typingNow: 'écrit…', teamTyping: 'L’équipe écrit…',
       endChat: 'Terminer le chat', endConfirm: 'Terminer ce chat avec l’équipe ?', closedNotice: 'Cette conversation est terminée.', startNew: 'Nouvelle conversation', emailSent: e => `Message envoyé. Nous répondrons à ${e}.`, emailSentShort: 'Message envoyé', viaEmail: 'par e-mail',
       statusWaiting: 'En attente de l’équipe', statusActive: 'L’équipe est là', statusReplied: 'L’équipe a répondu', statusClosed: 'Terminée', statusSent: 'Envoyé', statusAI: 'Assistant IA', remove: 'Retirer de cet appareil', removeConfirm: 'Retirer cette conversation de cet appareil ?', emptyList: 'Aucune conversation pour le moment.', notSent: 'Non envoyé', previewSent: 'Aperçu : votre équipe serait prévenue. Les vraies demandes apparaissent dans l’Inbox.', homeHint: 'Comment souhaitez-vous nous joindre ?', homeGreeting: 'Bonjour ! Comment pouvons-nous vous aider ?', newMessage: 'Nouveau message', aiAnswer: 'IA',
-      errors: { network: 'L’assistant est injoignable pour le moment.', thinking_limit: 'L’assistant a réfléchi trop longtemps et n’a pas pu terminer sa réponse. Réessayez ou posez une question plus précise.', refused: 'Je ne peux pas vous aider avec cela. Posez une autre question sur ce site.', too_many_open: 'Vous avez déjà des conversations ouvertes avec l’équipe.', captcha_failed: 'La vérification anti-spam a échoué. Réessayez.', captcha_consent: 'Autorisez la vérification anti-spam pour envoyer.', invalid_email: 'Saisissez une adresse e-mail valide.', invalid_message: 'Écrivez un message.', closed: 'Cette conversation est terminée. Commencez-en une nouvelle.', not_found: 'Cette conversation n’est plus disponible.', default: 'Une erreur est survenue. Réessayez.' } },
-    it: { open: 'Apri la chat', close: 'Chiudi la chat', minimize: 'Riduci', newChat: 'Nuova conversazione', send: 'Invia', stop: 'Ferma', attach: 'Allega uno screenshot o un PDF', placeholder: 'Fai una domanda…', placeholderTeam: 'Scrivi un messaggio…', online: 'Online', busy: 'Molto richiesto', starting: 'In avvio', offline: 'Offline', degraded: 'Rallentato', checking: 'Connessione…', queue: n => n === 1 ? 'Sei il prossimo' : `Sei il numero ${n} in coda`, wait: s => s < 60 ? `circa ${Math.max(5, Math.round(s / 5) * 5)} s` : `circa ${Math.round(s / 60)} min`, thinking: 'Sto pensando…', reading: p => `Lettura della conversazione… ${p}%`, readingDocument: p => `Lettura del documento… ${p}%`, typing: 'Sto scrivendo…', memory: 'Memoria', free: 'libera', memoryHelp: (u, l) => `Questa conversazione usa ${u} dei ${l} token che l’assistente può ricordare. Quando è piena, iniziane una nuova.`, retry: 'Riprova', reconnect: 'Riconnetti', removeAttachment: 'Rimuovi allegato', pages: n => `${n} pagin${n === 1 ? 'a' : 'e'}`, tokens: n => `${n} token`, processing: 'Lettura del file…', dropHere: 'Trascina qui screenshot o PDF', contact: 'Contattaci', email: 'Scrivici', poweredBy: 'IA privata di Ligata', poweredByApi: 'IA di Ligata', poweredByTeam: 'Chat di Ligata', notKept: 'non più allegato', you: 'Tu', copy: 'Copia', copied: 'Copiato', privacy: 'Privacy',
+      errors: { network: 'L’assistant est injoignable pour le moment.', thinking_limit: 'L’assistant a réfléchi trop longtemps et n’a pas pu terminer sa réponse. Réessayez ou posez une question plus précise.', refused: 'Je ne peux pas vous aider avec cela. Posez une autre question sur ce site.', context_full: 'Ce message ne tient pas dans la mémoire de l’assistant. Retirez une pièce jointe, raccourcissez-le ou commencez une nouvelle conversation.', compact_failed: 'La conversation n’a pas pu être résumée. Réessayez ou commencez une nouvelle conversation.', too_many_open: 'Vous avez déjà des conversations ouvertes avec l’équipe.', captcha_failed: 'La vérification anti-spam a échoué. Réessayez.', captcha_consent: 'Autorisez la vérification anti-spam pour envoyer.', invalid_email: 'Saisissez une adresse e-mail valide.', invalid_message: 'Écrivez un message.', closed: 'Cette conversation est terminée. Commencez-en une nouvelle.', not_found: 'Cette conversation n’est plus disponible.', default: 'Une erreur est survenue. Réessayez.' } },
+    it: { open: 'Apri la chat', close: 'Chiudi la chat', minimize: 'Riduci', newChat: 'Nuova conversazione', send: 'Invia', stop: 'Ferma', attach: 'Allega uno screenshot o un PDF', placeholder: 'Fai una domanda…', placeholderTeam: 'Scrivi un messaggio…', online: 'Online', busy: 'Molto richiesto', starting: 'In avvio', offline: 'Offline', degraded: 'Rallentato', checking: 'Connessione…', queue: n => n === 1 ? 'Sei il prossimo' : `Sei il numero ${n} in coda`, wait: s => s < 60 ? `circa ${Math.max(5, Math.round(s / 5) * 5)} s` : `circa ${Math.round(s / 60)} min`, thinking: 'Sto pensando…', reading: 'Sto leggendo…', readingDocument: 'Sto leggendo il documento…', compacting: 'Riassumo la conversazione…', compacted: 'I messaggi precedenti sono stati riassunti per poter continuare la conversazione.', image: 'Immagine', typing: 'Sto scrivendo…', memory: 'Memoria', free: 'libera', memoryHelp: p => `Questa conversazione occupa il ${p} della memoria dell’assistente. Quando è piena, l’assistente riassume i messaggi precedenti e continua.`, retry: 'Riprova', reconnect: 'Riconnetti', removeAttachment: 'Rimuovi allegato', pages: n => `${n} pagin${n === 1 ? 'a' : 'e'}`, tokens: n => `${n} token`, processing: 'Lettura del file…', dropHere: 'Trascina qui screenshot o PDF', contact: 'Contattaci', email: 'Scrivici', poweredBy: 'IA privata di Ligata', poweredByApi: 'IA di Ligata', poweredByTeam: 'Chat di Ligata', notKept: 'non più allegato', you: 'Tu', copy: 'Copia', copied: 'Copiato', privacy: 'Privacy',
       talkToTeam: 'Parla con una persona', conversations: 'Conversazioni', back: 'Indietro', ourTeam: 'Il nostro team', chatWithTeam: n => `Chatta con ${n}`, chatWithOurTeam: 'Chatta con il nostro team', leaveMessage: 'Lascia un messaggio', sendEmail: 'Inviaci un’e-mail', handoffTitle: 'Vuoi parlare con il nostro team?', noThanks: 'No, grazie',
       teamOnline: n => n === 1 ? 'Una persona del team è online' : `${n} persone del team sono online`, teamFast: 'di solito risponde in pochi minuti', teamOffline: 'Al momento nessuno è online. Ti risponderemo via e-mail.', teamOfflineShort: 'Rispondiamo via e-mail', teamHere: 'Qui per te',
       name: 'Nome', optional: 'facoltativo', emailField: 'E-mail', message: 'Messaggio', messageHint: 'Come possiamo aiutarti?', sendRequest: 'Invia richiesta', sendMail: 'Invia messaggio', sending: 'Invio…', cancel: 'Annulla', chatTab: 'Chat', emailTab: 'E-mail',
@@ -74,7 +74,7 @@
       joined: n => `${n} si è unito alla conversazione`, joinedAnon: 'Una persona del team si è unita alla conversazione', left: n => `${n} ha lasciato la conversazione`, leftAnon: 'La persona del team ha lasciato la conversazione', closedTeam: 'Il team ha chiuso questa conversazione.', closedInactive: 'Questa conversazione è stata chiusa per inattività.', closedYou: 'Hai terminato questa conversazione.', reopened: 'La conversazione è stata riaperta.', requested: 'Hai chiesto di parlare con il team', isTyping: n => `${n} sta scrivendo…`, typingNow: 'sta scrivendo…', teamTyping: 'Il team sta scrivendo…',
       endChat: 'Termina chat', endConfirm: 'Terminare questa chat con il team?', closedNotice: 'Questa conversazione è terminata.', startNew: 'Nuova conversazione', emailSent: e => `Messaggio inviato. Risponderemo a ${e}.`, emailSentShort: 'Messaggio inviato', viaEmail: 'via e-mail',
       statusWaiting: 'In attesa del team', statusActive: 'Il team è qui', statusReplied: 'Il team ha risposto', statusClosed: 'Chiusa', statusSent: 'Inviato', statusAI: 'Assistente IA', remove: 'Rimuovi da questo dispositivo', removeConfirm: 'Rimuovere questa conversazione da questo dispositivo?', emptyList: 'Ancora nessuna conversazione.', notSent: 'Non inviato', previewSent: 'Anteprima: qui verrebbe avvisato il team. Le richieste reali appaiono nella Inbox.', homeHint: 'Come vuoi contattarci?', homeGreeting: 'Ciao! Come possiamo aiutarti?', newMessage: 'Nuovo messaggio', aiAnswer: 'IA',
-      errors: { network: 'L’assistente non è raggiungibile al momento.', thinking_limit: 'L’assistente ha riflettuto troppo a lungo e non è riuscito a completare la risposta. Riprova o fai una domanda più precisa.', refused: 'Non posso aiutarti con questo. Fai un’altra domanda su questo sito.', too_many_open: 'Hai già conversazioni aperte con il team.', captcha_failed: 'Il controllo anti-spam non è riuscito. Riprova.', captcha_consent: 'Consenti il controllo anti-spam per inviare.', invalid_email: 'Inserisci un indirizzo e-mail valido.', invalid_message: 'Scrivi un messaggio.', closed: 'Questa conversazione è terminata. Iniziane una nuova.', not_found: 'Questa conversazione non è più disponibile.', default: 'Qualcosa è andato storto. Riprova.' } },
+      errors: { network: 'L’assistente non è raggiungibile al momento.', thinking_limit: 'L’assistente ha riflettuto troppo a lungo e non è riuscito a completare la risposta. Riprova o fai una domanda più precisa.', refused: 'Non posso aiutarti con questo. Fai un’altra domanda su questo sito.', context_full: 'Questo messaggio non entra nella memoria dell’assistente. Rimuovi un allegato, accorcialo o inizia una nuova conversazione.', compact_failed: 'Non è stato possibile riassumere la conversazione. Riprova o inizia una nuova conversazione.', too_many_open: 'Hai già conversazioni aperte con il team.', captcha_failed: 'Il controllo anti-spam non è riuscito. Riprova.', captcha_consent: 'Consenti il controllo anti-spam per inviare.', invalid_email: 'Inserisci un indirizzo e-mail valido.', invalid_message: 'Scrivi un messaggio.', closed: 'Questa conversazione è terminata. Iniziane una nuova.', not_found: 'Questa conversazione non è più disponibile.', default: 'Qualcosa è andato storto. Riprova.' } },
   };
   // Consent before the AI reads a message (GDPR Art. 6(1)(a)). Provider and country come from the server.
   const consentStrings = {
@@ -111,6 +111,7 @@
   const aiNotice = () => settings.privacyNotice || (settings.engine === 'api' ? t.privacyApi : t.privacyAi);
   const errorText = (code, fallback) => t.errors[code] || fallback || t.errors.default;
   const number = n => new Intl.NumberFormat(lang).format(Math.round(n));
+  const percent = ratio => new Intl.NumberFormat(lang, { style: 'percent' }).format(ratio);
   const compact = n => n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, '')}k` : String(Math.round(n));
   const clock = at => new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(new Date(at));
   const relative = at => {
@@ -301,8 +302,9 @@
   .waiting{align-self:flex-start;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:18px;border-bottom-left-radius:6px;background:var(--lai-bot);color:var(--lai-on-bot);font-size:13.5px;max-width:88%}
   .typing-row{align-self:flex-start;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--lai-muted);animation:rise .2s var(--lai-ease)}.typing-row .dots{padding:9px 12px;border-radius:16px;background:var(--lai-surface)}
   .dots{display:inline-flex;gap:4px}.dots i{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.35;animation:bounce 1.2s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
-  .waiting .progress{display:inline-block;vertical-align:middle;margin-left:6px;width:90px;height:4px;border-radius:4px;background:color-mix(in srgb,currentColor 15%,transparent);overflow:hidden}.waiting .progress b{display:block;height:100%;background:var(--lai-accent);transition:width .4s}
+  .waiting .progress{display:inline-block;vertical-align:middle;flex:none;width:72px;height:4px;border-radius:4px;background:color-mix(in srgb,currentColor 15%,transparent);overflow:hidden}.waiting .progress b{display:block;height:100%;background:var(--lai-accent);transition:width .4s}
   .queue-pos{font-variant-numeric:tabular-nums}
+  .event.note.summary{color:var(--lai-muted)}
   .list{padding:14px 12px 16px}
   .start{display:grid;gap:8px}.list .start{margin-bottom:18px}
   .option{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--lai-line);background:var(--lai-bg);text-align:left;transition:border-color .15s,background .15s,transform .15s}
@@ -392,7 +394,7 @@
   const blank = kind => ({ id: newId(), kind, title: '', created: Date.now(), updated: Date.now(), messages: [], context: { used: 0, limit: settings.contextLimit || 0 }, team: null, unread: 0 });
   const state = {
     open: false, view: 'chat', status: 'checking', queue: null, pending: [], busy: false, controller: null, conversations: [], activeId: null,
-    baseTokens: settings.baseTokens || 0, contextLimit: settings.contextLimit || 0, lastConfig: 0, teaserShown: false, teamOnline: 0, sheet: null, answerUnread: false,
+    baseTokens: settings.baseTokens || 0, contextLimit: settings.contextLimit || 0, reserveTokens: settings.reserveTokens || 0, lastConfig: 0, teaserShown: false, teamOnline: 0, sheet: null, answerUnread: false,
   };
   // The backoffice preview keeps its conversations in the editor's page memory (it reloads on every settings change).
   const previewStore = preview && window.parent !== window ? window.parent : null;
@@ -658,18 +660,20 @@
     const show = look.showContextMeter && F.ai && state.view === 'chat' && c && !c.team && c.kind === 'ai' && aiAllowed();
     $('.meter').classList.toggle('hidden', !show);
     if (!show) return;
-    const limit = c.context?.limit || state.contextLimit || 0;
+    const pendingTokens = state.pending.reduce((n, f) => n + (f.tokens || 0), 0) + estimate(input.value);
+    const { limit, used, room } = memory(c, pendingTokens);
     if (!limit) return;
-    const pendingTokens = state.pending.reduce((n, f) => n + (f.tokens || 0), 0) + Math.ceil(input.value.length / 3.5);
-    const used = Math.max(c.context?.used || 0, state.baseTokens) + pendingTokens;
-    const ratio = Math.min(1, used / limit);
+    // Full means "summarized before the next answer": the bar reaches the end where the summary starts.
+    const ratio = Math.min(1, used / room);
     const meter = $('.meter');
     $('.fill').style.width = `${Math.max(2, ratio * 100)}%`;
-    $('.meter-text').innerHTML = `<b>${compact(Math.max(0, limit - used))}</b> ${t.free}`;
+    // Visitors see how full the memory is; the backoffice preview also shows the tokens.
+    $('.meter-text').innerHTML = preview ? `<b>${compact(used)}</b> / ${compact(limit)}` : `<b>${percent(ratio)}</b>`;
     meter.classList.toggle('warn', ratio > .75 && ratio <= .92); meter.classList.toggle('full', ratio > .92);
     meter.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
-    meter.title = t.memoryHelp(number(used), number(limit));
-    $('.meter .sr').textContent = t.memoryHelp(number(used), number(limit));
+    const help = t.memoryHelp(percent(ratio)) + (preview ? ` (${number(used)} / ${number(limit)} tokens)` : '');
+    meter.title = help;
+    $('.meter .sr').textContent = help;
   }
 
   const scrollDown = force => { if (force || log.scrollHeight - log.scrollTop - log.clientHeight < 160) log.scrollTop = log.scrollHeight; };
@@ -677,7 +681,7 @@
   // ---------- messages ----------
   function fileChip(file, removable) {
     const thumb = file.kind === 'image' && file.preview ? `<img src="${file.preview}" alt="">` : `<span class="icon">${svg(file.kind === 'image' ? 'attach' : 'pdf')}</span>`;
-    const detail = file.gone ? t.notKept : file.error ? escape(file.error) : file.busy ? t.processing : file.kind === 'document' ? `${t.pages(file.pages || 1)} · ${t.tokens(compact(file.tokens || 0))}` : t.tokens(compact(file.tokens || 280));
+    const detail = file.gone ? t.notKept : file.error ? escape(file.error) : file.busy ? t.processing : file.kind === 'document' ? t.pages(file.pages || 1) + (preview ? ` · ${t.tokens(compact(file.tokens || 0))}` : '') : preview ? t.tokens(compact(file.tokens || 280)) : t.image;
     return `<div class="file ${file.gone ? 'gone' : ''} ${file.busy ? 'busy' : ''}">${thumb}<span><b>${escape(file.name)}</b><small>${detail}</small></span>${removable ? `<button type="button" class="x" data-remove="${file.id}" aria-label="${t.removeAttachment}">${svg('close')}</button>` : ''}</div>`;
   }
 
@@ -692,6 +696,7 @@
       case 'waiting': return [m.content, 'good note', null];
       case 'email-sent': return [t.emailSent(m.content), 'good note', null];
       case 'preview': return [t.previewSent, 'note', null];
+      case 'compacted': return [t.compacted, 'note summary', null];
       default: return [m.content || '', '', null];
     }
   }
@@ -701,7 +706,7 @@
     if (message.role === 'system') {
       const [text, tone, agent] = eventText(message);
       node.className = `event ${tone}`;
-      node.innerHTML = `${agent ? face(agent) : svg(tone.includes('good') ? 'check' : message.event === 'close' ? 'door' : message.event === 'request' ? 'person' : 'team')}<span>${escape(text)}</span>${message.at && !tone.includes('note') ? `<time>${clock(message.at)}</time>` : ''}`;
+      node.innerHTML = `${agent ? face(agent) : svg(tone.includes('good') ? 'check' : message.event === 'close' ? 'door' : message.event === 'request' ? 'person' : message.event === 'compacted' ? 'sparkle' : 'team')}<span>${escape(text)}</span>${message.at && !tone.includes('note') ? `<time>${clock(message.at)}</time>` : ''}`;
       return node;
     }
     if (message.role === 'user') {
@@ -951,6 +956,7 @@
       if (data.settings) {
         state.contextLimit = data.settings.contextLimit || state.contextLimit;
         state.baseTokens = data.settings.baseTokens || state.baseTokens;
+        state.reserveTokens = data.settings.reserveTokens || state.reserveTokens;
         Object.assign(limits, data.settings.limits || {});
         if (!preview && 'consent' in data.settings && JSON.stringify(data.settings.consent || null) !== JSON.stringify(consentConfig)) {
           consentConfig = data.settings.consent || null;
@@ -1029,10 +1035,93 @@
   }
 
   // ---------- AI conversation ----------
-  function payload(c) {
+  // ---------- memory ----------
+  // The conversation, the next question and the longest possible answer (or a summary) must fit into the
+  // assistant's memory. When they would not, the earlier messages are summarized first and only the summary
+  // and the latest exchange are sent from then on. The visitor still sees every message.
+  const estimate = text => Math.ceil(String(text || '').length / 3.5);
+  const messageTokens = m => estimate(m.content) + (m.files || []).filter(f => !f.gone).reduce((n, f) => n + (f.tokens || (f.kind === 'image' ? limits.imageTokens || 280 : estimate(f.text))), 0);
+  const live = c => c.messages.filter(m => (m.role === 'user' || m.role === 'assistant') && !m.summarized);
+  function memory(c, extra = 0) {
+    const limit = c.context?.limit || state.contextLimit || 0;
+    const reserve = Math.min(state.reserveTokens || 2048, limit / 2);
+    return { limit, used: Math.max(c.context?.used || 0, state.baseTokens) + extra, room: Math.max(1, limit - reserve) };
+  }
+  // Server-side limit on messages per request (ChatRelay.MaxMessages is 120).
+  const MAX_LIVE = 100;
+  function needsSummary(c, force) {
+    const earlier = live(c).length - 1; // without the new question
+    if (earlier < 2) return false;      // nothing to summarize yet
+    if (force || earlier >= MAX_LIVE) return true;
+    const { limit, used, room } = memory(c, messageTokens(c.messages.at(-1)));
+    return limit > 0 && used > room;
+  }
+
+  /** Reads a server-sent event stream: onEvent(name, data) for every event. */
+  async function events(response, onEvent) {
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let index;
+      while ((index = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, index); buffer = buffer.slice(index + 2);
+        const name = /^event: (.*)$/m.exec(block)?.[1];
+        const raw = /^data: (.*)$/m.exec(block)?.[1];
+        if (name && raw) onEvent(name, JSON.parse(raw));
+      }
+    }
+  }
+
+  const post = (body, signal) => request(preview ? 'preview' : 'chat', { method: 'POST', signal, body: JSON.stringify(preview ? { chat: body, settings: window.parent.__ligataAIPreviewSettings?.() } : body) });
+  const streaming = response => response.ok && response.body && (response.headers.get('content-type') || '').includes('event-stream');
+
+  /**
+   * Summarizes the conversation before the new question (the last message). Keeps the latest exchange word for
+   * word when it is short. Returns null when done, otherwise the error ({code, message}).
+   */
+  async function summarize(c, signal) {
+    const row = document.createElement('div');
+    row.className = 'waiting compacting';
+    row.innerHTML = `<span class="dots"><i></i><i></i><i></i></span><span class="wait-text">${t.compacting}</span><span class="progress"><b style="width:3%"></b></span>`;
+    log.append(row); scrollDown(true);
+    const bar = row.querySelector('.progress b');
+    // Reading the conversation is quick when it is still cached; writing the summary takes most of the time.
+    const show = value => { bar.style.width = `${Math.round(Math.min(97, value))}%`; };
+    let text = '', problem = null;
+    try {
+      const response = await post({ ...payload(c, true), compact: true }, signal);
+      if (!streaming(response)) problem = (await response.json().catch(() => ({}))).error || { code: 'compact_failed' };
+      else await events(response, (name, data) => {
+        if (name === 'progress') show(3 + 27 * data.processed / data.total);
+        else if (name === 'delta') { text += data.text; show(30 + 67 * text.length / 2400); }
+        else if (name === 'error') problem = data;
+      });
+    } catch { problem = { code: signal.aborted ? 'cancelled' : 'network' }; }
+    row.remove();
+    text = stripMark(text).trim();
+    if (problem || !text) return problem || { code: 'compact_failed' };
+    const question = c.messages.at(-1);
+    const earlier = live(c).filter(m => m !== question);
+    const tail = earlier.slice(-2);
+    const keep = tail.length === 2 && tail[0].role === 'user' && tail.reduce((n, m) => n + messageTokens(m), 0) <= memory(c).limit * 0.1 ? tail : [];
+    for (const m of earlier) if (!keep.includes(m)) m.summarized = true;
+    c.summary = text.slice(0, 30000);
+    c.messages.splice(c.messages.indexOf(keep[0] || question), 0, { role: 'system', event: 'compacted', at: Date.now() });
+    c.context.used = state.baseTokens + estimate(c.summary) + keep.reduce((n, m) => n + messageTokens(m), 0);
+    if (c.id === state.activeId) renderLog();
+    persist(true);
+    return null;
+  }
+
+  function payload(c, withoutLast = false) {
+    const messages = live(c);
+    if (withoutLast) messages.pop();
     return {
-      pageTitle: document.title.slice(0, 150), pagePath: location.pathname.slice(0, 300), consent: consent?.id,
-      messages: c.messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({
+      pageTitle: document.title.slice(0, 150), pagePath: location.pathname.slice(0, 300), consent: consent?.id, summary: c.summary || undefined,
+      messages: messages.map(m => ({
         role: m.role, content: m.role === 'assistant' ? stripMark(m.content) : m.content,
         attachments: (m.files || []).filter(f => !f.gone).map(f => f.kind === 'image' ? { type: 'image', name: f.name, data: f.data } : { type: 'document', name: f.name, text: f.text }),
       })),
@@ -1041,7 +1130,7 @@
 
   const titleOf = text => { const line = String(text || '').replace(/\s+/g, ' ').trim(); return line.length > 60 ? line.slice(0, 57).trimEnd() + '…' : line; };
 
-  async function send(text, isRetry) {
+  async function send(text, isRetry, summarizeFirst) {
     if (isTeamChat(current())) return sendTeam(text);
     if (state.busy || !F.ai) return;
     try { if (!await ensureConsent()) { updateComposer(); return; } }
@@ -1062,6 +1151,18 @@
     }
     log.querySelectorAll('.notice.transient').forEach(n => n.remove());
     state.busy = true; updateComposer(); scrollDown(true);
+    const controller = state.controller = new AbortController();
+    if (needsSummary(c, summarizeFirst)) {
+      const problem = await summarize(c, controller.signal);
+      if (problem) {
+        state.busy = false; state.controller = null; updateComposer(); persist(true);
+        if (problem.code === 'cancelled' || controller.signal.aborted) return;
+        if (problem.code === 'consent_required') { await consentLost(); return; }
+        showError(problem.code === 'context_full' ? 'compact_failed' : problem.code || 'compact_failed', problem.message, () => send('', true));
+        return;
+      }
+      updateMeter();
+    }
     const waiting = document.createElement('div');
     waiting.className = 'waiting';
     waiting.innerHTML = `<span class="dots"><i></i><i></i><i></i></span><span class="wait-text"></span>`;
@@ -1069,7 +1170,6 @@
     const waitText = waiting.querySelector('.wait-text');
     let answer = null, bubble = null, answerText = '', frame = 0;
     const paint = () => { frame = 0; if (bubble) { bubble.innerHTML = markdown(stripMark(answerText, true)) || '<p></p>'; scrollDown(); } };
-    const controller = state.controller = new AbortController();
     let ended = false;
     const finish = () => {
       if (ended) return; ended = true; state.busy = false; state.controller = null; waiting.remove(); bubble?.classList.remove('streaming');
@@ -1081,8 +1181,8 @@
       touch(c); updateComposer(); persist(true); renderHeader();
     };
     try {
-      const response = await request(preview ? 'preview' : 'chat', { method: 'POST', signal: controller.signal, body: JSON.stringify(preview ? { chat: payload(c), settings: window.parent.__ligataAIPreviewSettings?.() } : payload(c)) });
-      if (!response.ok || !response.body || !(response.headers.get('content-type') || '').includes('event-stream')) {
+      const response = await post(payload(c), controller.signal);
+      if (!streaming(response)) {
         const result = await response.json().catch(() => ({}));
         finish();
         if (result.error?.code === 'consent_required') {
@@ -1092,57 +1192,47 @@
           await consentLost();
           return;
         }
-        if (result.error?.code === 'context_full') { c.context.used = result.error.promptTokens || c.context.limit; updateMeter(); }
+        if (result.error?.code === 'context_full') {
+          c.context.used = result.error.promptTokens || c.context.limit; updateMeter();
+          // The estimate was too low: summarize the earlier messages and ask again, once.
+          if (!summarizeFirst && needsSummary(c, true)) return send('', true, true);
+        }
         if (['gateway_unavailable', 'model_unavailable', 'not_configured', 'invalid_key', 'disabled'].includes(result.error?.code)) setStatus(result.error.code === 'disabled' ? 'disabled' : 'offline');
         showError(result.error?.code || 'network', result.error?.message, ['context_full', 'disabled', 'daily_quota', 'origin_denied', 'message_too_long'].includes(result.error?.code) ? null : () => send('', true));
         return;
       }
-      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buffer = '';
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += value;
-        let index;
-        while ((index = buffer.indexOf('\n\n')) >= 0) {
-          const block = buffer.slice(0, index); buffer = buffer.slice(index + 2);
-          const eventName = /^event: (.*)$/m.exec(block)?.[1];
-          const raw = /^data: (.*)$/m.exec(block)?.[1];
-          if (!eventName || !raw) continue;
-          const data = JSON.parse(raw);
-          if (eventName === 'queued') {
-            if (look.showQueuePosition) waitText.innerHTML = `<span class="queue-pos">${t.queue(data.position)}</span> · ${t.wait(data.estimatedWaitSeconds || 10)}`;
-          } else if (eventName === 'started') {
-            waitText.textContent = '';
-            if (data.contextTokens) c.context.limit = data.contextTokens;
-            c.context.used = data.promptTokens || c.context.used; updateMeter();
-          } else if (eventName === 'progress') {
-            const percent = Math.min(99, Math.round(data.processed / data.total * 100));
-            const reading = c.messages.at(-1)?.files?.some(f => f.kind === 'document' && !f.gone) ? t.readingDocument : t.reading;
-            waitText.innerHTML = `${reading(percent)} <span class="progress"><b style="width:${percent}%"></b></span>`;
-          } else if (eventName === 'thinking') {
-            waitText.textContent = t.thinking;
-          } else if (eventName === 'delta') {
-            if (!answer) {
-              waiting.remove();
-              answer = { role: 'assistant', content: '', at: Date.now() };
-              c.messages.push(answer);
-              const node = messageNode(answer);
-              bubble = node.querySelector('.bubble'); bubble.classList.add('streaming');
-              if (c.id === state.activeId) log.append(node);
-            }
-            answerText += data.text; answer.content = answerText;
-            if (!frame) frame = requestAnimationFrame(paint);
-          } else if (eventName === 'done') {
-            c.context = { used: data.context.used, limit: data.context.limit };
-            if (!state.open) { state.answerUnread = true; updateBadge(); }
-          } else if (eventName === 'error') {
-            finish();
-            if (answer && !answerText) c.messages.pop();
-            showError(data.code, data.message, ['context_full', 'refused'].includes(data.code) ? null : () => send('', true));
+      await events(response, (eventName, data) => {
+        if (eventName === 'queued') {
+          if (look.showQueuePosition) waitText.innerHTML = `<span class="queue-pos">${t.queue(data.position)}</span> · ${t.wait(data.estimatedWaitSeconds || 10)}`;
+        } else if (eventName === 'started') {
+          waitText.textContent = '';
+          if (data.contextTokens) c.context.limit = data.contextTokens;
+          c.context.used = data.promptTokens || c.context.used; updateMeter();
+        } else if (eventName === 'progress') {
+          // A long conversation or document takes a moment to read: say so, like "Thinking…".
+          waitText.textContent = c.messages.at(-1)?.files?.some(f => f.kind === 'document' && !f.gone) ? t.readingDocument : t.reading;
+        } else if (eventName === 'thinking') {
+          waitText.textContent = t.thinking;
+        } else if (eventName === 'delta') {
+          if (!answer) {
+            waiting.remove();
+            answer = { role: 'assistant', content: '', at: Date.now() };
+            c.messages.push(answer);
+            const node = messageNode(answer);
+            bubble = node.querySelector('.bubble'); bubble.classList.add('streaming');
+            if (c.id === state.activeId) log.append(node);
           }
+          answerText += data.text; answer.content = answerText;
+          if (!frame) frame = requestAnimationFrame(paint);
+        } else if (eventName === 'done') {
+          c.context = { used: data.context.used, limit: data.context.limit };
+          if (!state.open) { state.answerUnread = true; updateBadge(); }
+        } else if (eventName === 'error') {
+          finish();
+          if (answer && !answerText) c.messages.pop();
+          showError(data.code, data.message, ['context_full', 'refused'].includes(data.code) ? null : () => send('', true));
         }
-      }
+      });
       if (frame) { cancelAnimationFrame(frame); paint(); }
       if (!answer && !ended) { finish(); showError('model_failed', null, () => send('', true)); return; }
       finish();

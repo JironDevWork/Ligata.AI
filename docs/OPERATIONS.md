@@ -74,7 +74,7 @@ Sites on this machine use `http://127.0.0.1:1210`. For others, add a public host
 | llama-server crashes / eGPU disconnects | Running answer ends with "something went wrong" + retry. New questions get "offline/starting" immediately (never queued). The launcher restarts the model with back-off (10 s → 5 min). |
 | Gateway down / machine off | Websites show the offline message with the configured email/contact link; the bubble keeps working on static pages. The backoffice shows "AI gateway offline". |
 | VRAM overflow into RAM | Should be impossible with the fixed profile; if GPU-shared RAM grows > 300 MB above its post-load level, `cli.mjs status` and every site's dashboard show a GPU memory warning and widgets show "running slowly". Restart `ligata-ai-llm`. |
-| A visitor sends a 200-page PDF | Text is extracted (max 80 pages, 10 MB); the answer starts after ~1 s per 1,000 tokens with a reading progress bar. If it exceeds the site's conversation limit the visitor is told to start a new chat. |
+| A visitor sends a 200-page PDF | Text is extracted (max 80 pages, 10 MB); the answer starts after ~1 s per 1,000 tokens; meanwhile the chat says *Reading…*. When the conversation would no longer fit, the widget first summarizes the earlier messages and carries on; only a single message that is too big on its own is refused. |
 
 ### Updating llama.cpp or the model
 

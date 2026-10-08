@@ -73,7 +73,7 @@ await check('two websites at once: the second visitor sees their place in line, 
   await a.page.context().close(); await b.page.context().close();
 });
 
-await check('a huge PDF shows reading progress and is answered', async () => {
+await check('a huge PDF shows "Reading your document…" and is answered', async () => {
   const lines = Array.from({ length: 1400 }, (_, i) => `Clause ${i}: The supplier delivers part ${i} within ${1 + i % 30} days for CHF ${100 + (i * 13) % 900}.`);
   lines.splice(900, 0, 'Clause SPECIAL: The contract may be cancelled with 47 days notice.');
   lines.unshift(`Contract reference ${Date.now()}`); // unique, so the prompt is never already cached
@@ -85,7 +85,8 @@ await check('a huge PDF shows reading progress and is answered', async () => {
   console.log('  attachment: ' + (await a.widget.locator('.pending .file').innerText()).replace(/\s+/g, ' '));
   const before = await answers(a).count();
   await ask(a, 'How many days notice are needed to cancel the contract?');
-  await a.widget.locator('.wait-text .progress').waitFor({ timeout: 60000 }).catch(async e => { throw new Error('no progress; widget shows: ' + (await a.widget.locator('.log').innerText()).replace(/s+/g, ' ').slice(-300)); });
+  await a.widget.locator('.wait-text', { hasText: 'Reading your document' }).waitFor({ timeout: 60000 }).catch(async e => { throw new Error('not reading; widget shows: ' + (await a.widget.locator('.log').innerText()).replace(/\s+/g, ' ').slice(-300)); });
+  assert(await a.widget.locator('.waiting .progress').count() === 0, 'no progress bar while reading');
   console.log('  progress: ' + (await a.widget.locator('.wait-text').innerText()).replace(/\s+/g, ' '));
   await a.page.screenshot({ path: path.join(out, '11-reading.png') });
   await answers(a).nth(before).waitFor({ timeout: 300000 });

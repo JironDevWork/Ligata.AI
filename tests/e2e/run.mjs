@@ -194,7 +194,7 @@ await check('a visitor asks a suggested question and gets a streamed answer', as
   if (!real) assert(html.includes('<strong>mock</strong>') && html.includes('<li>') && html.includes('href="/kontakt/"'), 'markdown rendered safely');
   else console.log('  answer: ' + (await widget().locator('.msg.bot .bubble').nth(1).innerText()).replace(/\s+/g, ' ').slice(0, 200));
   const meter = await widget().locator('.meter-text').innerText();
-  assert(/\d/.test(meter) && /free|frei/.test(meter), 'memory meter shows the free context: ' + meter);
+  assert(/^\d+\s?%$/.test(meter.trim()), 'memory bar shows how full it is, in percent: ' + meter);
   await shot(site, '07-site-answer');
 });
 

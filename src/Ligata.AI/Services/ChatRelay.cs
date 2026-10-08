@@ -11,8 +11,11 @@ namespace Ligata.AI.Services;
 
 public sealed record ChatAttachment(string Type, string? Name, string? Data, string? Text);
 public sealed record ChatMessage(string Role, string Content, List<ChatAttachment>? Attachments);
-/// <summary>Consent is the id of the visitor's recorded consent (LigataAI:Privacy:RequireConsent).</summary>
-public sealed record ChatRequest(List<ChatMessage> Messages, string? PageTitle, string? PagePath, string? Consent = null);
+/// <summary>
+/// Consent is the id of the visitor's recorded consent (LigataAI:Privacy:RequireConsent). Summary replaces the earlier messages of a long
+/// conversation; Compact asks for that summary instead of an answer (the widget sends it before the conversation would no longer fit).
+/// </summary>
+public sealed record ChatRequest(List<ChatMessage> Messages, string? PageTitle, string? PagePath, string? Consent = null, string? Summary = null, bool Compact = false);
 
 public sealed class ChatValidationException(string code, string message, int status = 400) : Exception(message)
 {
@@ -27,15 +30,33 @@ public sealed class ChatValidationException(string code, string message, int sta
 /// </summary>
 public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ClaudeEngine claude, IOptions<AssistantOptions> options, ILogger<ChatRelay> logger)
 {
-    public const int MaxMessages = 120, MaxUserCharacters = 8000, MaxAssistantCharacters = 24000, MaxDocumentCharacters = 600_000, MaxImageBase64 = 7_400_000;
+    public const int MaxMessages = 120, MaxUserCharacters = 8000, MaxAssistantCharacters = 24000, MaxDocumentCharacters = 600_000, MaxImageBase64 = 7_400_000, MaxSummaryCharacters = 30_000;
+
+    /// <summary>The most a summary may take; the instruction asks for far less.</summary>
+    public const int SummaryTokens = 2048;
+
+    /// <summary>Asked after the conversation when the widget compacts it. A visitor message would be answered, not summarized.</summary>
+    public const string SummaryInstruction = "(Message from the website, not from the visitor.) This conversation is getting too long for your memory. Write a summary of the whole conversation so far, including any earlier summary, so you can continue it with only the summary and the latest messages. Keep what the visitor wants and asked; names, numbers, dates and other details they gave; the facts, prices and links you gave; what was decided; open questions; and important content of attached documents or screenshots. Write short notes for yourself, at most 400 words: begin with \"Visitor’s language:\" and the language the visitor writes in, then write the notes in that language. Do not greet or address the visitor and add nothing else.";
+
+    /// <summary>The summary goes first, as a visitor-side message: like everything the browser sends, it is information, never instructions.</summary>
+    public static string SummaryMessage(string summary) =>
+        "Summary of the earlier part of this conversation (the older messages were removed to save memory):\n<conversation_summary>\n" + summary.Replace("</conversation_summary>", "").Trim() + "\n</conversation_summary>";
+
+    /// <summary>
+    /// Tokens a conversation keeps free: the longest answer or a summary, plus thinking where it shares the context (GPU mode), the
+    /// instruction and a margin. The widget summarizes the earlier messages before the next question would cross this line.
+    /// </summary>
+    public static int ReserveTokens(AssistantBehaviour behaviour, bool api) => Math.Max(behaviour.MaxAnswerTokens, SummaryTokens) + (api || !behaviour.Thinking ? 0 : ThinkingRoom) + 512;
 
     public static List<object> Messages(ChatRequest request, AssistantSettings settings, string system)
     {
         var messages = request.Messages;
         if (messages is not { Count: > 0 } || messages.Count > MaxMessages) throw new ChatValidationException("invalid_messages", "This conversation is too long. Start a new chat.", 413);
-        if (messages[^1].Role != "user") throw new ChatValidationException("invalid_messages", "The last message must be a question.");
+        if (!request.Compact && messages[^1].Role != "user") throw new ChatValidationException("invalid_messages", "The last message must be a question.");
+        if (request.Summary is { Length: > MaxSummaryCharacters }) throw new ChatValidationException("message_too_long", "The summary of this conversation is too long. Start a new chat.", 413);
         var images = 0;
         var result = new List<object> { new { role = "system", content = system } };
+        if (!string.IsNullOrWhiteSpace(request.Summary)) result.Add(new { role = "user", content = SummaryMessage(request.Summary) });
         foreach (var message in messages)
         {
             if (message.Role is not ("user" or "assistant")) throw new ChatValidationException("invalid_messages", "Invalid conversation.");
@@ -66,6 +87,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             if (content != "") parts.Add(new { type = "text", text = content });
             result.Add(new { role = message.Role, content = parts });
         }
+        if (request.Compact) result.Add(new { role = "user", content = SummaryInstruction });
         return result;
     }
 
@@ -79,6 +101,9 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     public async Task RunAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string visitor, bool countStats = true)
     {
         var token = http.RequestAborted;
+        // A summary is housekeeping, not a visitor question: it is not counted.
+        var compact = request.Compact;
+        var counting = countStats && !compact;
         var features = settings.Effective(options.Value.Features);
         if (!features.Assistant) { await Json(http, 503, "disabled", "The AI assistant is switched off."); return; }
         List<object> messages;
@@ -96,23 +121,25 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         var api = options.Value.UsesApi;
         if (api && claude.QuotaReached())
         {
-            if (countStats) store.Count(s => s.Busy++);
+            if (counting) store.Count(s => s.Busy++);
             await Json(http, 429, "daily_quota", "This website has reached its daily question limit. Please try again tomorrow.");
             return;
         }
         var last = request.Messages[^1];
-        if (countStats) store.Count(s => { s.Questions++; if (request.Messages.Count(m => m.Role == "user") == 1) s.Conversations++; s.Attachments += last.Attachments?.Count ?? 0; });
-        if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, countStats); return; }
+        if (counting) store.Count(s => { s.Questions++; if (request.Messages.Count(m => m.Role == "user") == 1) s.Conversations++; s.Attachments += last.Attachments?.Count ?? 0; });
+        if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, counting); return; }
+        var b = settings.Behaviour;
         var body = new
         {
-            messages, visitor, maxTokens = MaxTokens(settings.Behaviour), temperature = settings.Behaviour.Temperature,
-            thinking = settings.Behaviour.Thinking, contextLimit = settings.Behaviour.ContextLimit,
+            // A summary keeps the site's thinking setting: the prompt then matches the cached conversation exactly.
+            messages, visitor, maxTokens = compact ? SummaryTokens + (b.Thinking ? ThinkingRoom : 0) : MaxTokens(b), temperature = compact ? Math.Min(b.Temperature, 0.3) : b.Temperature,
+            thinking = b.Thinking, contextLimit = b.ContextLimit,
         };
         HttpResponseMessage response;
         try { response = await gateway.ChatAsync(body, token); }
         catch (GatewayException e)
         {
-            if (countStats) store.Count(s => { if (e.Code is "queue_full" or "site_busy" or "visitor_busy" or "queue_timeout" or "daily_quota") s.Busy++; else if (e.Code is "gateway_unavailable" or "model_unavailable" or "model_loading" or "not_configured" or "invalid_key") s.Offline++; else s.Failed++; });
+            if (counting) store.Count(s => { if (e.Code is "queue_full" or "site_busy" or "visitor_busy" or "queue_timeout" or "daily_quota") s.Busy++; else if (e.Code is "gateway_unavailable" or "model_unavailable" or "model_loading" or "not_configured" or "invalid_key") s.Offline++; else s.Failed++; });
             if (e.RetryAfter is { } retry) http.Response.Headers.RetryAfter = retry.ToString();
             await Json(http, e.Status is >= 400 and < 600 ? e.Status : 503, e.Code, countStats ? Visible(e) : e.Message, e.Details);
             return;
@@ -135,20 +162,20 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                 while (await reader.ReadLineAsync(token) is { } line)
                 {
                     if (line.StartsWith("event: ")) currentEvent = line[7..];
-                    else if (line.StartsWith("data: ") && currentEvent == "delta" && countStats && answer.Length < 200_000) answer.Append(Delta(line[6..]));
+                    else if (line.StartsWith("data: ") && currentEvent == "delta" && counting && answer.Length < 200_000) answer.Append(Delta(line[6..]));
                     else if (line.StartsWith("data: ") && currentEvent is "done" or "error")
                     {
                         finished = true;
-                        if (countStats) Record(currentEvent, line[6..]);
+                        if (counting) Record(currentEvent, line[6..]);
                         // Questions the AI could not answer: a useful signal for missing knowledge (only counted, never stored).
-                        if (countStats && currentEvent == "done" && answer.ToString().Contains(PromptBuilder.TeamMarker)) store.Count(s => s.Suggested++);
+                        if (counting && currentEvent == "done" && answer.ToString().Contains(PromptBuilder.TeamMarker)) store.Count(s => s.Suggested++);
                     }
                     await http.Response.WriteAsync(line + "\n", token);
                     if (line.Length == 0 || line.StartsWith(':')) await http.Response.Body.FlushAsync(token);
                 }
                 if (!finished)
                 {
-                    if (countStats) store.Count(s => s.Failed++);
+                    if (counting) store.Count(s => s.Failed++);
                     await http.Response.WriteAsync("event: error\ndata: {\"code\":\"gateway_unavailable\",\"message\":\"The connection to the assistant was interrupted.\"}\n\n", token);
                 }
                 await http.Response.Body.FlushAsync(token);
@@ -157,7 +184,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             catch (Exception e) when (e is IOException or HttpRequestException)
             {
                 logger.LogWarning("Ligata AI stream from the gateway was interrupted.");
-                if (countStats && !finished) store.Count(s => s.Failed++);
+                if (counting && !finished) store.Count(s => s.Failed++);
                 try { await http.Response.WriteAsync("event: error\ndata: {\"code\":\"gateway_unavailable\",\"message\":\"The connection to the assistant was interrupted.\"}\n\n", token); } catch { }
             }
         }

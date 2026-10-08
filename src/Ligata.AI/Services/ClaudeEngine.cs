@@ -182,6 +182,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     public static List<MessageParam> Messages(ChatRequest request)
     {
         var messages = new List<MessageParam>();
+        if (!string.IsNullOrWhiteSpace(request.Summary)) messages.Add(new() { Role = Role.User, Content = ChatRelay.SummaryMessage(request.Summary) });
         foreach (var message in request.Messages)
         {
             var text = message.Content ?? "";
@@ -202,6 +203,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             if (text.Trim().Length > 0) blocks.Add(new TextBlockParam { Text = text });
             if (blocks.Count > 0) messages.Add(new() { Role = Role.User, Content = blocks });
         }
+        if (request.Compact) messages.Add(new() { Role = Role.User, Content = ChatRelay.SummaryInstruction });
         return messages;
     }
 
@@ -232,7 +234,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         {
             Model = O.Model,
             // Thinking shares max_tokens with the answer, so the answer limit gets room on top.
-            MaxTokens = b.MaxAnswerTokens + room,
+            MaxTokens = (request.Compact ? ChatRelay.SummaryTokens : b.MaxAnswerTokens) + room,
             System = system,
             Messages = messages,
             OutputConfig = new OutputConfig { Effort = effort },
