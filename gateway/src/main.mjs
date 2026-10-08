@@ -16,6 +16,7 @@ export function startGateway(overrides = {}) {
   const config = loadConfig(overrides);
   mkdirSync(config.dataDir, { recursive: true });
   const keys = new KeyStore(config.dataDir, config.keyDefaults);
+  if (keys.problem) log('keys_damaged', { count: keys.keys.size, problem: keys.problem });
   const scheduler = new Scheduler(config.queue);
   const llm = new Llm(config.upstream);
   const slots = new SlotManager({ maxIdleTokens: config.cache.maxIdleTokens, log });
@@ -27,7 +28,7 @@ export function startGateway(overrides = {}) {
   const watcher = watch(config.dataDir, (_, file) => {
     if (file !== 'keys.json') return;
     clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(() => { keys.reload(); log('keys_reloaded', { count: keys.keys.size }); }, 200);
+    reloadTimer = setTimeout(() => { keys.reload(); log(keys.problem ? 'keys_damaged' : 'keys_reloaded', { count: keys.keys.size, ...(keys.problem ? { problem: keys.problem } : {}) }); }, 200);
   });
   const flush = setInterval(() => keys.flush(), 10000);
   flush.unref();

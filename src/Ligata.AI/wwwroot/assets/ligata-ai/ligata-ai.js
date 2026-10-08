@@ -9,7 +9,7 @@
   try { settings = JSON.parse(script.dataset.settings || '{}'); } catch { settings = {}; }
   const api = (script.dataset.api || '/api/ligata-ai').replace(/\/$/, '');
   const look = Object.assign({
-    theme: 'ligata', colorScheme: 'light', position: 'left', accent: '#2f5bff', accentText: '#ffffff', background: '#ffffff', surface: '#f3f4f8', text: '#15171f', mutedText: '#5d6272',
+    theme: 'ligata', colorScheme: 'light', position: 'right', accent: '#2f5bff', accentText: '#ffffff', background: '#ffffff', surface: '#f3f4f8', text: '#15171f', mutedText: '#5d6272',
     userBubble: '#2f5bff', userText: '#ffffff', assistantBubble: '#f3f4f8', assistantText: '#15171f', font: 'inherit', radius: 20, launcherSize: 60, launcherIcon: 'chat', launcherLabel: '',
     panelWidth: 400, panelHeight: 640, offsetX: 24, offsetY: 24, showContextMeter: true, showQueuePosition: true, showBranding: true, animations: true, sound: true, teaser: '', teaserDelaySeconds: 6, zIndex: 2147483000,
   }, settings.appearance || {});

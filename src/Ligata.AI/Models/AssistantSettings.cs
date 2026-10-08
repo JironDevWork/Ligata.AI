@@ -184,7 +184,8 @@ public sealed record AssistantAppearance
     /// <summary>light | dark | auto</summary>
     public string ColorScheme { get; init; } = "light";
     /// <summary>left | right</summary>
-    public string Position { get; init; } = "left";
+    /// <summary>Bottom right by default: consent banners such as Cookiebot keep their button bottom left.</summary>
+    public string Position { get; init; } = "right";
     public string Accent { get; init; } = "#2f5bff";
     public string AccentText { get; init; } = "#ffffff";
     public string Background { get; init; } = "#ffffff";

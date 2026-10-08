@@ -63,7 +63,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
 
 ## What visitors get
 
-A chat bubble (bottom left by default). Styles are isolated in Shadow DOM, and it is keyboard and screen-reader friendly, full screen on phones and available in English, German, French and Italian.
+A chat bubble (bottom right by default, clear of Cookiebot's button bottom left). Styles are isolated in Shadow DOM, and it is keyboard and screen-reader friendly, full screen on phones and available in English, German, French and Italian.
 
 - **Consent first**: before the first question the chat says that the assistant is an AI, which data goes where (Anthropic in the USA, or the operator of the AI server) and links the privacy policy. Nothing reaches the AI until the visitor agrees; withdrawing takes two clicks (*Conversations → Withdraw consent*). The team can be reached without agreeing.
 - **AI answers**:
@@ -84,8 +84,8 @@ A chat bubble (bottom left by default). Styles are isolated in Shadow DOM, and i
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.4.2.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.4.2 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.4.3.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.4.3 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.

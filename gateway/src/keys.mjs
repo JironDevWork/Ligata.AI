@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs';
 import path from 'node:path';
 
 // API keys look like lai_<id>_<secret>. Only SHA-256(secret) is stored, so a leaked keys.json
@@ -15,10 +15,16 @@ function readJson(file, fallback) {
   try { return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : fallback; }
   catch { return fallback; }
 }
-function writeJson(file, value) {
+const parses = file => { try { return Array.isArray(JSON.parse(readFileSync(file, 'utf8')).keys); } catch { return false; } };
+// The data reaches the disk before the rename: after a power cut or a forced logout the file is either the old or
+// the new version, never a file of zeros (which happened to keys.json once and silently disconnected every site).
+// keys.json also keeps its last good version as keys.json.bak.
+function writeJson(file, value, { backup = false } = {}) {
   mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
-  writeFileSync(temporary, JSON.stringify(value, null, 2), { mode: 0o600 });
+  const fd = openSync(temporary, 'w', 0o600);
+  try { writeSync(fd, JSON.stringify(value, null, 2)); fsyncSync(fd); } finally { closeSync(fd); }
+  if (backup && existsSync(file) && parses(file)) copyFileSync(file, `${file}.bak`);
   renameSync(temporary, file);
 }
 
@@ -32,11 +38,20 @@ export class KeyStore {
     this.dirty = false;
   }
 
+  /**
+   * Re-reads keys.json. A damaged file never revokes every site: the last good copy (keys.json.bak) is used,
+   * or the keys already loaded stay. problem says what happened (null when keys.json was read).
+   */
   reload() {
-    this.keys = new Map((readJson(this.file, { keys: [] }).keys || []).map(k => [k.id, k]));
+    this.problem = null;
+    if (!existsSync(this.file)) { this.keys = new Map(); return; }
+    const source = parses(this.file) ? this.file : existsSync(`${this.file}.bak`) && parses(`${this.file}.bak`) ? `${this.file}.bak` : null;
+    if (source !== this.file) this.problem = source ? 'keys.json is damaged; using keys.json.bak' : 'keys.json is damaged and has no usable backup; keeping the keys already loaded';
+    if (!source) { this.keys ||= new Map(); return; }
+    this.keys = new Map((JSON.parse(readFileSync(source, 'utf8')).keys || []).map(k => [k.id, k]));
   }
 
-  saveKeys() { writeJson(this.file, { version: 1, keys: [...this.keys.values()] }); }
+  saveKeys() { writeJson(this.file, { version: 1, keys: [...this.keys.values()] }, { backup: true }); }
 
   create(name, limits = {}) {
     name = String(name || '').trim();

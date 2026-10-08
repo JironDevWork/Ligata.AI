@@ -41,6 +41,7 @@ void Rejects<T>(Action action, string message) where T : Exception { try { actio
 var defaults = new AssistantSettings();
 AssistantValidation.Settings(defaults);
 Assert(true, "Defaults are valid.");
+Assert(defaults.Appearance.Position == "right", "The bubble sits bottom right by default, clear of consent banners bottom left.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Appearance = defaults.Appearance with { Accent = "red" } }), "Colours must be hex.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Appearance = defaults.Appearance with { Accent = "#12345g" } }), "Colours must be valid hex.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Behaviour = defaults.Behaviour with { KnowledgeBudget = 64000, ContextLimit = 65536 } }), "Knowledge budget must leave room for the chat.");

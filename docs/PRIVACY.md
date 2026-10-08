@@ -77,7 +77,8 @@ The chat works with Cookiebot in both consent modes.
    > KI-Chat-Assistent: Ihre Nachrichten im Chat werden zur Beantwortung an [Anthropic (USA) / den KI-Server von Ligata] übermittelt.
 
    Choose the category that fits your banner. `preferences` is the usual choice for a functional third-party service. Keep in mind that a visitor who allows the category also allows every other service in it.
-4. **reCAPTCHA** follows its own setting (`LigataForms:Recaptcha:ConsentMode` = `cookiebot` and `CookiebotCategory`, usually `marketing`).
+4. **Position.** The chat bubble sits bottom right by default, so it never covers Cookiebot's consent button bottom left (*Appearance → Position*).
+5. **reCAPTCHA** follows its own setting (`LigataForms:Recaptcha:ConsentMode` = `cookiebot` and `CookiebotCategory`, usually `marketing`).
 
 ## Contracts and records
 

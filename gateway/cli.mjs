@@ -24,6 +24,7 @@ const limits = Object.fromEntries(Object.entries({ requestsPerDay: flags['reques
   }));
 
 const keys = new KeyStore(config.dataDir, config.keyDefaults);
+if (keys.problem) console.error(`Warning: ${keys.problem}.`);
 const row = k => `${k.id}  ${k.revokedAt ? 'REVOKED ' : 'active  '}  ${k.name.padEnd(28)}  ${String(k.usage?.requests ?? 0).padStart(5)}/${k.limits.requestsPerDay} today  ctx≤${k.limits.maxContextTokens}  queue≤${k.limits.maxQueued}  last ${k.usage?.lastUsedAt ?? 'never'}`;
 
 try {

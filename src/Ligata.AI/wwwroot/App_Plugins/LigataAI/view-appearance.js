@@ -1,6 +1,6 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon } from './ui.js?v=0.4.2';
-import { themes, colorFields, contrast, readablePairs } from './themes.js?v=0.4.2';
+import { icon } from './ui.js?v=0.4.3';
+import { themes, colorFields, contrast, readablePairs } from './themes.js?v=0.4.3';
 
 export const appearanceView = {
   /** Warns (without blocking) when a colour pair is hard to read; shown even while the colour list is collapsed. */
