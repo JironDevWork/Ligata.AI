@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Ligata.AI.Data;
 using Ligata.AI.Models;
@@ -12,12 +13,14 @@ namespace Ligata.AI.Controllers;
 public sealed record AttachmentRequest(string? Name, string? Data, string? Consent = null);
 public sealed record ConsentRequest(string? Version, string? Source, string? Language);
 public sealed record ConsentWithdrawal(string? Id);
+/// <summary>Keys of conversations the visitor deleted in the chat (the browser's random keys, at most 20).</summary>
+public sealed record HistoryDeletion(List<string>? Keys);
 
 /// <summary>Anonymous API for the chat bubble. Allowlisted origins only; no cookies or visitor storage.</summary>
 [ApiController, AllowAnonymous, Route("api/ligata-ai")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PublicAssistantController(AssistantStore store, AssistantEngine engine, RequestGuard guard, ChatRelay relay, IMemoryCache cache, SupportHub hub,
-    ConsentStore consents, IOptions<AssistantOptions> options, IOptions<RecaptchaSettings> captcha) : ControllerBase
+    ConsentStore consents, ChatHistory history, ChatHistoryStore chats, IOptions<AssistantOptions> options, IOptions<RecaptchaSettings> captcha) : ControllerBase
 {
     private IActionResult? Check(string kind, bool requireOrigin)
     {
@@ -101,7 +104,11 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var visitor = guard.Visitor(HttpContext, row.VisitorSecret);
         using var turn = guard.Begin(visitor);
         if (turn == null) { Response.Headers.RetryAfter = "10"; await ChatRelay.Json(HttpContext, 429, "visitor_busy", "Please wait for the current answer before asking the next question."); return; }
-        await relay.RunAsync(HttpContext, request, settings, visitor);
+        // While the site keeps a history, the question and how it was answered are kept once the answer has ended.
+        var outcome = ChatHistory.Enabled(settings, settings.Effective(options.Value.Features)) && request.History != null ? new ChatOutcome() : null;
+        var clock = Stopwatch.StartNew();
+        await relay.RunAsync(HttpContext, request, settings, visitor, outcome: outcome);
+        if (outcome != null) history.Record(request, outcome, engine.Mode, clock.ElapsedMilliseconds);
     }
 
     /// <summary>Converts a visitor's PDF to text. The file is processed in memory and not stored.</summary>
@@ -153,12 +160,25 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         return Ok(new { id = row.Id, version = row.Version, expires = row.ExpiresUtc });
     }
 
-    /// <summary>Withdraws a consent. The widget forgets it at once; the record keeps the time of withdrawal as proof.</summary>
+    /// <summary>
+    /// Withdraws a consent. The widget forgets it at once; the record keeps the time of withdrawal as proof. Conversations kept
+    /// in the history with this consent are deleted.
+    /// </summary>
     [HttpPost("consent/withdraw"), RequestSizeLimit(1_000), Consumes("application/json")]
     public IActionResult WithdrawConsent([FromBody] ConsentWithdrawal request)
     {
         var denied = Check("consent", true); if (denied != null) return denied;
-        if (Guid.TryParse(request.Id, out var id)) consents.Withdraw(id, DateTime.UtcNow);
+        if (Guid.TryParse(request.Id, out var id)) { consents.Withdraw(id, DateTime.UtcNow); chats.DeleteByConsent(id); }
+        return NoContent();
+    }
+
+    /// <summary>The visitor deleted conversations in the chat: their copies in the history go too (also after the history was switched off).</summary>
+    [HttpPost("history/delete"), RequestSizeLimit(8_000), Consumes("application/json")]
+    public IActionResult DeleteHistory([FromBody] HistoryDeletion request)
+    {
+        var denied = Check("consent", true); if (denied != null) return denied;
+        var hashes = (request.Keys ?? []).Take(20).Select(ChatHistory.Hash).OfType<string>().Distinct().ToList();
+        chats.DeleteByKeys(hashes);
         return NoContent();
     }
 }

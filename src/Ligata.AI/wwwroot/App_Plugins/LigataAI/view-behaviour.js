@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact } from './ui.js?v=0.6.2';
+import { number, compact } from './ui.js?v=0.7.0';
 
 export const behaviourView = {
   behaviourView() {

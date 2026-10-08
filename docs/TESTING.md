@@ -8,12 +8,12 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 57 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 168 assertions
+# Package domain and security checks (no database): 181 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
-# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records: 237 assertions in total
+# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history: 263 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 24 checks, needs the host above and a gateway
@@ -21,6 +21,9 @@ node gateway/test/mock-server.mjs 1298                                    # or a
 $env:LIGATA_AI_DATA='C:/Code/Ligata.AI/.runtime/gateway-dev'; $env:LIGATA_AI_UPSTREAM='http://127.0.0.1:1298'; $env:LIGATA_AI_PORT=1220; $env:LIGATA_AI_ADMIN_PORT=1222; $env:LIGATA_AI_MEMORY_PROBE=0; node gateway/src/main.mjs
 node gateway/cli.mjs keys create "Test host" > .runtime/gateway-dev/created.txt    # with the same LIGATA_AI_DATA
 cd tests/e2e; npm ci; node run.mjs
+
+# The conversation history (0.7): switched on in the backoffice, announced to visitors, kept with lookups, kept and deleted: 7 checks (same host, mock gateway or API mode)
+node history.mjs
 
 # The chat's memory (no host, no model): Reading…, the memory bar, summaries of long conversations, contact buttons without a team: 7 checks
 node memory.mjs
@@ -49,6 +52,7 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself |
 
 Results (8 October 2026, version 0.4.0):
+- 0.7.0: an optional history of AI conversations for the team (off by default; *Privacy → Conversation history*, 1 to 365 days, default 30). Package checks 181 domain and 263 total: the consent version stays the same without a history and changes when it is switched on or its period changes, validation, the privacy policy sections in both languages (with and without consent), only key hashes stored, asking again after an error replaces the attempt, stopped answers, invalid requests not kept, summaries counted, lookups and file names (never contents), deletion by key, by consent and after the period (kept ones stay), delete all, the per-conversation and storage caps, the link to a team request, the backoffice page in the manifest only with the AI. Browser: history 7/7 with the mock gateway and 7/7 in API mode; regression AI 24/24, API 15/15, privacy 7/7, team 16/16, team without AI 5/5, memory 7/7.
 - Privacy suite: 7/7 with the mock gateway, 7/7 in API mode, 6/6 in Cookiebot mode, and 7/7 on the installed-package host (`.nupkg`, existing 0.3 database upgraded to the consent table).
 - Regression with consent: AI suite 23/23, team suite 16/16 (also on the installed-package host), API suite 13/13, no-AI suite 5/5 (no consent asked without the AI).
 - Package checks: 114 domain and 164 total with the database.

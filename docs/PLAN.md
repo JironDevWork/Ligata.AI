@@ -37,4 +37,4 @@ visitor browser ──► client Umbraco site (Ligata.AI package) ──► Liga
 
 ## Out of scope for the first release
 
-Fine-tuning/LoRA training, vector retrieval (keyword search with prefix matching suffices for website content and needs no embedding model), audio input, persistent chat transcripts (only anonymous daily counters are stored), and multi-GPU scheduling.
+Fine-tuning/LoRA training, vector retrieval (keyword search with prefix matching suffices for website content and needs no embedding model), audio input, chat transcripts by default (only anonymous daily counters are stored unless a site switches on the consented conversation history of 0.7), and multi-GPU scheduling.

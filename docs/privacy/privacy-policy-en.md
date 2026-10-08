@@ -5,7 +5,7 @@
 >
 > - These sections add the chat to your existing privacy policy. They are a template and **not legal advice**. Have the text reviewed by your data protection adviser before you publish it.
 > - **The backoffice does the work for you:** under *AI Assistant → Privacy* the package fills in this text for your setup (own AI server or Claude API, live chat, email form, reCAPTCHA, periods). Sections that do not apply are left out there, and the values in double curly braces are filled in.
-> - This file shows every variant. HTML comments in the source (for example "if api" to "endif") mark what a section is for: `gpu` = own AI server, `api` = Claude API, `chat` = live chat with the team, `email` = email form, `captcha` = Google reCAPTCHA, `consent` = consent before the first question (default), `cookiebot` = consent through Cookiebot.
+> - This file shows every variant. HTML comments in the source (for example "if api" to "endif") mark what a section is for: `gpu` = own AI server, `api` = Claude API, `chat` = live chat with the team, `email` = email form, `captcha` = Google reCAPTCHA, `consent` = consent before the first question (default), `cookiebot` = consent through Cookiebot, `history` = the site keeps a history of conversations with the AI for its team (off by default).
 > - Fill in the details in [square brackets] yourself.
 > - The details about Anthropic are based on its public terms (as of October 2026: API data deleted within 30 days, a Data Processing Addendum with the EU Standard Contractual Clauses, no training on API data). Check the current terms at anthropic.com/legal and privacy.claude.com, and note which Anthropic entity your contract is with.
 
@@ -69,7 +69,22 @@ The data is processed in the USA. The transfer is based on the EU Standard Contr
 
 **Storage period**
 
+<!-- if nohistory -->
 We do not store conversations with the AI assistant on our server. For statistics we only keep anonymous daily counts, for example the number of questions and the answer time, without any link to people or content. Your browser keeps the conversation (see "Storage in your browser").
+<!-- endif -->
+<!-- if history -->
+So that our team can check and improve the assistant's answers and the information on our website, and can follow up if you contact us later, we keep your conversations with the assistant on our website server for {{historyDays}} days after the last message. We keep your questions and the assistant's answers, the names of attached files (not the files or their content), the page on which you asked, the language of the chat, the times, whether an answer failed, and which pages of our website the assistant looked up. We do not keep your IP address or a pseudonymous identifier with it. Only authorised members of our team can read the conversations, in our administration area. In individual cases, for example to handle a complaint, our team may keep a conversation longer and deletes it as soon as it is no longer needed.
+
+<!-- if consent -->
+The legal basis is your consent (Art. 6(1)(a) GDPR): the consent request in the chat tells you about this history. If you withdraw your consent, we delete the conversations you had with it.
+<!-- endif -->
+<!-- if noconsent -->
+The legal basis is [please add, for example our legitimate interest in checking and improving our service, Art. 6(1)(f) GDPR]. You can object to it at any time.
+<!-- endif -->
+You can delete a conversation at any time yourself: in the chat under "Conversations", choose "Delete conversation". It is then deleted from your device and from our server.
+
+For statistics we also keep anonymous daily counts, for example the number of questions and the answer time, without any link to people or content.
+<!-- endif -->
 <!-- if consent -->
 
 **Proof of your consent**
@@ -108,13 +123,16 @@ To prevent abuse of requests to our team we use Google reCAPTCHA v3 by Google Ir
 
 The chat sets no cookies. So that your conversations remain when you move between pages, it stores data in your browser's local storage. This data stays on your device; only content you send in the chat is transmitted to us.
 
-- **`ligata-ai:v2:` followed by our domain name:** your conversations (texts; of attachments only the file names), access keys to conversations with our team and whether the chat window is open. Only created once you use the chat; conversations are removed after {{storageDays}} days without activity.
+- **`ligata-ai:v2:` followed by our domain name:** your conversations (texts; of attachments only the file names), access keys to conversations with our team<!-- if history -->, a random key for each conversation with the assistant (it lets you delete our copy)<!-- endif --> and whether the chat window is open. Only created once you use the chat; conversations are removed after {{storageDays}} days without activity.
 <!-- if consent -->
 - **`ligata-ai:consent:` followed by our domain name:** your consent to the AI assistant (random identifier, version, time). Kept for {{consentDays}} days or until you withdraw it.
 <!-- endif -->
+<!-- if history -->
+- **`ligata-ai:forget:` followed by our domain name:** only if you delete a conversation while our server cannot be reached: its key, so the deletion is sent again. Removed as soon as our server has deleted the conversation.
+<!-- endif -->
 
-This storage is strictly necessary for the chat you expressly want to use (section 25(2) no. 2 TDDDG). You can delete the data at any time, in the chat with "Remove from this device" or in your browser settings.
+This storage is strictly necessary for the chat you expressly want to use (section 25(2) no. 2 TDDDG). You can delete the data at any time, in the chat with <!-- if history -->"Delete conversation" or <!-- endif -->"Remove from this device" or in your browser settings.
 
 ### Your rights
 
-You have the right of access (Art. 15 GDPR), rectification (Art. 16 GDPR), erasure (Art. 17 GDPR), restriction of processing (Art. 18 GDPR) and data portability (Art. 20 GDPR). You can object to processing based on our legitimate interest (Art. 21 GDPR), and you can withdraw a consent at any time. You can also lodge a complaint with a data protection supervisory authority (Art. 77 GDPR).<!-- if ai --> We do not store conversations with the AI assistant, so we cannot provide information about them.<!-- endif --><!-- if team --> We find conversations and messages to our team by your email address or name.<!-- endif --> Contact: [contact details of the controller and, where applicable, the data protection officer].
+You have the right of access (Art. 15 GDPR), rectification (Art. 16 GDPR), erasure (Art. 17 GDPR), restriction of processing (Art. 18 GDPR) and data portability (Art. 20 GDPR). You can object to processing based on our legitimate interest (Art. 21 GDPR), and you can withdraw a consent at any time. You can also lodge a complaint with a data protection supervisory authority (Art. 77 GDPR).<!-- if nohistory --> We do not store conversations with the AI assistant, so we cannot provide information about them.<!-- endif --><!-- if history --> We keep conversations with the assistant without your name or IP address, so we can only find yours if you tell us what you wrote and when; you can delete them yourself in the chat.<!-- endif --><!-- if team --> We find conversations and messages to our team by your email address or name.<!-- endif --> Contact: [contact details of the controller and, where applicable, the data protection officer].

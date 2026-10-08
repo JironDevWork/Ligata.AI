@@ -19,7 +19,8 @@ Both are also in the package, and the backoffice fills them in for your setup: *
 | New consent when things change | A new recipient (switching between GPU and API mode, another GPU operator or country) asks everyone again. Editors can do the same with *Ask all visitors again* (Privacy tab), for example after the privacy policy changed. Consents expire after `ConsentDays` (365). |
 | Without consent | Live chat with the team and the email form still work; they do not involve the AI provider. |
 | Nothing before use | The chat sets no cookies and writes nothing to the browser until the visitor actually uses it. Opening the chat stores nothing. |
-| AI conversations | Not stored on the website's server. Anonymous daily counters only (number of questions, answer times, tokens). |
+| AI conversations | Not stored on the website's server by default. Anonymous daily counters only (number of questions, answer times, tokens). |
+| Conversation history (optional, 0.7) | Off by default (privacy by default, Art. 25(2)). When an editor switches it on (*Privacy → Conversation history*), each AI conversation is kept for the team for 1 to 365 days after its last question (default 30): questions, answers, what the AI looked up, names of attached files, page, interface language, times and how each question ended. Never files, the text read from them, IP addresses or the pseudonymous visitor id. The consent request and the notice under the input say so, and the consent version changes, so every visitor is asked again. Visitors delete a conversation in the chat (*Delete conversation*; the browser holds a random key per conversation and the server only its SHA-256 hash), and withdrawing consent deletes every conversation asked with it. The team reads them under *AI conversations* (same user groups as the Inbox) and can keep single conversations beyond the period (for example for a complaint); a visitor's deletion still removes them. Deletion runs hourly; at most 50,000 conversations are stored (the oldest go first). |
 | GPU mode | The gateway processes messages in GPU memory only: no disk storage, no content in logs, no host-RAM prompt cache, no use for training, nothing sent to third parties. The context stays in GPU memory for follow-up questions until overwritten. |
 | API mode | The website's server calls Anthropic directly; browsers never contact Anthropic. Only a pseudonymous visitor id is sent as `metadata.user_id`, never the IP address. |
 | IP addresses | Used for the connection and rate limits only. A pseudonymous id (HMAC with a per-site secret) is kept in memory; for team conversations it is stored with the conversation to enforce per-visitor limits. |
@@ -65,12 +66,13 @@ In the backoffice (**Privacy** tab) editors can change the wording of the consen
 The chat works with Cookiebot in both consent modes.
 
 1. **Automatic blocking.** The chat's script tag carries `data-cookieconsent="ignore"`, so Cookiebot's automatic blocking does not hide the chat bubble. This is correct because the chat sets no cookies and asks for consent itself before any data goes to the AI. Live chat and the email form need to work without AI consent anyway.
-2. **Cookie declaration.** Cookiebot's scanner may find two local storage entries. Classify them as **Necessary**: they only exist once a visitor uses the chat, and the chat needs them.
+2. **Cookie declaration.** Cookiebot's scanner may find these local storage entries. Classify them as **Necessary**: they only exist once a visitor uses the chat, and the chat needs them.
 
    | Name | Type | Purpose | Expiry |
    | --- | --- | --- | --- |
    | `ligata-ai:v2:<domain>` | HTML Local Storage | Conversations in the chat (texts; of attachments only file names), access keys to conversations with the team, whether the chat is open | Persistent; conversations are removed after the inactivity period |
    | `ligata-ai:consent:<domain>` | HTML Local Storage | The visitor's consent to the AI assistant (random id, version, time) | `ConsentDays` or until withdrawn |
+   | `ligata-ai:forget:<domain>` | HTML Local Storage | Only with the conversation history: keys of conversations the visitor deleted while the server could not be reached, so the deletion is sent again | Until the server confirmed the deletion |
 
 3. **Optional: AI consent in Cookiebot.** With `"ConsentMode": "cookiebot"`, the chat shows the same information but sends visitors to the cookie settings (`Cookiebot.renew()`) instead of offering its own button. It unlocks as soon as the configured category is allowed. Accepting cookies alone sends nothing: the consent is recorded on the server with the first question, with source `cookiebot`. Declining the category later withdraws it at once and removes the AI conversations from the device. Describe the AI assistant in that category's description in Cookiebot. For example, in German:
 
@@ -104,11 +106,11 @@ The chat works with Cookiebot in both consent modes.
 | Data | Chat messages, attachments, page title and path; for team requests also name, email address and messages; pseudonymous visitor id; consent records |
 | Recipients | AI: [Anthropic PBC, USA / GPU operator]; team: own staff; email: [email provider] |
 | Third countries | API mode: USA (SCCs); GPU mode: [country of the server] |
-| Erasure | AI: not stored on the server; team conversations: N days after closing; consent records: `KeepConsentRecordsDays` |
+| Erasure | AI: not stored on the server, or with the conversation history N days after the last question (kept ones when no longer needed); team conversations: N days after closing; consent records: `KeepConsentRecordsDays` |
 | Measures | See below |
 
 **Requests from visitors (Art. 15 to 21).**
-- AI conversations are not stored, so there is nothing to disclose or delete on the server.
+- AI conversations are not stored, so there is nothing to disclose or delete on the server. With the conversation history on, they are kept without name, IP address or visitor id: find a visitor's conversation by searching for what they wrote (*AI conversations → Search*), read it, and delete it. Visitors can also delete it themselves in the chat. If a visitor cannot tell you what they wrote, the conversation cannot be attributed to them (Art. 11 GDPR).
 - Team conversations and email requests can be found in the Inbox by name, email address or topic, read in full and deleted (*Delete* in the conversation).
 - Visitors can delete their own copy in the chat (*Remove from this device*).
 
@@ -124,7 +126,7 @@ Measures the software provides. Add your organisational ones (access rights, bac
   - Visitor access to team conversations requires a random 256-bit token, stored as a SHA-256 hash.
 - **Pseudonymisation.** Visitor IPs become an HMAC with a per-site secret before they are used or passed on.
 - **Data minimisation.** No cookies. No content in logs. AI conversations are not stored. Attachments are processed in memory. Consent records hold no IP address and no content.
-- **Storage limitation.** Automatic deletion of closed conversations, sent emails, unused and old consent records. Browser data is removed after inactivity.
+- **Storage limitation.** Automatic deletion of closed conversations, sent emails, unused and old consent records, and (when kept at all) AI conversations after the history period. Browser data is removed after inactivity.
 - **Abuse limits.** Rate limits per IP, per visitor and site-wide; one AI question at a time per visitor; a daily ceiling in API mode; size limits on all inputs.
 - **GPU server.**
   - The model server and the gateway listen on `127.0.0.1` only; websites reach the gateway through a tunnel or reverse proxy with HTTPS.

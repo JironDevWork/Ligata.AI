@@ -58,6 +58,17 @@ public sealed class LookupMigration(IMigrationContext context) : AsyncMigrationB
     }
 }
 
+/// <summary>0.7: an optional history of conversations with the AI (Privacy tab).</summary>
+public sealed class HistoryMigration(IMigrationContext context) : AsyncMigrationBase(context)
+{
+    protected override Task MigrateAsync()
+    {
+        if (!TableExists("LigataAIChat")) Create.Table<ChatRow>().Do();
+        if (!TableExists("LigataAIChatTurn")) Create.Table<ChatTurnRow>().Do();
+        return Task.CompletedTask;
+    }
+}
+
 public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreScopeProvider scopes, Umbraco.Cms.Infrastructure.Scoping.IScopeProvider database, IKeyValueService keys, IUserGroupService groups, IOptions<AssistantOptions> options, ILogger<AssistantInstaller> logger)
 {
     public const string SectionAlias = "Ligata.AI.Section";
@@ -65,7 +76,7 @@ public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreSco
     public async Task InstallAsync()
     {
         var plan = new MigrationPlan("Ligata.AI");
-        plan.From(string.Empty).To<AssistantMigration>("ai-v1").To<SupportMigration>("ai-v2").To<ConsentMigration>("ai-v3").To<LookupMigration>("ai-v4");
+        plan.From(string.Empty).To<AssistantMigration>("ai-v1").To<SupportMigration>("ai-v2").To<ConsentMigration>("ai-v3").To<LookupMigration>("ai-v4").To<HistoryMigration>("ai-v5");
         var result = await new Upgrader(plan).ExecuteAsync(executor, scopes, keys);
         if (!result.Successful) throw new InvalidOperationException("Ligata AI migration failed. Inspect the Umbraco migration log.");
         LivePages();

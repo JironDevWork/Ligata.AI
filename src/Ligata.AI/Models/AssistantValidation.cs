@@ -50,6 +50,7 @@ public static partial class AssistantValidation
         Check(s.Privacy != null, "privacy", "Privacy settings are missing.");
         Check((s.Privacy?.ConsentText ?? "").Length <= 1500, "privacy.consentText", "The consent text can have at most 1500 characters.");
         Check(s.Privacy?.ConsentRevision is >= 1 and <= 100000, "privacy.consentRevision", "The consent revision must be between 1 and 100000.");
+        Check(s.Privacy?.HistoryDays is >= 1 and <= 365, "privacy.historyDays", "Conversations are kept for 1 to 365 days.");
         Check(SafeUrl(i.FallbackUrl) && i.FallbackUrl.Length <= 500, "identity.fallbackUrl", "The contact link must be an http(s) or site-relative URL.");
         Check(i.FallbackEmail == "" || Email(i.FallbackEmail), "identity.fallbackEmail", "Enter a valid contact email address.");
 

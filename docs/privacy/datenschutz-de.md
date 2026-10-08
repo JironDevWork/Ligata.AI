@@ -5,7 +5,7 @@
 >
 > - Diese Bausteine ergänzen Ihre bestehende Datenschutzerklärung um den Chat. Sie sind ein Muster und **keine Rechtsberatung**. Lassen Sie den Text vor der Veröffentlichung von Ihrer Datenschutzberatung prüfen.
 > - **Einfacher geht es im Backoffice:** Unter *AI Assistant → Datenschutz* erzeugt das Paket diesen Text passend zu Ihrer Konfiguration (eigener KI-Server oder Claude API, Live-Chat, E-Mail-Formular, reCAPTCHA, Fristen). Abschnitte, die nicht zutreffen, fallen dort weg, und Werte in doppelten geschweiften Klammern werden eingesetzt.
-> - Hier im Repository sehen Sie alle Varianten. HTML-Kommentare im Quelltext (zum Beispiel „if api“ bis „endif“) markieren, wofür ein Abschnitt gilt: `gpu` = eigener KI-Server, `api` = Claude API, `chat` = Live-Chat mit dem Team, `email` = E-Mail-Formular, `captcha` = Google reCAPTCHA, `consent` = Einwilligung vor der ersten Frage (Standard), `cookiebot` = Einwilligung über Cookiebot.
+> - Hier im Repository sehen Sie alle Varianten. HTML-Kommentare im Quelltext (zum Beispiel „if api“ bis „endif“) markieren, wofür ein Abschnitt gilt: `gpu` = eigener KI-Server, `api` = Claude API, `chat` = Live-Chat mit dem Team, `email` = E-Mail-Formular, `captcha` = Google reCAPTCHA, `consent` = Einwilligung vor der ersten Frage (Standard), `cookiebot` = Einwilligung über Cookiebot, `history` = die Website bewahrt Gespräche mit der KI für ihr Team auf (standardmässig aus).
 > - Angaben in [eckigen Klammern] ergänzen Sie selbst.
 > - Der Text ist so formuliert, dass er in Deutschland, Österreich und der Schweiz passt. Für Schweizer Websites, die nur dem DSG unterliegen, können Sie die DSGVO-Artikel durch einen Hinweis auf das DSG ersetzen; die nach Art. 19 DSG nötigen Angaben (Empfänger, Empfängerstaaten) sind enthalten.
 > - Die Angaben zu Anthropic beruhen auf deren öffentlichen Bedingungen (Stand Oktober 2026: Löschung von API-Daten innerhalb von 30 Tagen, Data Processing Addendum mit EU-Standardvertragsklauseln, kein Training mit API-Daten). Prüfen Sie den aktuellen Stand unter anthropic.com/legal und privacy.claude.com, und halten Sie fest, mit welcher Anthropic-Gesellschaft Ihr Vertrag besteht.
@@ -70,7 +70,22 @@ Die Daten werden in den USA verarbeitet. Die Übermittlung stützt sich auf die 
 
 **Speicherdauer**
 
+<!-- if nohistory -->
 Gespräche mit dem KI-Assistenten speichern wir nicht auf unserem Server. Für Statistiken zählen wir lediglich anonym pro Tag, zum Beispiel die Anzahl Fragen und die Antwortzeit, ohne Bezug zu Personen oder Inhalten. Den Gesprächsverlauf speichert Ihr Browser (siehe „Speicherung in Ihrem Browser“).
+<!-- endif -->
+<!-- if history -->
+Damit unser Team die Antworten des Assistenten und die Informationen auf unserer Website prüfen und verbessern und bei einer späteren Anfrage von Ihnen nachvollziehen kann, worum es ging, bewahren wir Ihre Gespräche mit dem Assistenten {{historyDays}} Tage nach der letzten Nachricht auf unserem Website-Server auf. Gespeichert werden Ihre Fragen und die Antworten des Assistenten, die Namen angehängter Dateien (nicht die Dateien oder ihr Inhalt), die Seite, auf der Sie gefragt haben, die Sprache des Chats, die Zeitpunkte, ob eine Antwort fehlschlug, und welche Seiten unserer Website der Assistent nachgeschlagen hat. Ihre IP-Adresse oder eine daraus abgeleitete Kennung speichern wir dazu nicht. Lesen können die Gespräche nur berechtigte Mitglieder unseres Teams in unserem Verwaltungsbereich. Im Einzelfall, zum Beispiel zur Bearbeitung einer Beschwerde, kann unser Team ein Gespräch länger aufbewahren und löscht es, sobald es nicht mehr benötigt wird.
+
+<!-- if consent -->
+Rechtsgrundlage ist Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO): Die Einwilligungsabfrage im Chat weist auf diese Aufbewahrung hin. Widerrufen Sie Ihre Einwilligung, löschen wir die Gespräche, die Sie damit geführt haben.
+<!-- endif -->
+<!-- if noconsent -->
+Rechtsgrundlage ist [bitte ergänzen, zum Beispiel unser berechtigtes Interesse an der Prüfung und Verbesserung unseres Angebots, Art. 6 Abs. 1 lit. f DSGVO]. Sie können dem jederzeit widersprechen.
+<!-- endif -->
+Sie können ein Gespräch jederzeit selbst löschen: im Chat unter „Gespräche“ mit „Gespräch löschen“. Es wird dann auf Ihrem Gerät und auf unserem Server gelöscht.
+
+Für Statistiken zählen wir zudem anonym pro Tag, zum Beispiel die Anzahl Fragen und die Antwortzeit, ohne Bezug zu Personen oder Inhalten.
+<!-- endif -->
 <!-- if consent -->
 
 **Nachweis Ihrer Einwilligung**
@@ -109,13 +124,16 @@ Um Missbrauch von Anfragen an unser Team zu verhindern, verwenden wir Google reC
 
 Der Chat setzt keine Cookies. Damit Ihre Gespräche beim Wechsel zwischen Seiten erhalten bleiben, speichert er Daten im lokalen Speicher Ihres Browsers (Local Storage). Diese Daten bleiben auf Ihrem Gerät; an uns übermittelt werden nur Inhalte, die Sie im Chat absenden.
 
-- **`ligata-ai:v2:` und der Name unserer Domain:** Ihre Gespräche (Texte; von Anhängen nur die Dateinamen), Zugangsschlüssel zu Gesprächen mit unserem Team und ob das Chatfenster offen ist. Wird erst angelegt, wenn Sie den Chat nutzen; Gespräche werden nach {{storageDays}} Tagen ohne Aktivität entfernt.
+- **`ligata-ai:v2:` und der Name unserer Domain:** Ihre Gespräche (Texte; von Anhängen nur die Dateinamen), Zugangsschlüssel zu Gesprächen mit unserem Team<!-- if history -->, ein zufälliger Schlüssel je Gespräch mit dem Assistenten (damit können Sie unsere Kopie löschen)<!-- endif --> und ob das Chatfenster offen ist. Wird erst angelegt, wenn Sie den Chat nutzen; Gespräche werden nach {{storageDays}} Tagen ohne Aktivität entfernt.
 <!-- if consent -->
 - **`ligata-ai:consent:` und der Name unserer Domain:** Ihre Einwilligung zum KI-Assistenten (zufällige Kennung, Version, Zeitpunkt). Gespeichert für {{consentDays}} Tage oder bis zum Widerruf.
 <!-- endif -->
+<!-- if history -->
+- **`ligata-ai:forget:` und der Name unserer Domain:** nur wenn Sie ein Gespräch löschen, während unser Server nicht erreichbar ist: dessen Schlüssel, damit die Löschung erneut gesendet wird. Wird entfernt, sobald unser Server das Gespräch gelöscht hat.
+<!-- endif -->
 
-Diese Speicherung ist unbedingt erforderlich, damit der Chat funktioniert, den Sie ausdrücklich nutzen möchten (§ 25 Abs. 2 Nr. 2 TDDDG). Sie können die Daten jederzeit löschen, im Chat über „Von diesem Gerät entfernen“ oder in den Einstellungen Ihres Browsers.
+Diese Speicherung ist unbedingt erforderlich, damit der Chat funktioniert, den Sie ausdrücklich nutzen möchten (§ 25 Abs. 2 Nr. 2 TDDDG). Sie können die Daten jederzeit löschen, im Chat über <!-- if history -->„Gespräch löschen“ oder <!-- endif -->„Von diesem Gerät entfernen“ oder in den Einstellungen Ihres Browsers.
 
 ### Ihre Rechte
 
-Sie haben das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16 DSGVO), Löschung (Art. 17 DSGVO), Einschränkung der Verarbeitung (Art. 18 DSGVO) und Datenübertragbarkeit (Art. 20 DSGVO). Verarbeitungen auf Grundlage unseres berechtigten Interesses können Sie widersprechen (Art. 21 DSGVO), eine Einwilligung können Sie jederzeit widerrufen. Zudem können Sie sich bei einer Datenschutz-Aufsichtsbehörde beschweren (Art. 77 DSGVO).<!-- if ai --> Gespräche mit dem KI-Assistenten speichern wir nicht, deshalb können wir dazu keine Auskunft geben.<!-- endif --><!-- if team --> Gespräche und Nachrichten an unser Team finden wir anhand Ihrer E-Mail-Adresse oder Ihres Namens.<!-- endif --> Kontakt: [Kontaktangaben des Verantwortlichen und gegebenenfalls der oder des Datenschutzbeauftragten].
+Sie haben das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16 DSGVO), Löschung (Art. 17 DSGVO), Einschränkung der Verarbeitung (Art. 18 DSGVO) und Datenübertragbarkeit (Art. 20 DSGVO). Verarbeitungen auf Grundlage unseres berechtigten Interesses können Sie widersprechen (Art. 21 DSGVO), eine Einwilligung können Sie jederzeit widerrufen. Zudem können Sie sich bei einer Datenschutz-Aufsichtsbehörde beschweren (Art. 77 DSGVO).<!-- if nohistory --> Gespräche mit dem KI-Assistenten speichern wir nicht, deshalb können wir dazu keine Auskunft geben.<!-- endif --><!-- if history --> Gespräche mit dem Assistenten bewahren wir ohne Ihren Namen und ohne IP-Adresse auf; wir finden Ihre deshalb nur, wenn Sie uns sagen, was Sie wann geschrieben haben. Löschen können Sie sie selbst im Chat.<!-- endif --><!-- if team --> Gespräche und Nachrichten an unser Team finden wir anhand Ihrer E-Mail-Adresse oder Ihres Namens.<!-- endif --> Kontakt: [Kontaktangaben des Verantwortlichen und gegebenenfalls der oder des Datenschutzbeauftragten].

@@ -11,12 +11,13 @@ public sealed class SupportException(string code, string message, int status = 4
 }
 
 public sealed record HistoryMessage(string Role, string Content);
+/// <summary>HistoryKey: the key of the AI conversation the request starts from, so the team sees both linked in the history.</summary>
 public sealed record CreateConversationRequest(string Kind, string? Name, string? Email, string Message, List<HistoryMessage>? History,
-    string? PageTitle, string? PagePath, string? Language, string? RecaptchaToken, string? ClientId);
+    string? PageTitle, string? PagePath, string? Language, string? RecaptchaToken, string? ClientId, string? HistoryKey = null);
 
 /// <summary>Visitor and team actions on conversations: validation, limits, spam protection, notifications and counters.</summary>
 public sealed class SupportService(SupportStore store, AssistantStore settingsStore, SupportHub hub, SupportMailer mailer, AgentDirectory directory,
-    IContactCaptcha captcha, IOptions<AssistantOptions> options)
+    IContactCaptcha captcha, IOptions<AssistantOptions> options, ChatHistoryStore chats)
 {
     public const int MaxVisitorCharacters = 4000, MaxAgentCharacters = 8000, MaxHistoryItems = 40, MaxHistoryCharacters = 30000;
     private static readonly string[] Languages = ["en", "de", "fr", "it"];
@@ -81,6 +82,7 @@ public sealed class SupportService(SupportStore store, AssistantStore settingsSt
         var language = Languages.Contains(request.Language) ? request.Language! : "";
         var row = store.Create(new NewConversation(kind, name, email, message, history, Clean(request.PagePath, 300), Clean(request.PageTitle, 150), language, visitor, Clean(request.ClientId, 40) is { Length: > 0 } id ? id : null), out var secret);
         settingsStore.Count(s => { if (kind == "chat") s.ChatRequests++; else s.EmailRequests++; });
+        if (ChatHistory.Hash(request.HistoryKey) is { } historyKey) chats.Link(historyKey, row.Id);
         if (kind == "chat") mailer.TeamNewChat(settings, row, store.Messages(row.Id, 0, team: true), hub.OnlineAgents());
         else { mailer.TeamEmail(settings, row, message); mailer.VisitorConfirmation(settings, row, message); }
         store.Notified(row.Id);

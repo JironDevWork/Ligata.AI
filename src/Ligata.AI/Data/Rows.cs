@@ -171,3 +171,62 @@ public sealed class ConsentRow
     [Column("UsedUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? UsedUtc { get; set; }
     [Column("WithdrawnUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? WithdrawnUtc { get; set; }
 }
+
+/// <summary>
+/// A conversation with the AI, kept while the site keeps a history (Privacy tab; off by default). Holds no IP address and no
+/// files: the visitor's questions, the answers, what the AI looked up and how each question ended. Deleted after the history
+/// period unless the team keeps it, at once when the visitor deletes it in the chat or withdraws consent.
+/// </summary>
+[TableName("LigataAIChat"), PrimaryKey("Id", AutoIncrement = false), ExplicitColumns]
+public sealed class ChatRow
+{
+    [Column("Id"), PrimaryKeyColumn(AutoIncrement = false)] public Guid Id { get; set; }
+    // SHA-256 of the random key only the visitor's browser has (it proves a deletion request comes from that browser).
+    [Column("KeyHash"), Length(64), Index(IndexTypes.UniqueNonClustered)] public string KeyHash { get; set; } = "";
+    // The consent the questions were asked with: withdrawing it deletes the conversation.
+    [Column("ConsentId"), NullSetting(NullSetting = NullSettings.Null), Index(IndexTypes.NonClustered)] public Guid? ConsentId { get; set; }
+    /// <summary>gpu | api</summary>
+    [Column("Engine"), Length(10)] public string Engine { get; set; } = "";
+    [Column("Language"), Length(10)] public string Language { get; set; } = "";
+    [Column("PagePath"), Length(300)] public string PagePath { get; set; } = "";
+    [Column("PageTitle"), Length(150)] public string PageTitle { get; set; } = "";
+    [Column("Topic"), Length(200)] public string Topic { get; set; } = "";
+    [Column("Turns")] public int Turns { get; set; }
+    /// <summary>Questions without an answer (an error) and answers that offered the team instead (the AI did not know).</summary>
+    [Column("Unanswered")] public int Unanswered { get; set; }
+    /// <summary>How often the conversation was summarized because the AI's memory was full.</summary>
+    [Column("Summaries")] public int Summaries { get; set; }
+    /// <summary>The team conversation the visitor started from this one.</summary>
+    [Column("ConversationId"), NullSetting(NullSetting = NullSettings.Null)] public Guid? ConversationId { get; set; }
+    /// <summary>Kept by the team: not deleted after the history period.</summary>
+    [Column("Kept")] public bool Kept { get; set; }
+    [Column("CreatedUtc")] public DateTime CreatedUtc { get; set; }
+    [Column("UpdatedUtc"), Index(IndexTypes.NonClustered)] public DateTime UpdatedUtc { get; set; }
+}
+
+/// <summary>One question to the AI and its answer.</summary>
+[TableName("LigataAIChatTurn"), PrimaryKey("Id", AutoIncrement = true), ExplicitColumns]
+public sealed class ChatTurnRow
+{
+    [Column("Id"), PrimaryKeyColumn(AutoIncrement = true)] public int Id { get; set; }
+    [Column("ChatId"), Index(IndexTypes.NonClustered)] public Guid ChatId { get; set; }
+    [Column("Seq")] public int Seq { get; set; }
+    // The browser's id for the question, so asking again after an error replaces the earlier attempt.
+    [Column("ClientId"), Length(40), NullSetting(NullSetting = NullSettings.Null)] public string? ClientId { get; set; }
+    [Column("Question"), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Question { get; set; } = "";
+    /// <summary>Names of attached files as JSON ([{type, name}]); the files themselves are never stored.</summary>
+    [Column("Files"), Length(1000), NullSetting(NullSetting = NullSettings.Null)] public string? Files { get; set; }
+    [Column("Answer"), SpecialDbType(SpecialDbTypes.NVARCHARMAX)] public string Answer { get; set; } = "";
+    /// <summary>What the AI looked up before answering, as JSON (rounds of {name, arguments}).</summary>
+    [Column("Lookups"), Length(4000), NullSetting(NullSetting = NullSettings.Null)] public string? Lookups { get; set; }
+    /// <summary>answered | stopped (by the visitor) | an error code (busy, offline, context_full, …)</summary>
+    [Column("Outcome"), Length(30)] public string Outcome { get; set; } = "answered";
+    /// <summary>The answer offered the team (the AI could not answer from the website).</summary>
+    [Column("OfferedTeam")] public bool OfferedTeam { get; set; }
+    [Column("PagePath"), Length(300)] public string PagePath { get; set; } = "";
+    [Column("Attempts")] public int Attempts { get; set; } = 1;
+    [Column("DurationMs")] public long DurationMs { get; set; }
+    [Column("PromptTokens")] public long PromptTokens { get; set; }
+    [Column("CompletionTokens")] public long CompletionTokens { get; set; }
+    [Column("CreatedUtc")] public DateTime CreatedUtc { get; set; }
+}

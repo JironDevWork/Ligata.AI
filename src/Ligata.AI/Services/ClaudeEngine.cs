@@ -241,7 +241,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     /// guardrails, owner instructions, knowledge, the list of pages); the page context follows it uncached. When Claude looks
     /// something up, the lookups run here and the answer continues with the results, up to a few rounds.
     /// </summary>
-    public async Task ChatAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string stable, string context, string visitor, bool countStats, Lookups? lookups = null)
+    public async Task ChatAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string stable, string context, string visitor, bool countStats, Lookups? lookups = null, ChatOutcome? outcome = null)
     {
         var token = http.RequestAborted;
         var b = settings.Behaviour;
@@ -285,7 +285,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         }
         if (estimate + Math.Min(b.MaxAnswerTokens, 256) > limit)
         {
-            await Error(http, new GatewayException("context_full", "This conversation no longer fits into the assistant's memory. Start a new chat.", 413), countStats, estimate, limit);
+            await Error(http, new GatewayException("context_full", "This conversation no longer fits into the assistant's memory. Start a new chat.", 413), countStats, estimate, limit, outcome);
             return;
         }
 
@@ -293,7 +293,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         using var slot = await gate.EnterAsync(TimeSpan.FromSeconds(15), token);
         if (slot == null)
         {
-            await Error(http, new GatewayException("site_busy", "Many visitors are asking at the same time. Please try again in a moment.", 429, 10), countStats);
+            await Error(http, new GatewayException("site_busy", "Many visitors are asking at the same time. Please try again in a moment.", 429, 10), countStats, outcome: outcome);
             return;
         }
 
@@ -319,9 +319,9 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                 catch (Exception e) when (sse == null)
                 {
                     var error = Map(e, gate);
-                    if (error.Code == "context_full") { await Error(http, error, countStats, limit, limit); return; }
+                    if (error.Code == "context_full") { await Error(http, error, countStats, limit, limit, outcome); return; }
                     if (error.Code == "gateway_unavailable") logger.LogWarning(e, "Ligata AI could not reach the Claude API.");
-                    await Error(http, error, countStats);
+                    await Error(http, error, countStats, outcome: outcome);
                     return;
                 }
                 sse ??= new EventStream(http);
@@ -362,6 +362,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                             {
                                 if (firstToken == 0) firstToken = clock.ElapsedMilliseconds;
                                 if (answer.Length < 200_000) answer.Append(piece.Text);
+                                outcome?.Append(piece.Text);
                                 text.Append(piece.Text);
                                 await sse.Send("delta", new { text = piece.Text });
                             }
@@ -396,6 +397,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                 {
                     var asked = calls.Select(c => new ChatLookup(c.Name, Parse(c.Json))).ToList();
                     var results = looking.Round(asked);
+                    if (asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).ToList() is { Count: > 0 } kept) outcome?.Lookups.Add(kept);
                     await sse.Send("lookup", new { calls = asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).Select(c => new { name = c.Name, arguments = c.Arguments }) });
                     conversation.Add(new() { Role = Role.Assistant, Content = blocks });
                     conversation.Add(new() { Role = Role.User, Content = calls.Select((c, i) => (ContentBlockParam)new ToolResultBlockParam { ToolUseID = c.Id, Content = results[i] }).ToList() });
@@ -409,12 +411,14 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             if (stopReason == "max_tokens" && answer.Length == 0)
             {
                 if (countStats) store.Count(s => s.Failed++);
+                if (outcome != null) outcome.Error = "thinking_limit";
                 await sse!.Send("error", new { code = "thinking_limit", message = "The assistant thought for too long and could not finish its answer. Please try again or ask more specifically." });
                 return;
             }
             if (stopReason == "refusal" && answer.Length == 0)
             {
                 if (countStats) store.Count(s => s.Failed++);
+                if (outcome != null) outcome.Error = "refused";
                 await sse!.Send("error", new { code = "refused", message = "I can't help with that. Please ask something else about this website." });
                 return;
             }
@@ -426,6 +430,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                     // Questions the AI could not answer: a signal for missing knowledge (only counted, never stored).
                     if (answer.ToString().Contains(PromptBuilder.TeamMarker)) s.Suggested++;
                 });
+            if (outcome != null) { outcome.Done = true; outcome.PromptTokens = prompt; outcome.CompletionTokens = output; }
             await sse!.Send("done", new
             {
                 finishReason = stopReason switch { "max_tokens" => "length", "refusal" => "refusal", _ => "stop" },
@@ -440,6 +445,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             var error = Map(e, gate);
             logger.LogWarning("Ligata AI: the Claude answer stream failed ({Code}).", error.Code);
             if (countStats && !finished) store.Count(s => s.Failed++);
+            if (outcome is { Done: false }) outcome.Error = error.Code;
             try { if (sse != null) await sse.Send("error", new { code = error.Code, message = error.Message }); } catch (Exception) { }
         }
         finally { if (sse != null) await sse.DisposeAsync(); }
@@ -453,8 +459,9 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     }
     private static readonly JsonElement Empty = JsonDocument.Parse("{}").RootElement.Clone();
 
-    private async Task Error(HttpContext http, GatewayException error, bool countStats, int? promptTokens = null, int? contextTokens = null)
+    private async Task Error(HttpContext http, GatewayException error, bool countStats, int? promptTokens = null, int? contextTokens = null, ChatOutcome? outcome = null)
     {
+        if (outcome != null) outcome.Error = error.Code;
         if (countStats) store.Count(s => { if (error.Code is "site_busy" or "daily_quota") s.Busy++; else if (error.Code is "invalid_key" or "model_unavailable" or "gateway_unavailable" or "not_configured") s.Offline++; else if (error.Code != "context_full") s.Failed++; });
         if (error.RetryAfter is { } retry) http.Response.Headers.RetryAfter = retry.ToString();
         var details = promptTokens != null ? JsonSerializer.SerializeToElement(new { promptTokens, contextTokens }) : (JsonElement?)null;

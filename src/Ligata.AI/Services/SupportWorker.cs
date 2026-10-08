@@ -10,7 +10,8 @@ namespace Ligata.AI.Services;
 
 /// <summary>
 /// Every 30 s: closes inactive conversations, removes absent team members, deletes conversations past
-/// retention and sends queued emails (with retries). Every hour: deletes old and unused consent records.
+/// retention and sends queued emails (with retries). Every hour: deletes old and unused consent records and AI conversations
+/// past the history period.
 /// Keep the application running (IIS: AlwaysRunning) so this also happens without traffic.
 /// </summary>
 public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<AssistantOptions> options, ILogger<SupportWorker> logger) : BackgroundService
@@ -36,6 +37,7 @@ public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<Assistan
                 if (DateTime.UtcNow - consentsPurged > TimeSpan.FromHours(1))
                 {
                     PurgeConsents(scope.ServiceProvider.GetRequiredService<ConsentStore>(), options.Value.Privacy, DateTime.UtcNow);
+                    PurgeHistory(scope.ServiceProvider.GetRequiredService<ChatHistoryStore>(), scope.ServiceProvider.GetRequiredService<AssistantStore>().Settings().Settings, DateTime.UtcNow);
                     consentsPurged = DateTime.UtcNow;
                 }
             }
@@ -49,6 +51,10 @@ public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<Assistan
     /// <summary>Proof of consent is kept for KeepConsentRecordsDays; a consent never used for a question proves nothing and goes after a day.</summary>
     public static int PurgeConsents(ConsentStore store, PrivacyOptions privacy, DateTime now) =>
         store.Purge(now.AddDays(-Math.Clamp(privacy.KeepConsentRecordsDays, Math.Clamp(privacy.ConsentDays, 1, 400), 3650)), now.AddDays(-1));
+
+    /// <summary>AI conversations go HistoryDays after their last message unless the team keeps them (also once the history is switched off).</summary>
+    public static int PurgeHistory(ChatHistoryStore store, Models.AssistantSettings settings, DateTime now) =>
+        store.Purge(now.AddDays(-Math.Clamp(settings.Privacy.HistoryDays, 1, 365)));
 
     public static async Task<int> SendAsync(IServiceProvider services, CancellationToken token)
     {

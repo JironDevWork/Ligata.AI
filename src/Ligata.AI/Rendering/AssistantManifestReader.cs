@@ -47,6 +47,16 @@ public sealed class AssistantManifestReader(IOptions<AssistantOptions> options, 
                 conditions = agents.Length > 0 ? new[] { Groups(agents) } : Array.Empty<object>(),
             });
         }
+        if (o.Features.Assistant)
+        {
+            // The history of AI conversations, for the same people as the Inbox; it explains how to start one while the site keeps none.
+            extensions.Add(new
+            {
+                type = "dashboard", alias = "Ligata.AI.History", name = "Ligata AI conversations", element = $"/App_Plugins/LigataAI/history.js?v={Version}", weight = 150,
+                meta = new { label = "AI conversations", pathname = "conversations" },
+                conditions = agents.Length > 0 ? new[] { Section(), Groups(agents) } : new[] { Section() },
+            });
+        }
         extensions.Add(new
         {
             type = "dashboard", alias = "Ligata.AI.Dashboard", name = "Ligata AI settings", element = $"/App_Plugins/LigataAI/dashboard.js?v={Version}", weight = 100,

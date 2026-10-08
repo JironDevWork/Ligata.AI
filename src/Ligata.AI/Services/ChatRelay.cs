@@ -20,8 +20,11 @@ public sealed record ChatMessage(string Role, string Content, List<ChatAttachmen
 /// <summary>
 /// Consent is the id of the visitor's recorded consent (LigataAI:Privacy:RequireConsent). Summary replaces the earlier messages of a long
 /// conversation; Compact asks for that summary instead of an answer (the widget sends it before the conversation would no longer fit).
+/// History is the browser's random key for this conversation while the site keeps a history, Turn its id for the question (asking again
+/// after an error replaces the earlier attempt) and Language the chat's interface language.
 /// </summary>
-public sealed record ChatRequest(List<ChatMessage> Messages, string? PageTitle, string? PagePath, string? Consent = null, string? Summary = null, bool Compact = false);
+public sealed record ChatRequest(List<ChatMessage> Messages, string? PageTitle, string? PagePath, string? Consent = null, string? Summary = null, bool Compact = false,
+    string? History = null, string? Turn = null, string? Language = null);
 
 public sealed class ChatValidationException(string code, string message, int status = 400) : Exception(message)
 {
@@ -149,7 +152,8 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         return (stable, PromptBuilder.Context(settings, pageTitle, pagePath, DateTime.Now, team, lookups != null), lookups);
     }
 
-    public async Task RunAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string visitor, bool countStats = true)
+    /// <summary>Answers one request. <paramref name="outcome"/> (while the site keeps a history) receives the answer and how it ended.</summary>
+    public async Task RunAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string visitor, bool countStats = true, ChatOutcome? outcome = null)
     {
         var token = http.RequestAborted;
         // A summary is housekeeping, not a visitor question: it is not counted.
@@ -168,17 +172,19 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         }
         catch (ChatValidationException e) { await Json(http, e.Status, e.Code, e.Message); return; }
         catch (OperationCanceledException) { return; }
+        if (outcome != null) outcome.Reached = true;
 
         var api = options.Value.UsesApi;
         if (api && claude.QuotaReached())
         {
             if (counting) store.Count(s => s.Busy++);
+            if (outcome != null) outcome.Error = "daily_quota";
             await Json(http, 429, "daily_quota", "This website has reached its daily question limit. Please try again tomorrow.");
             return;
         }
         var last = request.Messages[^1];
         if (counting) store.Count(s => { s.Questions++; if (request.Messages.Count(m => m.Role == "user") == 1) s.Conversations++; s.Attachments += last.Attachments?.Count ?? 0; });
-        if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, counting, lookups); return; }
+        if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, counting, lookups, outcome); return; }
         var b = settings.Behaviour;
         var body = new
         {
@@ -193,6 +199,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         {
             if (counting) store.Count(s => { if (e.Code is "queue_full" or "site_busy" or "visitor_busy" or "queue_timeout" or "daily_quota") s.Busy++; else if (e.Code is "gateway_unavailable" or "model_unavailable" or "model_loading" or "not_configured" or "invalid_key") s.Offline++; else s.Failed++; });
             if (e.RetryAfter is { } retry) http.Response.Headers.RetryAfter = retry.ToString();
+            if (outcome != null) outcome.Error = e.Code;
             await Json(http, e.Status is >= 400 and < 600 ? e.Status : 503, e.Code, countStats ? Visible(e) : e.Message, e.Details);
             return;
         }
@@ -218,15 +225,20 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                     if (currentEvent == "tool_calls")
                     {
                         // The model looks something up: answered here, never passed to the browser as is.
-                        if (line.StartsWith("data: ")) await LookupAsync(http, line[6..], looking, token);
+                        if (line.StartsWith("data: ")) await LookupAsync(http, line[6..], looking, outcome, token);
                         else if (line.Length == 0) currentEvent = null;
                         continue;
                     }
-                    if (line.StartsWith("data: ") && currentEvent == "delta" && counting && answer.Length < 200_000) answer.Append(Delta(line[6..]));
+                    if (line.StartsWith("data: ") && currentEvent == "delta" && (counting || outcome != null))
+                    {
+                        var piece = Delta(line[6..]);
+                        if (answer.Length < 200_000) answer.Append(piece);
+                        outcome?.Append(piece);
+                    }
                     else if (line.StartsWith("data: ") && currentEvent is "done" or "error")
                     {
                         finished = true;
-                        if (counting) Record(currentEvent, line[6..]);
+                        Record(currentEvent, line[6..], counting, outcome);
                         // Questions the AI could not answer: a useful signal for missing knowledge (only counted, never stored).
                         if (counting && currentEvent == "done" && answer.ToString().Contains(PromptBuilder.TeamMarker)) store.Count(s => s.Suggested++);
                     }
@@ -236,6 +248,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                 if (!finished)
                 {
                     if (counting) store.Count(s => s.Failed++);
+                    if (outcome != null) outcome.Error = "gateway_unavailable";
                     await http.Response.WriteAsync("event: error\ndata: {\"code\":\"gateway_unavailable\",\"message\":\"The connection to the assistant was interrupted.\"}\n\n", token);
                 }
                 await http.Response.Body.FlushAsync(token);
@@ -245,6 +258,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             {
                 logger.LogWarning("Ligata AI stream from the gateway was interrupted.");
                 if (counting && !finished) store.Count(s => s.Failed++);
+                if (outcome != null && !finished) outcome.Error = "gateway_unavailable";
                 try { await http.Response.WriteAsync("event: error\ndata: {\"code\":\"gateway_unavailable\",\"message\":\"The connection to the assistant was interrupted.\"}\n\n", token); } catch { }
             }
         }
@@ -255,7 +269,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     /// which continues the answer; the browser learns what was looked up ("lookup" event), keeps the calls and sends them back
     /// with the next question.
     /// </summary>
-    private async Task LookupAsync(HttpContext http, string json, Lookups.Answer? looking, CancellationToken token)
+    private async Task LookupAsync(HttpContext http, string json, Lookups.Answer? looking, ChatOutcome? outcome, CancellationToken token)
     {
         string round;
         List<(string Id, ChatLookup Call)> calls;
@@ -268,7 +282,9 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException) { logger.LogWarning("Ligata AI received a malformed lookup from the gateway."); return; }
         var results = looking?.Round(calls.Select(c => c.Call).ToList()) ?? calls.Select(_ => "Lookups are not available.").ToList();
-        var kept = calls.Select(c => c.Call).Where(Lookups.Valid).Select(c => new { name = c.Name, arguments = c.Arguments });
+        var valid = calls.Select(c => c.Call).Where(Lookups.Valid).ToList();
+        if (valid.Count > 0) outcome?.Lookups.Add(valid);
+        var kept = valid.Select(c => new { name = c.Name, arguments = c.Arguments });
         await http.Response.WriteAsync($"event: lookup\ndata: {JsonSerializer.Serialize(new { calls = kept }, AssistantJson.Options)}\n\n", token);
         await http.Response.Body.FlushAsync(token);
         try { await gateway.ToolResultsAsync(round, calls.Select((c, i) => new { id = c.Id, content = results[i] }).ToList(), token); }
@@ -281,8 +297,10 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         catch (JsonException) { return ""; }
     }
 
-    private void Record(string kind, string json)
+    /// <summary>The end of an answer (done or error): the daily counters and, while a history is kept, the outcome.</summary>
+    private void Record(string kind, string json, bool counting, ChatOutcome? outcome)
     {
+        if (outcome != null) { outcome.Done = kind == "done"; if (kind != "done") outcome.Error = "model_failed"; }
         try
         {
             using var document = JsonDocument.Parse(json);
@@ -290,10 +308,17 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             if (kind == "done")
             {
                 var usage = root.GetProperty("usage");
+                var prompt = usage.GetProperty("promptTokens").GetInt64();
+                var completion = usage.GetProperty("completionTokens").GetInt64();
+                if (outcome != null) { outcome.PromptTokens = prompt; outcome.CompletionTokens = completion; }
                 var total = root.GetProperty("timings").TryGetProperty("totalMs", out var ms) && ms.ValueKind == JsonValueKind.Number ? ms.GetInt64() : 0;
-                store.Count(s => { s.Answered++; s.PromptTokens += usage.GetProperty("promptTokens").GetInt64(); s.CompletionTokens += usage.GetProperty("completionTokens").GetInt64(); s.AnswerMs += total; });
+                if (counting) store.Count(s => { s.Answered++; s.PromptTokens += prompt; s.CompletionTokens += completion; s.AnswerMs += total; });
             }
-            else store.Count(s => s.Failed++);
+            else
+            {
+                if (outcome != null && root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String) outcome.Error = code.GetString();
+                if (counting) store.Count(s => s.Failed++);
+            }
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException) { }
     }

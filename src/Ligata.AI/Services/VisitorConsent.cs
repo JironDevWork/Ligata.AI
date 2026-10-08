@@ -20,11 +20,16 @@ public static class VisitorConsent
 
     public static bool Required(AssistantOptions options, FeatureState features) => options.Privacy.RequireConsent && features.Assistant;
 
-    /// <summary>Changes when the recipient changes (engine, GPU operator or its country) or editors ask everyone again.</summary>
+    /// <summary>
+    /// Changes when the recipient changes (engine, GPU operator or its country), when the site starts keeping a history of
+    /// conversations or keeps it for another period, or when editors ask everyone again. Without a history it is the same as
+    /// before histories existed, so updating the package asks nobody again.
+    /// </summary>
     public static string Version(AssistantSettings settings, AssistantOptions options)
     {
         var engine = Engine(options);
         var recipient = engine == "api" ? AnthropicName : $"{options.Privacy.GpuOperator.Trim()}|{options.Privacy.GpuOperatorCountry.Trim().ToUpperInvariant()}";
+        if (settings.Privacy.History) recipient += $"|history:{settings.Privacy.HistoryDays}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(recipient)))[..6].ToLowerInvariant();
         return $"{engine}.{Math.Max(1, settings.Privacy.ConsentRevision)}.{hash}";
     }

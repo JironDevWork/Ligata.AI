@@ -103,6 +103,8 @@ public static partial class PrivacyPolicy
         Flag("pdfs", features.Assistant && settings.Behaviour.AllowPdfs);
         Flag("files", features.Assistant && (settings.Behaviour.AllowImages || settings.Behaviour.AllowPdfs));
         Flag("pagecontext", features.Assistant && settings.Behaviour.IncludePageContext);
+        Flag("history", features.Assistant && settings.Privacy.History);
+        Flag("nohistory", features.Assistant && !settings.Privacy.History);
 
         var values = new Dictionary<string, string>
         {
@@ -113,6 +115,7 @@ public static partial class PrivacyPolicy
             ["keepDays"] = Math.Clamp(privacy.KeepConsentRecordsDays, Math.Clamp(privacy.ConsentDays, 1, 400), 3650).ToString(),
             ["inactivityDays"] = settings.Support.InactivityDays.ToString(),
             ["retentionDays"] = settings.Support.RetentionDays.ToString(),
+            ["historyDays"] = Math.Clamp(settings.Privacy.HistoryDays, 1, 365).ToString(),
             // The widget forgets conversations after the team's inactivity period, or after 3 days without team features.
             ["storageDays"] = (features.Team ? Math.Clamp(settings.Support.InactivityDays, 1, 30) : 3).ToString(),
             ["cookiebotCategory"] = Category(privacy.Category, language),

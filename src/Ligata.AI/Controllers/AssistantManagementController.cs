@@ -34,7 +34,7 @@ public sealed record BudgetRequest(AssistantSettings Settings);
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(AssistantEditorFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, ApiKeyVault vault, ContentKnowledge content, KnowledgeIndex index, ChatRelay relay, IOptions<AssistantOptions> options,
-    IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore, ConsentStore consents) : ManagementApiControllerBase
+    IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore, ConsentStore consents, ChatHistoryStore chats) : ManagementApiControllerBase
 {
     private static object Problem(string message, Dictionary<string, string>? errors = null) => new { message, errors };
 
@@ -87,6 +87,8 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         var features = settings.Effective(o.Features);
         ConsentSummary? summary = null;
         try { summary = consents.Summary(now.AddDays(-30), now); } catch (Exception e) when (e is not OutOfMemoryException) { } // table missing until the migration ran
+        HistoryCounts? kept = null;
+        try { kept = chats.Counts(); } catch (Exception e) when (e is not OutOfMemoryException) { }
         return new
         {
             required = p.RequireConsent, mode = p.UsesCookiebot ? "cookiebot" : "explicit", category = p.Category,
@@ -96,6 +98,8 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
             // What the preview widget needs to show the consent request (null when none is asked).
             consent = VisitorConsent.Public(settings, o, features),
             summary,
+            // Conversations in the history now (also after it was switched off, until their period ends).
+            history = new { stored = kept?.Total ?? 0, kept = kept?.Kept ?? 0 },
             captcha = captcha.Value.Ready ? new { mode = captcha.Value.ConsentMode, category = captcha.Value.CookiebotCategory } : null,
             languages = PrivacyPolicy.Languages,
         };

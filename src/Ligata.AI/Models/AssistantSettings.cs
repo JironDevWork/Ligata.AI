@@ -53,6 +53,8 @@ public sealed record AssistantSettings
         } : null,
         Contact = features.Email ? new { Contact.Title, Contact.Intro, Contact.NameField, Contact.SuccessMessage } : null,
         Captcha = features.Team && Support.UseRecaptcha && captcha.Ready ? new { captcha.SiteKey, captcha.ConsentMode, captcha.CookiebotCategory } : null,
+        // Conversations with the AI are kept for the team for this many days (null: nothing is kept).
+        History = features.Assistant && Privacy.History ? new { Days = Privacy.HistoryDays } : null,
         // What the AI needs before it may read messages (null: no consent is asked, see LigataAI:Privacy).
         Consent = consent,
     };
@@ -135,6 +137,13 @@ public sealed record PrivacySettings
     public string ConsentText { get; init; } = "";
     /// <summary>Raising it asks every visitor again (for example after the privacy policy changed).</summary>
     public int ConsentRevision { get; init; } = 1;
+    /// <summary>
+    /// Keeps a history of conversations with the AI for the team (questions, answers and what the AI looked up; no files, no IP
+    /// address). Off by default. Visitors are told before they agree, and switching it on or changing the period asks them again.
+    /// </summary>
+    public bool History { get; init; }
+    /// <summary>Conversations are deleted this many days after their last message, unless the team keeps them.</summary>
+    public int HistoryDays { get; init; } = 30;
 }
 
 public sealed record NotificationSettings

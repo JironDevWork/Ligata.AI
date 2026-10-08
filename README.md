@@ -37,6 +37,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
   - the visitor's typing and whether they are on the website now;
   - sound and desktop notifications, and an Available/Away switch.
   - **How I appear** lets each team member choose what visitors see: name and photo from their Umbraco profile, name only, a nickname, or anonymous (team name only).
+- **AI conversations** (0.7, optional): while the site keeps a history (*Settings → Privacy → Conversation history*, off by default), what visitors asked the AI, what it looked up on the website and what it answered, newest first. Views for unanswered questions (errors, or answers that offered the team), conversations handed to the team (with a link to the Inbox) and kept ones; search over questions and answers; *Keep* exempts a conversation from automatic deletion; delete one or all. Same access as the Inbox.
 - **Header badge**: a chat icon in the Umbraco header counts conversations that need a reply, from anywhere in the backoffice.
 - **Settings**, organised in tabs:
   - **Overview**: getting-started checklist per feature, team inbox numbers, AI server status and the **context budget**.
@@ -61,7 +62,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
     - upload PDF, Word, text, Markdown, CSV, JSON or HTML, or write text; mark short essentials as *always known*;
     - a test search, and the list of pages the assistant gets with every question.
   - **Connection**: gateway address and API key (stored encrypted, never sent to browsers), live test. In API mode: the Claude model, whether the key is configured (never any part of it), a connection test and today's usage against the limits.
-  - **Privacy**: consent status (who receives the data, how long a consent lasts, how many visitors agreed, asked and withdrew), the wording of the consent request, *Ask all visitors again*, the notice under the input and the privacy policy link, what to declare in Cookiebot, and the **privacy policy text** for this site's setup in German or English (copy or download).
+  - **Privacy**: consent status (who receives the data, how long a consent lasts, how many visitors agreed, asked and withdrew), the wording of the consent request, *Ask all visitors again*, the **conversation history** (on/off, days to keep, 1 to 365), the notice under the input and the privacy policy link, what to declare in Cookiebot, and the **privacy policy text** for this site's setup in German or English (copy or download).
   - **Insights**: anonymous daily counters for the AI (questions, answer time, busy/offline, failures) and the team (chat requests, emails, replies, average first response, questions the AI could not answer).
 
 ## What visitors get
@@ -89,8 +90,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.6.2.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.6.2 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.7.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.7.0 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -204,7 +205,7 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
   - Closed after N days without messages and deleted M days later.
   - Internal notes are never sent to visitors.
 - **Team members.** They are identified to visitors only as they choose. The Umbraco user key is never exposed, and photos are served only while a team member shows them.
-- **AI conversations** are not stored on the server. Statistics are anonymous daily counters (including how often the AI could not answer, never the question). PDFs and screenshots are processed in memory.
+- **AI conversations** are not stored on the server unless the site keeps a history (off by default). With the history on: questions, answers, lookups and file names (never files, IP addresses or visitor ids), deleted after the chosen period unless kept; visitors are told before they agree (switching it on asks everyone again), and they delete their conversations in the chat or by withdrawing consent. Statistics are anonymous daily counters. PDFs and screenshots are processed in memory.
 - **Escaping.** All visitor text is escaped in the widget, the backoffice and emails. Email subjects cannot carry line breaks.
 - **Your privacy policy** must mention the chat: copy the text from the Privacy tab (see below).
 
@@ -213,10 +214,11 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 - **Consent before the AI.**
   - The chat asks before the first question, names the recipient and links your privacy policy.
   - The server records each consent (random id, text version, times; no IP, no content) and refuses questions and files without a valid one.
-  - Visitors withdraw in the chat; a new recipient or *Ask all visitors again* asks everyone again; consents expire after a year.
+  - Visitors withdraw in the chat; a new recipient, switching the conversation history on (or changing its period) or *Ask all visitors again* asks everyone again; consents expire after a year.
+- **Conversation history (optional).** Off by default. When on, the consent request and the notice under the input say how long conversations are kept, the privacy policy text gains the section, and visitors can delete a conversation in the chat; withdrawing consent deletes the conversations asked with it.
 - **Cookiebot.**
   - The script tag is exempt from automatic blocking (`data-cookieconsent="ignore"`): the chat sets no cookies and asks itself.
-  - Declare its two local storage entries as *Necessary*.
+  - Declare its local storage entries as *Necessary*.
   - Optionally let a Cookiebot category give the AI consent (`"ConsentMode": "cookiebot"`).
 - **Privacy policy text.** The Privacy tab writes the sections for your setup in German or English (engine, features, periods, reCAPTCHA, Cookiebot). The templates are in [docs/privacy](docs/privacy/) and in the package.
 - **Your part.**

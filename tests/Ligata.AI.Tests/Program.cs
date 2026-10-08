@@ -278,6 +278,25 @@ var noConsent = PrivacyPolicy.Generate("en", aiSettings, new AssistantOptions { 
 Assert(noConsent.Contains("[please add") && !noConsent.Contains("Proof of your consent"), "Without consent the legal basis is left for the operator.");
 Assert(PrivacyPolicy.Country("US", "en") == "the United States" && PrivacyPolicy.Country("DE", "de") == "Deutschland" && PrivacyPolicy.Country("Schweiz", "de") == "Schweiz", "Countries read naturally.");
 
+// ---------- history of AI conversations (off by default) ----------
+var historyOn = aiSettings with { Privacy = new() { History = true, HistoryDays = 30 } };
+Assert(!new PrivacySettings().History && new PrivacySettings().HistoryDays == 30, "No history is kept unless the site switches it on.");
+Assert(VisitorConsent.Version(aiSettings with { Privacy = new() { History = false, HistoryDays = 90 } }, gpuSite) == gpuVersion, "Without a history the consent version is the one from before histories existed: updating asks nobody again.");
+Assert(VisitorConsent.Version(historyOn, gpuSite) != gpuVersion && VisitorConsent.Version(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 60 } }, gpuSite) != VisitorConsent.Version(historyOn, gpuSite), "Keeping a history, or keeping it longer, asks everyone again.");
+string PublicOf(AssistantSettings s, FeatureOptions? licensed = null) => JsonSerializer.Serialize(s.Public(65536, new { }, 100, s.Effective(licensed ?? new FeatureOptions()), new RecaptchaSettings(), "gpu"), AssistantJson.Options);
+Assert(PublicOf(historyOn).Contains("\"history\":{\"days\":30}") && PublicOf(aiSettings).Contains("\"history\":null") && PublicOf(historyOn, new FeatureOptions { Assistant = false }).Contains("\"history\":null"), "The widget learns how long conversations are kept, only with the AI on.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 0 } }), "At least one day.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 366 } }), "At most a year.");
+var historyDe = PrivacyPolicy.Generate("de", historyOn, gpuSite, new RecaptchaSettings());
+var historyEn = PrivacyPolicy.Generate("en", historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 14 } }, gpuSite, new RecaptchaSettings());
+Assert(historyDe.Contains("30 Tage nach der letzten Nachricht") && historyDe.Contains("„Gespräch löschen“") && historyDe.Contains("löschen wir die Gespräche") && !historyDe.Contains("Gespräche mit dem KI-Assistenten speichern wir nicht"), "The German policy describes the history, its period, deletion by the visitor and by withdrawal.");
+Assert(historyEn.Contains("for 14 days after the last message") && historyEn.Contains("\"Delete conversation\"") && historyEn.Contains("without your name or IP address") && !historyEn.Contains("We do not store conversations with the AI assistant"), "The English policy too, including how a request for access is handled.");
+Assert(policyDe.Contains("Gespräche mit dem KI-Assistenten speichern wir nicht") && !policyDe.Contains("Gespräch löschen"), "Without a history the policy still says that conversations are not stored.");
+var historyNoConsent = PrivacyPolicy.Generate("en", historyOn, new AssistantOptions { Privacy = new() { RequireConsent = false } }, new RecaptchaSettings());
+Assert(historyNoConsent.Contains("checking and improving our service") && historyNoConsent.Contains("You can object"), "Without consent the policy leaves the history's legal basis to the operator.");
+Assert(ChatHistory.Hash("k" + new string('x', 31)) is { Length: 64 } && ChatHistory.Hash("short") == null && ChatHistory.Hash("bad key with spaces and more than twenty") == null && ChatHistory.Hash(null) == null && ChatHistory.Hash("k" + new string('x', 31)) != "k" + new string('x', 31), "Only random browser keys are accepted, and only their hash is stored.");
+Assert(!typeof(ChatRow).GetProperties().Concat(typeof(ChatTurnRow).GetProperties()).Any(p => p.Name.Contains("Ip") || p.Name.Contains("Address") || p.Name == "Visitor" || p.Name.Contains("Data")), "The history holds no IP address, visitor id or file contents.");
+
 // ---------- secrets and visitors ----------
 var vault = new ApiKeyVault(new EphemeralDataProtectionProvider());
 var key = "lai_0123456789ab_" + new string('A', 43);
@@ -610,7 +629,7 @@ using (var scope = app.Services.CreateScope())
     await support.CreateAsync(Request("chat", null, "x@example.test", "Second"), visitorA, default);
     await support.CreateAsync(Request("chat", null, "x@example.test", "Third"), visitorA, default);
     // Default limits (the browser fixture raises them for its single test address).
-    var defaultLimits = new SupportService(supportStore, store, supportHub, services.GetRequiredService<SupportMailer>(), services.GetRequiredService<AgentDirectory>(), services.GetRequiredService<IContactCaptcha>(), Options.Create(new AssistantOptions()));
+    var defaultLimits = new SupportService(supportStore, store, supportHub, services.GetRequiredService<SupportMailer>(), services.GetRequiredService<AgentDirectory>(), services.GetRequiredService<IContactCaptcha>(), Options.Create(new AssistantOptions()), services.GetRequiredService<ChatHistoryStore>());
     try { await defaultLimits.CreateAsync(Request("chat", null, "x@example.test", "Fourth"), visitorA, default); Assert(false, "A fourth open conversation is refused."); }
     catch (SupportException e) { Assert(e.Code == "too_many_open", "A fourth open conversation is refused: " + e.Code); }
     try { await support.CreateAsync(Request("email", "Bob", null, "Please call me"), "visitor-b", default); Assert(false, "Email requests need an address."); }
@@ -624,7 +643,7 @@ using (var scope = app.Services.CreateScope())
     Assert(supportStore.RecentEmails(5).Any(e => e.Kind == "reply" && e.ToAddress == "bob@example.test" && e.Subject.StartsWith("Re: ")), "Email replies go to the visitor.");
 
     // spam protection
-    var strict = new SupportService(supportStore, store, supportHub, services.GetRequiredService<SupportMailer>(), services.GetRequiredService<AgentDirectory>(), new FakeCaptcha(), services.GetRequiredService<IOptions<AssistantOptions>>());
+    var strict = new SupportService(supportStore, store, supportHub, services.GetRequiredService<SupportMailer>(), services.GetRequiredService<AgentDirectory>(), new FakeCaptcha(), services.GetRequiredService<IOptions<AssistantOptions>>(), services.GetRequiredService<ChatHistoryStore>());
     try { await strict.CreateAsync(Request("email", null, "c@example.test", "spam?", captcha: "bot-token"), "visitor-c", default); Assert(false, "A failed spam check is refused."); }
     catch (SupportException e) { Assert(e.Code == "captcha_failed", "A failed spam check is refused."); }
     Assert((await strict.CreateAsync(Request("email", null, "c@example.test", "real person", captcha: "pass-123"), "visitor-c", default)).Row.Kind == "email", "A passed spam check is accepted.");
@@ -661,15 +680,67 @@ using (var scope = app.Services.CreateScope())
     await SupportWorker.SendAsync(services, default);
     Assert(Directory.GetFiles(mailFolder, "*.eml").Length > before && supportStore.RecentEmails(30).All(e => e.State == "sent"), "Queued emails are delivered through the host's SMTP settings.");
 
+    // ---------- history of AI conversations ----------
+    var chats = services.GetRequiredService<ChatHistoryStore>();
+    var historyService = services.GetRequiredService<ChatHistory>();
+    var consentA = Guid.NewGuid();
+    string Key() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+    var keyA = Key();
+    ChatRequest Asked(string key, string question, string turn, string? consent = null) => new([new("user", question, null)], "Prices", "/prices/", consent ?? consentA.ToString(), History: key, Turn: turn, Language: "de");
+    var failed = new ChatOutcome { Reached = true, Error = "queue_full" };
+    historyService.Record(Asked(keyA, "Was kostet Hosting?", "t1"), failed, "gpu", 1200);
+    var answer = new ChatOutcome { Reached = true, Done = true, PromptTokens = 900, CompletionTokens = 40 };
+    answer.Append("Hosting kostet CHF 25 im Monat.");
+    answer.Lookups.Add([new ChatLookup(Lookups.Search, JsonDocument.Parse("""{"query":"hosting preis"}""").RootElement.Clone())]);
+    historyService.Record(Asked(keyA, "Was kostet Hosting?", "t1"), answer, "gpu", 2300);
+    var team = new ChatOutcome { Reached = true, Done = true };
+    team.Append("Das weiss ich nicht. " + PromptBuilder.TeamMarker);
+    historyService.Record(Asked(keyA, "Und eine Domain?", "t2") with { Messages = [new("user", "Und eine Domain?", [new ChatAttachment("image", "screen.png", "AAAA", null)])] }, team, "gpu", 900);
+    historyService.Record(Asked(keyA, "Abgebrochen", "t3"), new ChatOutcome { Reached = true }, "gpu", 300);
+    historyService.Record(Asked(keyA, "Ungültig", "t4"), new ChatOutcome { Reached = false }, "gpu", 1);
+    historyService.Record(Asked(keyA, "", "s") with { Compact = true }, new ChatOutcome { Reached = true, Done = true }, "gpu", 1);
+    var chatA = chats.List(new HistoryQuery()).Items.Single(c => c.KeyHash == ChatHistory.Hash(keyA));
+    var turnsA = chats.Turns(chatA.Id);
+    Assert(chatA is { Turns: 3, Unanswered: 1, Summaries: 1, Language: "de", PagePath: "/prices/", Topic: "Was kostet Hosting?" } && chatA.ConsentId == consentA, "A conversation keeps its questions, the summary count, page and language: " + JsonSerializer.Serialize(chatA));
+    Assert(turnsA[0] is { Outcome: "answered", Attempts: 2, PromptTokens: 900, Answer: "Hosting kostet CHF 25 im Monat." } && turnsA[0].Lookups!.Contains("hosting preis"), "Asking again after an error replaces the attempt, with what the AI looked up.");
+    Assert(turnsA[1] is { OfferedTeam: true, Answer: "Das weiss ich nicht." } && turnsA[1].Files!.Contains("screen.png") && !turnsA[1].Files!.Contains("AAAA"), "Answers that offered the team are marked; of files only the names are kept.");
+    Assert(turnsA[2].Outcome == "stopped" && turnsA.All(t => t.Question != "Ungültig"), "A stopped answer is kept as stopped; requests that never reached the AI are not kept.");
+    Assert(chats.List(new HistoryQuery("unanswered")).Items.Any(c => c.Id == chatA.Id) && chats.List(new HistoryQuery(Search: "CHF 25")).Items.Any(c => c.Id == chatA.Id) && !chats.List(new HistoryQuery(Search: "nothing-like-this")).Items.Any(), "Views and search over questions and answers.");
+    var (linked, _) = await support.CreateAsync(Request("chat", "Lea", "lea@example.test", "Domain?") with { HistoryKey = keyA }, "visitor-h", default);
+    Assert(chats.Find(chatA.Id)!.ConversationId == linked.Id && chats.List(new HistoryQuery("team")).Items.Any(c => c.Id == chatA.Id), "A request to the team links the AI conversation it started from.");
+    var keyB = Key(); var keyC = Key();
+    historyService.Record(Asked(keyB, "Zweites Gespräch", "b1"), answer, "gpu", 100);
+    historyService.Record(Asked(keyC, "Drittes Gespräch", "c1", Guid.NewGuid().ToString()), answer, "api", 100);
+    Assert(chats.DeleteByConsent(consentA) == 2 && chats.Find(chatA.Id) == null && chats.Turns(chatA.Id).Count == 0 && chats.List(new HistoryQuery()).Items.Any(c => c.KeyHash == ChatHistory.Hash(keyC)), "Withdrawing a consent deletes the conversations asked with it, and only those.");
+    var chatC = chats.List(new HistoryQuery()).Items.Single(c => c.KeyHash == ChatHistory.Hash(keyC));
+    chats.Keep(chatC.Id, true);
+    var keyD = Key();
+    historyService.Record(Asked(keyD, "Altes Gespräch", "d1", Guid.NewGuid().ToString()), answer, "gpu", 100);
+    using (var scope6 = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+    {
+        scope6.Database.Execute("UPDATE LigataAIChat SET UpdatedUtc=@0", DateTime.UtcNow.AddDays(-40));
+        scope6.Complete();
+    }
+    Assert(SupportWorker.PurgeHistory(chats, historyOn, DateTime.UtcNow) == 1 && chats.Find(chatC.Id) != null && !chats.List(new HistoryQuery()).Items.Any(c => c.KeyHash == ChatHistory.Hash(keyD)), "After the history period conversations go, unless the team kept them.");
+    Assert(chats.List(new HistoryQuery("kept")).Total == 1 && chats.Counts() is { Total: 1, Kept: 1 }, "Kept conversations are listed and counted.");
+    Assert(chats.DeleteAll() == 0 && chats.DeleteByKeys([ChatHistory.Hash(keyC)!]) == 1 && chats.Counts().Total == 0, "Delete all spares kept conversations; the visitor's deletion removes even a kept one.");
+    var keyE = Key();
+    for (var i = 0; i < ChatHistoryStore.MaxTurnsPerChat + 2; i++) chats.Record(new NewChat(ChatHistory.Hash(keyE)!, null, "gpu", "", "/", ""), new ChatTurn("e" + i, "q" + i, null, "a", null, "answered", false, "/", 1, 0, 0), DateTime.UtcNow);
+    Assert(chats.List(new HistoryQuery()).Items.Single().Turns == ChatHistoryStore.MaxTurnsPerChat, "A conversation keeps at most " + ChatHistoryStore.MaxTurnsPerChat + " questions.");
+    chats.DeleteByKeys([ChatHistory.Hash(keyE)!]);
+    for (var i = 0; i < 5; i++) chats.Record(new NewChat(ChatHistory.Hash(Key())!, null, "gpu", "", "/", ""), new ChatTurn(null, "cap " + i, null, "a", null, "answered", false, "/", 1, 0, 0), DateTime.UtcNow.AddMinutes(i));
+    Assert(chats.Purge(DateTime.UtcNow.AddDays(-1), maxStored: 3) == 2 && chats.List(new HistoryQuery()).Items.Select(c => c.Topic).OrderBy(t => t).SequenceEqual(["cap 2", "cap 3", "cap 4"]), "Above the storage cap the oldest conversations go first.");
+    chats.DeleteAll();
+
     // dynamic backoffice manifest
     var manifests = await new AssistantManifestReader(services.GetRequiredService<IOptions<AssistantOptions>>(), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync();
     var manifestJson = JsonSerializer.Serialize(manifests);
     var adminGroup = await groups.GetAsync("admin");
     Assert(manifestJson.Contains("Ligata.AI.Inbox") && manifestJson.Contains("Ligata.AI.HeaderApp") && manifestJson.Contains("Umb.Condition.CurrentUser.GroupId") && manifestJson.Contains(adminGroup!.Key.ToString()), "The manifest adds Inbox, badge and group conditions for licensed features.");
     var aiOnly = await new AssistantManifestReader(Options.Create(new AssistantOptions { Features = new() { LiveChat = false, Email = false } }), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync();
-    Assert(!JsonSerializer.Serialize(aiOnly).Contains("Ligata.AI.Inbox"), "Without live chat and email there is no Inbox.");
+    Assert(!JsonSerializer.Serialize(aiOnly).Contains("Ligata.AI.Inbox") && JsonSerializer.Serialize(aiOnly).Contains("Ligata.AI.History"), "Without live chat and email there is no Inbox, but the AI conversations page.");
     var supportOnly = JsonSerializer.Serialize(await new AssistantManifestReader(Options.Create(new AssistantOptions { Features = new() { Assistant = false } }), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync());
-    Assert(supportOnly.Contains("\"Support\"") && !supportOnly.Contains("AI Assistant"), "Without AI the section is called Support.");
+    Assert(supportOnly.Contains("\"Support\"") && !supportOnly.Contains("AI Assistant") && !supportOnly.Contains("Ligata.AI.History"), "Without AI the section is called Support and has no AI conversations.");
 
     // leave the fixture in a clean state for the browser tests
     using (var scope4 = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
