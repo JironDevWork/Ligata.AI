@@ -23,7 +23,8 @@ public sealed class HistoryFilter(IBackOfficeSecurityAccessor security, IOptions
     }
 }
 
-public sealed record KeepRequest(bool Keep);
+/// <summary>Keep a conversation for Days (1 to 365, default 90) for a Reason, or stop keeping it (Keep false).</summary>
+public sealed record KeepRequest(bool Keep, string? Reason = null, int Days = 90);
 
 [ApiVersion("1.0"), Route("umbraco/management/api/v{version:apiVersion}/ligata-ai/history")]
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(HistoryFilter))]
@@ -34,7 +35,8 @@ public sealed class HistoryController(ChatHistoryStore chats, AssistantStore sto
 
     private static object Summary(ChatRow r) => new
     {
-        r.Id, r.Topic, r.PagePath, r.PageTitle, r.Language, r.Engine, r.Turns, r.Unanswered, r.Summaries, r.Kept,
+        r.Id, r.Topic, r.PagePath, r.PageTitle, r.Language, r.Engine, r.Turns, r.Unanswered, r.Summaries, r.Kept, r.KeptReason,
+        keptUntil = r.KeptUntil is { } until ? Utc(until) : (DateTime?)null, expires = r.ExpiresUtc is { } end ? Utc(end) : (DateTime?)null,
         conversationId = r.ConversationId, created = Utc(r.CreatedUtc), updated = Utc(r.UpdatedUtc),
     };
 
@@ -78,12 +80,18 @@ public sealed class HistoryController(ChatHistoryStore chats, AssistantStore sto
         try { using var document = JsonDocument.Parse(value); return document.RootElement.Clone(); } catch (JsonException) { return null; }
     }
 
-    /// <summary>Kept conversations are not deleted after the history period (the visitor can still delete them).</summary>
+    /// <summary>
+    /// Keeps a conversation beyond the history period, for a stated reason (a complaint, a legal claim) and a limited time. The
+    /// visitor can still delete it, and it is deleted when the keeping ends.
+    /// </summary>
     [HttpPost("{id:guid}/keep")]
     public IActionResult Keep(Guid id, [FromBody] KeepRequest request)
     {
         if (chats.Find(id) == null) return NotFound(new { code = "not_found", message = "This conversation was deleted." });
-        chats.Keep(id, request.Keep);
+        var reason = (request.Reason ?? "").Trim();
+        if (request.Keep && (reason.Length is 0 or > 200 || reason.Any(char.IsControl))) return BadRequest(new { code = "invalid_reason", message = "Say in up to 200 characters why the conversation is kept." });
+        if (request.Keep && request.Days is < 1 or > 365) return BadRequest(new { code = "invalid_days", message = "Keep a conversation for 1 to 365 days." });
+        chats.Keep(id, request.Keep ? DateTime.UtcNow.AddDays(request.Days) : null, request.Keep ? reason : null, security.BackOfficeSecurity?.CurrentUser?.Key);
         return Ok(new { conversation = Summary(chats.Find(id)!) });
     }
 

@@ -76,7 +76,9 @@ public static partial class PrivacyPolicy
         ("statistics", _) => "Statistics", _ => "Preferences",
     };
 
-    public static string Generate(string language, AssistantSettings settings, AssistantOptions options, RecaptchaSettings captcha)
+    /// <param name="keptConversations">Conversations still in the history: after it was switched off they stay until their period ends,
+    /// and the text must say so instead of "not stored".</param>
+    public static string Generate(string language, AssistantSettings settings, AssistantOptions options, RecaptchaSettings captcha, int keptConversations = 0)
     {
         language = Languages.Contains(language) ? language : "en";
         var features = settings.Effective(options.Features);
@@ -104,7 +106,9 @@ public static partial class PrivacyPolicy
         Flag("files", features.Assistant && (settings.Behaviour.AllowImages || settings.Behaviour.AllowPdfs));
         Flag("pagecontext", features.Assistant && settings.Behaviour.IncludePageContext);
         Flag("history", features.Assistant && settings.Privacy.History);
-        Flag("nohistory", features.Assistant && !settings.Privacy.History);
+        Flag("nohistory", features.Assistant && !settings.Privacy.History && keptConversations == 0);
+        Flag("historyending", features.Assistant && !settings.Privacy.History && keptConversations > 0);
+        Flag("historyany", features.Assistant && (settings.Privacy.History || keptConversations > 0));
 
         var values = new Dictionary<string, string>
         {

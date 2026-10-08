@@ -52,9 +52,9 @@ public sealed class SupportWorker(IServiceScopeFactory scopes, IOptions<Assistan
     public static int PurgeConsents(ConsentStore store, PrivacyOptions privacy, DateTime now) =>
         store.Purge(now.AddDays(-Math.Clamp(privacy.KeepConsentRecordsDays, Math.Clamp(privacy.ConsentDays, 1, 400), 3650)), now.AddDays(-1));
 
-    /// <summary>AI conversations go HistoryDays after their last message unless the team keeps them (also once the history is switched off).</summary>
+    /// <summary>AI conversations go at the end of the period they were kept under (a shorter current one applies at once), kept ones when keeping ends.</summary>
     public static int PurgeHistory(ChatHistoryStore store, Models.AssistantSettings settings, DateTime now) =>
-        store.Purge(now.AddDays(-Math.Clamp(settings.Privacy.HistoryDays, 1, 365)));
+        store.Purge(now, settings.Privacy.HistoryDays);
 
     public static async Task<int> SendAsync(IServiceProvider services, CancellationToken token)
     {

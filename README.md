@@ -205,7 +205,7 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
   - Closed after N days without messages and deleted M days later.
   - Internal notes are never sent to visitors.
 - **Team members.** They are identified to visitors only as they choose. The Umbraco user key is never exposed, and photos are served only while a team member shows them.
-- **AI conversations** are not stored on the server unless the site keeps a history (off by default). With the history on: questions, answers, lookups and file names (never files, IP addresses or visitor ids), deleted after the chosen period unless kept; visitors are told before they agree (switching it on asks everyone again), and they delete their conversations in the chat or by withdrawing consent. Statistics are anonymous daily counters. PDFs and screenshots are processed in memory.
+- **AI conversations** are not stored on the server unless the site keeps a history (off by default) and the visitor allowed it separately. Then: questions, answers, lookups and file names (never files, IP addresses or visitor ids), deleted after the period they were collected under unless kept for a reason (at most a year); visitors stop it, delete single conversations or withdraw consent in the chat, which deletes the server copies. Statistics are anonymous daily counters. PDFs and screenshots are processed in memory.
 - **Escaping.** All visitor text is escaped in the widget, the backoffice and emails. Email subjects cannot carry line breaks.
 - **Your privacy policy** must mention the chat: copy the text from the Privacy tab (see below).
 
@@ -214,8 +214,8 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 - **Consent before the AI.**
   - The chat asks before the first question, names the recipient and links your privacy policy.
   - The server records each consent (random id, text version, times; no IP, no content) and refuses questions and files without a valid one.
-  - Visitors withdraw in the chat; a new recipient, switching the conversation history on (or changing its period) or *Ask all visitors again* asks everyone again; consents expire after a year.
-- **Conversation history (optional).** Off by default. When on, the consent request and the notice under the input say how long conversations are kept, the privacy policy text gains the section, and visitors can delete a conversation in the chat; withdrawing consent deletes the conversations asked with it.
+  - Visitors withdraw in the chat; a new recipient or *Ask all visitors again* asks everyone again; consents expire after a year.
+- **Conversation history (optional).** Off by default. When on, visitors decide separately with an unticked, optional box (or later under *Conversations*); the assistant works the same without it. The notice under the input tells those whose conversations are kept, the privacy policy text gains the section, and *Stop keeping*, *Delete conversation* and a withdrawal delete the server copies.
 - **Cookiebot.**
   - The script tag is exempt from automatic blocking (`data-cookieconsent="ignore"`): the chat sets no cookies and asks itself.
   - Declare its local storage entries as *Necessary*.

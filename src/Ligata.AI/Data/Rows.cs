@@ -170,6 +170,11 @@ public sealed class ConsentRow
     /// <summary>First question or file sent with this consent; unused records are deleted after a day.</summary>
     [Column("UsedUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? UsedUtc { get; set; }
     [Column("WithdrawnUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? WithdrawnUtc { get; set; }
+    // Added in ai-v6: the separate, optional consent to the conversation history. The version names the period and revision the
+    // visitor agreed to (null: not agreed, or stopped); the times prove when.
+    [Column("HistoryVersion"), Length(20), NullSetting(NullSetting = NullSettings.Null)] public string? HistoryVersion { get; set; }
+    [Column("HistoryUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? HistoryUtc { get; set; }
+    [Column("HistoryStoppedUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? HistoryStoppedUtc { get; set; }
 }
 
 /// <summary>
@@ -198,10 +203,17 @@ public sealed class ChatRow
     [Column("Summaries")] public int Summaries { get; set; }
     /// <summary>The team conversation the visitor started from this one.</summary>
     [Column("ConversationId"), NullSetting(NullSetting = NullSettings.Null)] public Guid? ConversationId { get; set; }
-    /// <summary>Kept by the team: not deleted after the history period.</summary>
+    /// <summary>Kept by the team beyond the history period, until KeptUntil (for a reason, such as a complaint).</summary>
     [Column("Kept")] public bool Kept { get; set; }
     [Column("CreatedUtc")] public DateTime CreatedUtc { get; set; }
     [Column("UpdatedUtc"), Index(IndexTypes.NonClustered)] public DateTime UpdatedUtc { get; set; }
+    // Added in ai-v6. The end of the period in effect when the last question was kept: a longer period set later never extends
+    // what was collected under a shorter one (a shorter one applies at once).
+    [Column("ExpiresUtc"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? ExpiresUtc { get; set; }
+    [Column("KeptUntil"), NullSetting(NullSetting = NullSettings.Null)] public DateTime? KeptUntil { get; set; }
+    [Column("KeptReason"), Length(200), NullSetting(NullSetting = NullSettings.Null)] public string? KeptReason { get; set; }
+    /// <summary>The Umbraco user who kept it.</summary>
+    [Column("KeptBy"), NullSetting(NullSetting = NullSettings.Null)] public Guid? KeptBy { get; set; }
 }
 
 /// <summary>One question to the AI and its answer.</summary>

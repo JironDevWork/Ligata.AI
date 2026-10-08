@@ -105,6 +105,8 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         };
     }
 
+    private int Kept() { try { return chats.Counts().Total ?? 0; } catch (Exception e) when (e is not OutOfMemoryException) { return 0; } }
+
     [HttpGet("privacy")]
     public IActionResult PrivacyInfo() => Ok(Privacy(store.Settings().Settings));
 
@@ -114,7 +116,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         settings ??= store.Settings().Settings;
         try { AssistantValidation.Settings(settings); } catch (AssistantValidationException) { settings = store.Settings().Settings; }
-        return Ok(new { language = PrivacyPolicy.Languages.Contains(language) ? language : "en", text = PrivacyPolicy.Generate(language, settings, options.Value, captcha.Value) });
+        return Ok(new { language = PrivacyPolicy.Languages.Contains(language) ? language : "en", text = PrivacyPolicy.Generate(language, settings, options.Value, captcha.Value, Kept()) });
     }
 
     /// <summary>Queues a test email to the given (or saved) team addresses and tries to send it at once.</summary>

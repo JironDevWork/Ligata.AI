@@ -11,7 +11,10 @@ using Microsoft.Extensions.Options;
 namespace Ligata.AI.Controllers;
 
 public sealed record AttachmentRequest(string? Name, string? Data, string? Consent = null);
-public sealed record ConsentRequest(string? Version, string? Source, string? Language);
+/// <summary>History: the history version shown with the separate, optional checkbox when the visitor ticked it.</summary>
+public sealed record ConsentRequest(string? Version, string? Source, string? Language, string? History = null);
+/// <summary>The visitor lets the site keep their conversations (Version = the history version they read) or stops it (Version null).</summary>
+public sealed record HistoryChoice(string? Id, string? Version);
 public sealed record ConsentWithdrawal(string? Id);
 /// <summary>Keys of conversations the visitor deleted in the chat (the browser's random keys, at most 20).</summary>
 public sealed record HistoryDeletion(List<string>? Keys);
@@ -104,11 +107,14 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var visitor = guard.Visitor(HttpContext, row.VisitorSecret);
         using var turn = guard.Begin(visitor);
         if (turn == null) { Response.Headers.RetryAfter = "10"; await ChatRelay.Json(HttpContext, 429, "visitor_busy", "Please wait for the current answer before asking the next question."); return; }
-        // While the site keeps a history, the question and how it was answered are kept once the answer has ended.
-        var outcome = ChatHistory.Enabled(settings, settings.Effective(options.Value.Features)) && request.History != null ? new ChatOutcome() : null;
+        // While the site keeps a history and the visitor agreed to it, the question and how it was answered are kept once the answer
+        // has ended. Checked again then: a visitor may stop the history or withdraw while the answer runs.
+        var features = settings.Effective(options.Value.Features);
+        bool Keeps() => request.History != null && VisitorConsent.KeepsHistory(consents, request.Consent, settings, options.Value, features, DateTime.UtcNow);
+        var outcome = Keeps() ? new ChatOutcome() : null;
         var clock = Stopwatch.StartNew();
         await relay.RunAsync(HttpContext, request, settings, visitor, outcome: outcome);
-        if (outcome != null) history.Record(request, outcome, engine.Mode, clock.ElapsedMilliseconds);
+        if (outcome != null && Keeps()) history.Record(request, outcome, engine.Mode, clock.ElapsedMilliseconds, settings.Privacy.HistoryDays);
     }
 
     /// <summary>Converts a visitor's PDF to text. The file is processed in memory and not stored.</summary>
@@ -153,11 +159,37 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var features = settings.Effective(options.Value.Features);
         if (!settings.Enabled || !features.Assistant) return StatusCode(503, Error("disabled", "The assistant is switched off."));
         var current = VisitorConsent.Version(settings, options.Value);
-        if (request.Version != current) return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, version = current });
+        var history = VisitorConsent.HistoryVersion(settings);
+        if (request.Version != current || (request.History != null && request.History != history))
+            return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, version = current });
         var now = DateTime.UtcNow;
         var row = consents.Create(current, VisitorConsent.Engine(options.Value), VisitorConsent.Source(request.Source), VisitorConsent.Language(request.Language), now,
-            now.AddDays(Math.Clamp(options.Value.Privacy.ConsentDays, 1, 400)));
-        return Ok(new { id = row.Id, version = row.Version, expires = row.ExpiresUtc });
+            now.AddDays(Math.Clamp(options.Value.Privacy.ConsentDays, 1, 400)), request.History != null && history != "" ? history : null);
+        return Ok(new { id = row.Id, version = row.Version, expires = row.ExpiresUtc, history = row.HistoryVersion });
+    }
+
+    /// <summary>
+    /// The separate, optional consent to the conversation history: given (the current history version) or stopped. Stopping deletes
+    /// every conversation kept with this consent; the assistant keeps working either way.
+    /// </summary>
+    [HttpPost("consent/history"), RequestSizeLimit(1_000), Consumes("application/json")]
+    public IActionResult HistoryConsent([FromBody] HistoryChoice request)
+    {
+        var denied = Check("consent", true); if (denied != null) return denied;
+        if (!Guid.TryParse(request.Id, out var id)) return BadRequest(Error("invalid_consent", "Unknown consent."));
+        var now = DateTime.UtcNow;
+        if (request.Version == null)
+        {
+            consents.SetHistory(id, null, now);
+            chats.DeleteByConsent(id);
+            return Ok(new { history = (string?)null });
+        }
+        var (settings, _) = store.Settings();
+        if (VisitorConsent.HistoryVersion(settings) is not { Length: > 0 } current || request.Version != current)
+            return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, history = VisitorConsent.HistoryVersion(settings) });
+        if (VisitorConsent.Check(consents.Find(id), VisitorConsent.Version(settings, options.Value), now) != ConsentCheck.Valid || !consents.SetHistory(id, current, now))
+            return StatusCode(403, Error("consent_required", "Please agree to the processing of your messages before using the assistant."));
+        return Ok(new { history = current });
     }
 
     /// <summary>

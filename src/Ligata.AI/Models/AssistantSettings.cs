@@ -53,8 +53,8 @@ public sealed record AssistantSettings
         } : null,
         Contact = features.Email ? new { Contact.Title, Contact.Intro, Contact.NameField, Contact.SuccessMessage } : null,
         Captcha = features.Team && Support.UseRecaptcha && captcha.Ready ? new { captcha.SiteKey, captcha.ConsentMode, captcha.CookiebotCategory } : null,
-        // Conversations with the AI are kept for the team for this many days (null: nothing is kept).
-        History = features.Assistant && Privacy.History ? new { Days = Privacy.HistoryDays } : null,
+        // Conversations with the AI may be kept for the team for this many days, with the visitor's separate consent (null: nothing is kept).
+        History = features.Assistant && Privacy.History ? new { Days = Privacy.HistoryDays, Version = Services.VisitorConsent.HistoryVersion(this) } : null,
         // What the AI needs before it may read messages (null: no consent is asked, see LigataAI:Privacy).
         Consent = consent,
     };

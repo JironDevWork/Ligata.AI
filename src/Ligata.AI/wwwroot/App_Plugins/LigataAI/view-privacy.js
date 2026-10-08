@@ -58,7 +58,7 @@ export const privacyView = {
         ${sum ? html`<dt>Last 30 days</dt><dd>${number(sum.given)} agreed · ${number(sum.used)} asked a question · ${number(sum.withdrawn)} withdrew</dd>` : nothing}
       </dl>
       ${!api && !p.gpuOperatorCountry ? html`<div class="notice warning" style="margin-top:14px">${icon('warn')}<div>Visitors are told who runs the AI server. Add its country to the site's configuration, for example <code>"LigataAI": { "Privacy": { "GpuOperatorCountry": "CH" } }</code>.</div></div>` : nothing}
-      <div class="section">${this.text('privacy.consentText', 'Text of the consent request', { rows: 3, max: 1500, help: html`Empty uses this default, translated into the visitor's language: “${this.defaultConsentText()}” Name the recipient if you write your own.${this.settings.privacy?.history ? ` With the history on, visitors also read: “This website keeps your conversations with the assistant for ${this.settings.privacy.historyDays} days so its team can check and improve the answers. You can delete them at any time under Conversations.”` : ''}` })}</div>
+      <div class="section">${this.text('privacy.consentText', 'Text of the consent request', { rows: 3, max: 1500, help: html`Empty uses this default, translated into the visitor's language: “${this.defaultConsentText()}” Name the recipient if you write your own.${this.settings.privacy?.history ? ` With the history on, an unticked, optional box follows: “Keep my conversations (optional): this website may keep my conversations with the assistant for ${this.settings.privacy.historyDays} days after the last message so its team can check and improve the answers. The assistant works without it …”` : ''}` })}</div>
       <div class="row section">
         <button type="button" class="btn" ?disabled=${this.busy} @click=${() => { this.set('privacy.consentRevision', revision + 1); this.message = 'Visitors will be asked again once you save.'; }}>${icon('refresh')}Ask all visitors again</button>
         <small class="muted grow">${revision !== savedRevision ? 'Save to ask everyone again.' : 'Use this after the consent text or your privacy policy changed.'}</small>
@@ -71,20 +71,21 @@ export const privacyView = {
     const on = !!this.settings.privacy?.history;
     const days = this.settings.privacy?.historyDays || 30;
     const saved = JSON.parse(this.saved || '{}').privacy || {};
-    const changed = on !== !!saved.history || (on && days !== (saved.historyDays || 30));
+    const changed = on && saved.history && days !== (saved.historyDays || 30);
     const stored = p.history?.stored || 0;
     const custom = this.settings.identity.privacyNotice !== this.defaults?.identity?.privacyNotice;
     return html`<section class="card">
-      <header><div><h2>Conversation history</h2><p class="muted">Keep conversations with the AI so your team can read what visitors ask and how the assistant answers, and improve your website where it did not know.</p></div>
+      <header><div><h2>Conversation history</h2><p class="muted">With their permission, keep visitors' conversations with the AI, so your team can read what they ask and how the assistant answers, and improve your website where it did not know.</p></div>
         <span class="pill ${on ? 'ok' : ''}"><i></i>${on ? 'On' : 'Off'}</span></header>
       ${this.toggle('privacy.history', 'Keep a history of AI conversations', 'Off by default. Read them under AI conversations, next to the Inbox.')}
       ${on ? html`<div class="section">${this.text('privacy.historyDays', 'Delete conversations after (days)', { type: 'number', help: 'Counted from the last question, 1 to 365. Keep the period as short as your purpose allows; 30 days is usual. Single conversations can be kept longer from the AI conversations page.' })}</div>
       <dl class="facts">
         <dt>Kept</dt><dd>Questions, answers, what the AI looked up, names of attached files, page, language and times. No IP address, no files.</dd>
         <dt>Who can read them</dt><dd>Team members with access to the Inbox (user groups in <code>LigataAI:AgentGroups</code> and <code>EditorGroups</code>).</dd>
-        <dt>Visitors</dt><dd>${p.required ? 'Are told in the consent request and agree to it. ' : ''}Can delete a conversation in the chat${p.required ? '; withdrawing consent deletes their conversations too' : ''}.</dd>
+        <dt>Visitors</dt><dd>${p.required ? html`Decide themselves: an unticked, optional box under the consent request, or later under <i>Conversations</i>. The assistant works the same without it. <i>Stop keeping</i> or withdrawing consent deletes what was kept.` : html`Are told under the input and can object under <i>Conversations</i> (<i>Stop keeping</i>), which deletes what was kept.`} Single conversations can be deleted in the chat.</dd>
+        <dt>Keeping longer</dt><dd>From the AI conversations page, for a stated reason (a complaint, a legal claim) and at most a year.</dd>
       </dl>` : nothing}
-      ${changed && p.required ? html`<div class="notice warning" style="margin-top:14px">${icon('info')}<div>When you save, every visitor is asked for consent again, because what they agree to changes.</div></div>` : nothing}
+      ${changed && p.required ? html`<div class="notice warning" style="margin-top:14px">${icon('info')}<div>Visitors who agreed to the earlier period are asked again before new conversations are kept. Conversations already kept keep the period they were collected under.</div></div>` : nothing}
       ${on ? html`<div class="notice warning" style="margin-top:14px">${icon('warn')}<div>Update your privacy policy: the text below now describes the history. ${custom ? 'Your own notice under the input must not say that messages are not stored.' : 'The default notice under the input tells visitors how long conversations are kept.'}${p.required ? '' : ' Without consent, add the legal basis for the history to your privacy policy.'}</div></div>` : nothing}
       ${stored ? html`<small class="muted">${number(stored)} conversation${stored === 1 ? '' : 's'} stored${p.history.kept ? `, ${number(p.history.kept)} kept` : ''}${on ? '' : ': they are deleted when their period ends'}. <a href="/umbraco/section/ai-assistant/dashboard/conversations">Open AI conversations</a></small>` : nothing}
     </section>`;

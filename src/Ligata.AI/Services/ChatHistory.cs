@@ -44,8 +44,8 @@ public sealed class ChatHistory(ChatHistoryStore store, ILogger<ChatHistory> log
         return text.Length > max ? text[..max] : text;
     }
 
-    /// <summary>Stores the question and its outcome. Never throws: the visitor already has the answer.</summary>
-    public void Record(ChatRequest request, ChatOutcome outcome, string engine, long durationMs)
+    /// <summary>Stores the question and its outcome, kept for <paramref name="days"/> at most. Never throws: the visitor already has the answer.</summary>
+    public void Record(ChatRequest request, ChatOutcome outcome, string engine, long durationMs, int days)
     {
         if (!outcome.Reached || Hash(request.History) is not { } hash || request.Messages is not { Count: > 0 }) return;
         try
@@ -58,7 +58,7 @@ public sealed class ChatHistory(ChatHistoryStore store, ILogger<ChatHistory> log
             var answer = outcome.Answer.ToString();
             var page = Clip(request.PagePath, 300);
             store.Record(
-                new NewChat(hash, Guid.TryParse(request.Consent, out var consent) ? consent : null, engine, VisitorConsent.Language(request.Language), page, Clip(request.PageTitle, 150)),
+                new NewChat(hash, Guid.TryParse(request.Consent, out var consent) ? consent : null, engine, VisitorConsent.Language(request.Language), page, Clip(request.PageTitle, 150), days),
                 new ChatTurn(Clip(request.Turn, 40) is { Length: > 0 } turn ? turn : null, Clip(question.Content, ChatRelay.MaxUserCharacters), files,
                     answer.Replace(PromptBuilder.TeamMarker, "").Trim(), Lookups(outcome), outcome.Done ? "answered" : Clip(outcome.Error, 30) is { Length: > 0 } error ? error : "stopped",
                     answer.Contains(PromptBuilder.TeamMarker), page, durationMs, outcome.PromptTokens, outcome.CompletionTokens),

@@ -2,7 +2,8 @@ using Umbraco.Cms.Infrastructure.Scoping;
 
 namespace Ligata.AI.Data;
 
-public sealed record NewChat(string KeyHash, Guid? ConsentId, string Engine, string Language, string PagePath, string PageTitle);
+/// <param name="Days">The history period in effect: the conversation is deleted this many days after this question at the latest.</param>
+public sealed record NewChat(string KeyHash, Guid? ConsentId, string Engine, string Language, string PagePath, string PageTitle, int Days = 30);
 public sealed record ChatTurn(string? ClientId, string Question, string? Files, string Answer, string? Lookups, string Outcome, bool OfferedTeam, string PagePath, long DurationMs, long PromptTokens, long CompletionTokens);
 /// <summary>view: all | unanswered | team | kept</summary>
 public sealed record HistoryQuery(string View = "all", string? Search = null, int Skip = 0, int Take = 50);
@@ -20,15 +21,20 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
     public const int MaxTurnsPerChat = 400, MaxChats = 50_000;
     // Turn numbers are read-modify-write; one CMS instance serialises them here.
     private static readonly object Gate = new();
+    // Conversations the visitor deleted: an answer still running when they did must not bring them back (kept longer than any answer).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> deleted = new();
+    private static readonly TimeSpan Remember = TimeSpan.FromHours(2);
 
     /// <summary>
     /// Adds a question and its answer to the conversation with this key (created with the first question). The same question
-    /// asked again (same ClientId, after an error) replaces the earlier attempt. Null when the conversation is full.
+    /// asked again (same ClientId, after an error) replaces the earlier attempt. Null when the conversation is full or the
+    /// visitor deleted it while the answer was running.
     /// </summary>
     public ChatRow? Record(NewChat chat, ChatTurn turn, DateTime now)
     {
         lock (Gate)
         {
+            if (deleted.ContainsKey(chat.KeyHash)) return null;
             using var scope = scopes.CreateScope();
             var db = scope.Database;
             var row = db.FirstOrDefault<ChatRow>("WHERE KeyHash=@0", chat.KeyHash);
@@ -58,6 +64,7 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
             // Questions asked after the visitor agreed again belong to the newer consent: withdrawing that one deletes them.
             row.ConsentId = chat.ConsentId ?? row.ConsentId;
             row.UpdatedUtc = now;
+            row.ExpiresUtc = now.AddDays(Math.Clamp(chat.Days, 1, 365));
             db.Update(row);
             scope.Complete();
             return row;
@@ -113,7 +120,9 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
         {
             var text = query.Search.Trim().Replace("[", "").Replace("%", "").Replace("_", "");
             var term = Arg("%" + text[..Math.Min(text.Length, 80)] + "%");
-            where.Add($"(Topic LIKE {term} OR PagePath LIKE {term} OR Id IN (SELECT ChatId FROM LigataAIChatTurn WHERE Question LIKE {term} OR Answer LIKE {term}))");
+            // Also by the name or email of a team request the visitor started from the conversation (requests for access by email).
+            where.Add($"(Topic LIKE {term} OR PagePath LIKE {term} OR Id IN (SELECT ChatId FROM LigataAIChatTurn WHERE Question LIKE {term} OR Answer LIKE {term})" +
+                $" OR ConversationId IN (SELECT Id FROM LigataAIConversation WHERE Name LIKE {term} OR Email LIKE {term}))");
         }
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
         using var scope = scopes.CreateScope(autoComplete: true);
@@ -132,35 +141,57 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
             FROM LigataAIChat", true);
     }
 
-    public void Keep(Guid id, bool keep)
+    /// <summary>Keeps a conversation beyond the history period until <paramref name="until"/>, for a reason (null: stop keeping it).</summary>
+    public void Keep(Guid id, DateTime? until, string? reason, Guid? by)
     {
         using var scope = scopes.CreateScope();
-        scope.Database.Execute("UPDATE LigataAIChat SET Kept=@0 WHERE Id=@1", keep, id);
+        scope.Database.Execute("UPDATE LigataAIChat SET Kept=@0, KeptUntil=@1, KeptReason=@2, KeptBy=@3 WHERE Id=@4",
+            until != null, (object?)until ?? DBNull.Value, (object?)reason ?? DBNull.Value, (object?)(until == null ? null : by) ?? DBNull.Value, id);
         scope.Complete();
     }
 
     public int Delete(Guid id) => Remove("WHERE Id=@0", id);
 
-    /// <summary>The visitor deleted these conversations in the chat (keys hashed).</summary>
-    public int DeleteByKeys(IReadOnlyCollection<string> keyHashes) => keyHashes.Count == 0 ? 0 : Remove("WHERE KeyHash IN (@0)", keyHashes);
+    /// <summary>The visitor deleted these conversations in the chat (keys hashed). An answer still running cannot bring them back.</summary>
+    public int DeleteByKeys(IReadOnlyCollection<string> keyHashes)
+    {
+        if (keyHashes.Count == 0) return 0;
+        Forget(keyHashes);
+        return Remove("WHERE KeyHash IN (@0)", keyHashes);
+    }
 
-    /// <summary>The visitor withdrew this consent: everything asked with it goes.</summary>
-    public int DeleteByConsent(Guid consentId) => Remove("WHERE ConsentId=@0", consentId);
+    /// <summary>The visitor withdrew this consent, or stopped the history: everything kept with it goes.</summary>
+    public int DeleteByConsent(Guid consentId)
+    {
+        using (var scope = scopes.CreateScope(autoComplete: true)) Forget(scope.Database.Fetch<string>("SELECT KeyHash FROM LigataAIChat WHERE ConsentId=@0", consentId));
+        return Remove("WHERE ConsentId=@0", consentId);
+    }
+
+    private static void Forget(IEnumerable<string> keyHashes)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var hash in keyHashes) deleted[hash] = now;
+        if (deleted.Count > 1000) foreach (var old in deleted.Where(d => now - d.Value > Remember).Select(d => d.Key).ToList()) deleted.TryRemove(old, out _);
+    }
 
     /// <summary>Every conversation the team has not kept.</summary>
     public int DeleteAll() => Remove("WHERE Kept=@0", false);
 
-    /// <summary>Deletes conversations without activity since <paramref name="before"/> (unless kept) and, above the cap, the oldest.</summary>
-    public int Purge(DateTime before, int maxStored = MaxChats)
+    /// <summary>
+    /// Deletes conversations past their period: the one they were collected under (ExpiresUtc), or the current one when it is
+    /// shorter (<paramref name="days"/>). Kept ones go when their keeping ends. Above the cap the oldest go first.
+    /// </summary>
+    public int Purge(DateTime now, int days, int maxStored = MaxChats)
     {
+        var before = now.AddDays(-Math.Clamp(days, 1, 365));
         lock (Gate)
         {
             using var scope = scopes.CreateScope();
             var db = scope.Database;
-            var ids = db.Fetch<Guid>("SELECT Id FROM LigataAIChat WHERE Kept=@0 AND UpdatedUtc<@1", false, before);
+            var ids = db.Fetch<Guid>("SELECT Id FROM LigataAIChat WHERE (Kept=@0 AND (ExpiresUtc<@1 OR UpdatedUtc<@2)) OR (Kept=@3 AND (KeptUntil IS NULL OR KeptUntil<@1))", false, now, before, true);
             var total = db.ExecuteScalar<int>("SELECT COUNT(*) FROM LigataAIChat") - ids.Count;
             if (total > maxStored)
-                ids.AddRange(db.SkipTake<ChatRow>(0, total - maxStored, "WHERE Kept=@0 AND UpdatedUtc>=@1 ORDER BY UpdatedUtc", false, before).Select(r => r.Id));
+                ids.AddRange(db.SkipTake<ChatRow>(0, total - maxStored, "WHERE Kept=@0 AND UpdatedUtc>=@1 ORDER BY UpdatedUtc", false, before).Where(r => !ids.Contains(r.Id)).Select(r => r.Id));
             foreach (var chunk in ids.Chunk(200))
             {
                 db.Execute("DELETE FROM LigataAIChatTurn WHERE ChatId IN (@0)", chunk);

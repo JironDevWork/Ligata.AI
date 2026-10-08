@@ -112,8 +112,10 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
   async load(quiet) {
     const params = new URLSearchParams({ view: this.view, take: '80' });
     if (this.q.trim()) params.set('q', this.q.trim());
+    const seq = this.loadSeq = (this.loadSeq || 0) + 1;
     try {
       const data = await this.request('?' + params);
+      if (seq !== this.loadSeq) return;
       this.items = data.items; this.total = data.total; this.counts = data.counts; this.setup = data.history;
       if (quiet && this.selected && this.items.some(i => i.id === this.selected && i.updated !== this.thread?.conversation.updated)) this.loadThread(this.selected);
     } catch (e) { if (!quiet) throw e; }
@@ -142,7 +144,10 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
   }
 
   async keep(c) {
-    const result = await this.act(`/${c.id}/keep`, 'POST', { keep: !c.kept }, c.kept ? 'No longer kept: deleted with the others after the history period.' : 'Kept: not deleted after the history period.');
+    // Keeping beyond the period needs a reason (a complaint, a legal claim) and ends after 90 days unless kept again.
+    let reason = '';
+    if (!c.kept) { reason = (prompt('Why is this conversation kept beyond the history period? For example: complaint, legal claim. It is kept for 90 days.') || '').trim(); if (!reason) return; }
+    const result = await this.act(`/${c.id}/keep`, 'POST', { keep: !c.kept, reason, days: 90 }, c.kept ? 'No longer kept: deleted with the others after the history period.' : 'Kept for 90 days.');
     if (result?.conversation) { this.thread = { ...this.thread, conversation: result.conversation }; await this.load(true); }
   }
   async remove(c) {
@@ -188,7 +193,7 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
   offState() {
     const s = this.setup || {};
     return html`<div class="app"><div class="center empty-state">${icon('chat')}<h2>No conversations are kept</h2>
-      <p>The website does not keep conversations with the AI. To read what visitors ask, switch on the history under <b>Settings → Privacy → Conversation history</b>. Visitors are told before they agree, and conversations are deleted automatically after the period you choose.</p>
+      <p>The website does not keep conversations with the AI. To read what visitors ask, switch on the history under <b>Settings → Privacy → Conversation history</b>. Visitors then decide in the chat whether their conversations may be kept, and kept conversations are deleted automatically after the period you choose.</p>
       ${s.editor ? html`<a class="btn primary" href=${settingsPath}>${icon('shield')}Open the privacy settings</a>` : html`<p class="muted">Ask an administrator to switch it on.</p>`}
     </div></div>`;
   }
@@ -232,7 +237,7 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
           <div class="meta">${c.pagePath ? html`<span title=${c.pageTitle}>${icon('globe')} ${c.pagePath}</span>` : nothing}<span>${when(c.created)}</span>${c.language ? html`<span>${languages[c.language] || c.language.toUpperCase()}</span>` : nothing}</div></div>
         <div class="row">
           ${c.conversationId && this.setup?.inbox ? html`<a class="btn" href=${inboxPath(c.conversationId)}>${icon('inbox')}Open in Inbox</a>` : nothing}
-          <button class="btn ${c.kept ? 'primary' : ''}" ?disabled=${this.busy} title=${c.kept ? 'Kept until you delete it' : 'Keep it beyond the history period'} @click=${() => this.keep(c)}>${icon('pin')}${c.kept ? 'Kept' : 'Keep'}</button>
+          <button class="btn ${c.kept ? 'primary' : ''}" ?disabled=${this.busy} title=${c.kept ? 'Kept for a reason; click to stop keeping it' : 'Keep it beyond the history period, for a reason'} @click=${() => this.keep(c)}>${icon('pin')}${c.kept ? 'Kept' : 'Keep'}</button>
           <button class="icon-btn" title="Details" aria-label="Details" @click=${() => { this.showDetails = !this.showDetails; }}>${icon('panel')}</button>
         </div>
       </div>
@@ -264,7 +269,7 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
 
   detailsPane(c) {
     const s = this.setup || {};
-    const deleted = new Date(new Date(c.updated).getTime() + (s.days || 30) * 86400000);
+    const deleted = new Date(Math.min(c.expires ? new Date(c.expires).getTime() : Infinity, new Date(c.updated).getTime() + (s.days || 30) * 86400000));
     return html`<section class="pane details">
       <div><h3>Conversation</h3><dl>
         <dt>Started</dt><dd>${when(c.created)}</dd>
@@ -274,7 +279,7 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
         ${c.language ? html`<dt>Language</dt><dd>${languages[c.language] || c.language.toUpperCase()}</dd>` : nothing}
         ${c.pagePath ? html`<dt>Page</dt><dd title=${c.pagePath}>${c.pageTitle || c.pagePath}<br><small class="muted">${c.pagePath}</small></dd>` : nothing}
         <dt>Answered by</dt><dd>${c.engine === 'api' ? 'Claude (Anthropic API)' : 'Own AI server'}</dd>
-        <dt>Deleted</dt><dd>${c.kept ? 'Kept until you delete it' : `${deleted.toLocaleDateString(undefined, { dateStyle: 'medium' })}, unless you keep it or the visitor deletes it earlier`}</dd>
+        <dt>Deleted</dt><dd>${c.kept ? `Kept until ${new Date(c.keptUntil).toLocaleDateString(undefined, { dateStyle: 'medium' })}: ${c.keptReason || ''}` : `${deleted.toLocaleDateString(undefined, { dateStyle: 'medium' })}, unless you keep it or the visitor deletes it earlier`}</dd>
       </dl></div>
       ${c.conversationId ? html`<div><h3>Team</h3><p class="muted" style="font-size:13px">The visitor asked your team from this conversation${s.inbox ? html`: <a href=${inboxPath(c.conversationId)}>open it in the Inbox</a>` : ''}.</p></div>` : nothing}
       ${this.aboutCard()}
@@ -285,8 +290,8 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
   aboutCard() {
     const s = this.setup || {};
     return html`<div><h3>About the history</h3><p class="muted" style="font-size:12.5px;line-height:1.5">
-      ${s.enabled ? `Conversations are deleted ${number(s.days)} day${s.days === 1 ? '' : 's'} after their last question, unless you keep them.` : 'The history is switched off: these conversations are deleted when their period ends.'}
-      Visitors were told before they agreed. They can delete their conversations in the chat, and withdrawing consent deletes them too. No IP addresses and no files are kept.</p></div>`;
+      ${s.enabled ? `Only conversations of visitors who allowed it are kept, and deleted ${number(s.days)} day${s.days === 1 ? '' : 's'} after their last question unless you keep one for a reason.` : 'The history is switched off: these conversations are deleted when their period ends.'}
+      Visitors can delete their conversations in the chat; stopping the history or withdrawing consent deletes them too. No IP addresses and no files are kept.</p></div>`;
   }
 }
 customElements.define('ligata-ai-history', LigataAIHistory);
