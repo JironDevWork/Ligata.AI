@@ -185,7 +185,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             // A summary keeps the site's thinking setting and tools (declared, not callable): the prompt then matches the cached conversation exactly.
             messages, visitor, maxTokens = compact ? SummaryTokens + (b.Thinking ? ThinkingRoom : 0) : MaxTokens(b), temperature = compact ? Math.Min(b.Temperature, 0.3) : b.Temperature,
             thinking = b.Thinking, contextLimit = b.ContextLimit,
-            tools = lookups != null ? Lookups.Tools : null, toolChoice = lookups == null ? null : compact ? "none" : lookups.Touches(request.Messages[^1].Content ?? "") ? "required" : null, lookupRounds = Lookups.MaxRounds,
+            tools = lookups != null ? Lookups.Tools : null, toolChoice = lookups == null ? null : compact ? "none" : lookups.Touches(request.Messages[^1].Content ?? "", request.Messages.SkipLast(1).Select(m => m.Content ?? "").Append(request.Summary ?? "")) ? "required" : null, lookupRounds = Lookups.MaxRounds,
         };
         HttpResponseMessage response;
         try { response = await gateway.ChatAsync(body, token); }

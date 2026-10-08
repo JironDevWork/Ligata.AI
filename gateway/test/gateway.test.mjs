@@ -397,7 +397,7 @@ test('a model that keeps looking things up must answer with what it found', asyn
   const result = await chat(keyA, { visitor: 'look7', tools, messages: [{ role: 'user', content: 'look up forever' }] }, { onEvent: answer() });
   assert.equal(result.events.filter(e => e.name === 'tool_calls').length, 4, 'maxRounds 4: four rounds of lookups');
   assert.deepEqual(mock.state.choices, ['auto', 'auto', 'auto', 'auto', 'none'], 'then a round without lookups');
-  assert.deepEqual(mock.state.lastBody.logit_bias, [[48, false]], 'in which the model cannot even write a tool call as text');
+  assert.deepEqual(mock.state.lastBody.logit_bias, [[48, false], [49, false]], 'in which the model cannot even write a tool call as text');
   assert.equal(result.events.at(-1).name, 'done');
   assert.ok(result.text.startsWith('Found: '), result.text);
   const fewer = await chat(keyA, { visitor: 'look7b', tools, lookupRounds: 2, messages: [{ role: 'user', content: 'look up forever' }] }, { onEvent: answer() });

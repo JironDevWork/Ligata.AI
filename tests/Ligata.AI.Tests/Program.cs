@@ -164,7 +164,8 @@ Assert(!Lookups.Valid(Call("x", "{}")) && !Lookups.Valid(Call(Lookups.Search, "[
 
 Assert(lookups.Touches("Wann habt ihr offen?") && lookups.Touches("Was kostet das?") && lookups.Touches("Kontaktformular?") && !lookups.Touches("Schreib mir ein Gedicht über Katzen.") && !lookups.Touches("Write me a poem about the moon"),
     "A question that mentions the website's words must be looked up first (GPU); unrelated requests stay free.");
-Assert(!new Lookups(new KnowledgeSnapshot([new("page", "Kontakt", "/kontakt/", 1, "E-Mail: hallo@ahorn.example")])).Touches("Hallo!"), "Greetings never force a lookup, even when the word is on the website.");
+Assert(lookups.Touches("Wann habt ihr offen?", ["Was kostet ein Tisch?", "Ab CHF 2400."]) && !lookups.Touches("Ist die Werkstatt auch offen?", ["Wann habt ihr offen?", "Die Werkstatt ist Montag bis Freitag offen."]), "A follow-up about what the conversation already found is left to the model.");
+Assert(!new Lookups(new KnowledgeSnapshot([new("page", "Kontakt", "/kontakt/", 1, "E-Mail: hallo@ahorn.example. Gute Möbel.")])).Touches("Hallo!") && !new Lookups(new KnowledgeSnapshot([new("page", "Kontakt", "/kontakt/", 1, "Gute Möbel halten lange.")])).Touches("Guten Morgen"), "Greetings never force a lookup, even when the word is on the website.");
 
 var bilingual = new KnowledgeSnapshot(
 [
@@ -186,7 +187,7 @@ var bigSite = new KnowledgeSnapshot([.. Enumerable.Range(0, 900).Select(i => new
 var bigMap = PromptBuilder.SiteMap(bigSite);
 Assert(bigMap.Length / 3.6 <= PromptBuilder.SiteMapTokens + 100 && bigMap.Contains("more pages: find them with search_website") && bigMap.Contains("Page 0 with"), "A big website lists its upper levels within the limit and is searched for the rest.");
 var lookupPrompt = PromptBuilder.System(configured, [], ahorn, "Kontakt", "/kontakt/", new DateTime(2026, 10, 7), team: true);
-Assert(lookupPrompt.Contains("search_website") && lookupPrompt.Contains("Look up before every answer") && lookupPrompt.Contains("neither the knowledge nor your lookups answer it") && lookupPrompt.Contains("If neither the knowledge nor a lookup answers") && !lookupPrompt.Contains("Esstisch"), "With lookups the prompt explains the tools and holds no page text.");
+Assert(lookupPrompt.Contains("search_website") && lookupPrompt.Contains("Use the tools whenever an answer needs facts") && lookupPrompt.Contains("never from memory or assumption") && lookupPrompt.Contains("neither the knowledge nor your lookups answer it") && lookupPrompt.Contains("If neither the knowledge nor a lookup answers") && !lookupPrompt.Contains("Esstisch"), "With lookups the prompt explains the tools and holds no page text.");
 Assert(lookupPrompt.IndexOf("# Pages of this website") < lookupPrompt.IndexOf("# Current situation"), "The list of pages belongs to the cacheable prefix.");
 Assert(PromptBuilder.Everything(ahorn, 60).Length < PromptBuilder.Everything(ahorn, 100_000).Length && PromptBuilder.Everything(ahorn, 100_000).Contains("Esstisch"), "Without lookups, pages go into the prompt as far as the budget allows.");
 Assert(new KnowledgeSettings().Includes(Guid.NewGuid(), "/a/") && !new KnowledgeSettings { UsePages = false }.Includes(Guid.NewGuid(), "/a/") && !new KnowledgeSettings { ExcludedPaths = ["/shop/"] }.Includes(Guid.NewGuid(), "/shop/cart/") && new KnowledgeSettings { ExcludedPaths = ["/shop/"] }.Includes(Guid.NewGuid(), "/shopping/"),

@@ -25,7 +25,7 @@ export function startMockLlm() {
     const erase = /^\/slots\/(\d+)\?action=erase$/.exec(request.url);
     if (erase) { state.erased.push(Number(erase[1])); return json(200, { id_slot: Number(erase[1]), n_erased: 1 }); }
     // Gemma's tool call marker is one special token (id 48), like llama-server reports it with parse_special.
-    if (request.url === '/tokenize') return json(200, { tokens: body.parse_special && body.content === '<|tool_call>' ? [48] : Array.from({ length: count(body.content) }, (_, i) => i) });
+    if (request.url === '/tokenize') return json(200, { tokens: body.parse_special && ['<|tool_call>', '<tool_call|>'].includes(body.content) ? [body.content === '<|tool_call>' ? 48 : 49] : Array.from({ length: count(body.content) }, (_, i) => i) });
     if (request.url === '/apply-template') return json(200, { prompt: body.messages.map(m => `<${m.role}>${m.content}`).join('\n') });
     if (request.url === '/v1/chat/completions') {
       state.requests++; state.lastBody = body; state.slotLog.push(body.id_slot); (state.choices ||= []).push(body.tool_choice);

@@ -89,8 +89,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.6.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.6.0 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.6.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.6.1 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -111,7 +111,7 @@ The assistant does not read the whole website with every question. It gets its i
 - **`search_website`** searches every page and document and returns the best passages with their page url. It is a keyword index on the website's own server (BM25 over passages of about a paragraph): words match without accents and by prefix, so *kontakt* finds *Kontaktformular* and *preise* finds *Preis*.
 - **`read_pages`** reads up to three pages (by url) or documents (by title) in full.
 
-The model may search several topics at once, in up to three rounds per answer (about 7,000 tokens of results); then it answers with what it found. The visitor sees *Searching the website…* meanwhile. On the GPU, a question whose words occur on the website must be looked up before it is answered: a 12B model otherwise too often answers from the prompt alone. Greetings and unrelated requests are answered at once.
+The model may search several topics at once, in up to three rounds per answer (about 7,000 tokens of results); then it answers with what it found. The visitor sees *Searching the website…* meanwhile. Looking things up is the model's choice: greetings, small talk and follow-ups the conversation already answers are answered at once, but every fact about the website must come from a lookup, the knowledge or the conversation, never from memory. On the GPU, a question that asks for website facts the conversation does not contain yet must be looked up first: a 12B model otherwise too often answers from the prompt alone.
 
 - **Big websites fit**: knowledge no longer grows with the website. The list of pages takes at most about 3,000 tokens; a bigger website lists its upper levels and is found by search.
 - **Always current**: pages are read live from Umbraco's published content. Publishing, unpublishing or moving a page updates what the assistant finds at once (on every server of a load-balanced site). New pages are included automatically; editors leave out single pages or whole sections under **Knowledge**.

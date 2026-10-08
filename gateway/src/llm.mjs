@@ -70,13 +70,14 @@ export class Llm {
   }
 
   /**
-   * The special token(s) that start a tool call (Gemma 4: <|tool_call>). tool_choice "none" alone does not stop the model from
+   * The special tokens of a tool call (Gemma 4: <|tool_call>, <tool_call|> and the response markers). tool_choice "none" alone does not stop the model from
    * writing one, and llama-server then passes it on as answer text; rounds without lookups forbid these tokens instead.
    */
   async toolCallTokens() {
     if (this.toolTokens?.epoch === this.epoch) return this.toolTokens.ids;
     const ids = [];
-    for (const marker of ['<|tool_call>', '<tool_call>', '[TOOL_CALLS]']) {
+    // Every special token of the tool syntax: banning only the opening one, Gemma began a call with the closing one instead.
+    for (const marker of ['<|tool_call>', '<tool_call|>', '<|tool_response>', '<tool_response|>', '<tool_call>', '</tool_call>', '[TOOL_CALLS]']) {
       const { tokens } = await this.json('/tokenize', { content: marker, parse_special: true }).catch(() => ({ tokens: [] }));
       if (tokens.length === 1) ids.push(typeof tokens[0] === 'object' ? tokens[0].id : tokens[0]);
     }

@@ -49,6 +49,7 @@ public sealed class KnowledgeSnapshot
         "quand", "pourquoi", "quel", "quelle", "aussi", "sur", "dans", "quando", "dove", "perche", "quale", "anche", "su", "sul",
         "hi", "hello", "hey", "thanks", "thank", "bye", "ok", "okay", "yes", "no", "please", "hallo", "gruezi", "gruessech", "servus", "moin", "danke", "merci", "tschuss", "ja", "nein", "bitte",
         "bonjour", "salut", "oui", "non", "ciao", "buongiorno", "grazie", "si",
+        "good", "morning", "afternoon", "evening", "guten", "gute", "morgen", "abend", "geht", "gehts", "gaht", "bonsoir", "buonasera",
         "write", "tell", "give", "schreib", "schreibe", "erzahl", "erzahle", "ecris", "scrivi",
     };
 
@@ -273,6 +274,17 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
     /// requests stay free.
     /// </summary>
     public bool Touches(string question) => snapshot.Mentions(question);
+
+    /// <summary>
+    /// The question touches the website with something the conversation does not contain yet. Otherwise (a follow-up about what
+    /// was already found, small talk) the model decides itself whether it needs to look something up.
+    /// </summary>
+    public bool Touches(string question, IEnumerable<string> conversation)
+    {
+        var known = conversation.SelectMany(KnowledgeSnapshot.Meaningful).ToHashSet(StringComparer.Ordinal);
+        var asked = KnowledgeSnapshot.Meaningful(question).Where(term => !known.Contains(term)).ToList();
+        return asked.Count > 0 && snapshot.Mentions(string.Join(' ', asked));
+    }
 
     /// <summary>Added to every result when the model may offer the team.</summary>
     public const string TeamReminder = "\n\n(If this does not answer the visitor's question, say so in one short sentence, offer the team and end your reply with " + PromptBuilder.TeamMarker + ".)";
