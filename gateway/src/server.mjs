@@ -4,7 +4,7 @@ import { LlmError } from './llm.mjs';
 import { DocumentError, pdfToText } from './pdf.mjs';
 
 // Public, server-to-server API used by the Umbraco package. Browsers never call it directly
-// (no CORS headers), and every route except /v1/health requires an API key.
+// (no CORS headers), and every route except /v1/health and /robots.txt requires an API key.
 
 class HttpError extends Error {
   constructor(status, code, message, extra = {}) { super(message); Object.assign(this, { status, code, extra }); }
@@ -185,7 +185,13 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
   return http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://gateway');
     const route = `${request.method} ${url.pathname}`;
+    // An API on a public hostname, not a website: search engines and AI crawlers stay out.
+    response.setHeader('X-Robots-Tag', 'noindex, nofollow');
     try {
+      if (route === 'GET /robots.txt') {
+        response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+        return response.end('User-agent: *\nDisallow: /\n');
+      }
       if (route === 'GET /v1/health') return send(response, 200, (await routes[route]()).body);
       const known = route === 'POST /v1/chat' || routes[route];
       if (!known) throw new HttpError(404, 'not_found', 'Unknown endpoint.');

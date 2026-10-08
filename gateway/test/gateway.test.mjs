@@ -58,6 +58,14 @@ test('keys are stored as hashes only and verified in constant time', () => {
   assert.equal(gateway.keys.verify('nonsense'), null);
 });
 
+test('crawlers are kept out: robots.txt disallows everything and every answer says noindex', async () => {
+  const robots = await call('/robots.txt');
+  assert.equal(robots.status, 200);
+  assert.equal(await robots.text(), 'User-agent: *\nDisallow: /\n');
+  for (const answer of [robots, await call('/v1/health'), await call('/v1/status'), await call('/nothing-here')])
+    assert.equal(answer.headers.get('x-robots-tag'), 'noindex, nofollow', answer.url);
+});
+
 test('health is public, everything else requires a valid key', async () => {
   assert.equal((await call('/v1/health')).status, 200);
   assert.equal((await call('/v1/status')).status, 401);

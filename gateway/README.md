@@ -54,6 +54,7 @@ Defaults are in `src/config.mjs`; override them in `data/config.json` (same shap
 | Route | Purpose |
 | --- | --- |
 | `GET /v1/health` | Public liveness: `{ ok, model: ready \| loading \| down }` |
+| `GET /robots.txt` | Public: `Disallow: /` for every crawler. Every answer also carries `X-Robots-Tag: noindex, nofollow`, so the public hostname (e.g. ai.ligata.ch) stays out of search engines and AI crawlers |
 | `GET /v1/status` | Model, context size, queue, GPU health, this key's limits and usage |
 | `POST /v1/chat` | `{ messages, visitor, maxTokens, temperature, thinking, contextLimit }` → SSE |
 | `POST /v1/tokenize` | `{ texts: [] }` → `{ counts: [] }` (knowledge budgets) |

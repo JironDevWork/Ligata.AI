@@ -16,7 +16,7 @@ Then restart the site and check **AI Assistant → Settings → Connection → T
 In GPU mode, visitors are told that their messages go to an AI server run by `LigataAI:Privacy:GpuOperator` (default "Ligata") in `GpuOperatorCountry` (default `CH`, where this machine runs), and they agree before anything is sent. For every website you connect:
 - Nothing to configure while the GPU stays in Switzerland. If it moves, set `"LigataAI": { "Privacy": { "GpuOperatorCountry": "…" } }` on every website (visitors are then asked again).
 - Sign a data processing agreement (Art. 28 GDPR) with the website owner: you process their visitors' messages on their behalf. [docs/PRIVACY.md](PRIVACY.md#technical-and-organisational-measures-software) lists the technical measures for its annex.
-- Keep the gateway reachable over HTTPS only (tunnel or reverse proxy); it listens on 127.0.0.1.
+- Keep the gateway reachable over HTTPS only (tunnel or reverse proxy); it listens on 127.0.0.1. The public hostname answers `/robots.txt` with `Disallow: /` and every response with `X-Robots-Tag: noindex, nofollow`. Cloudflare's managed robots.txt (AI Crawl Control) only prepends comments to it.
 - `gateway/data/keys.json` is written crash-safe (flushed to disk before it replaces the old file), and `keys.json.bak` holds the previous version. A damaged file never disconnects sites: the gateway uses the backup or keeps the keys it has loaded, and logs `keys_damaged`. Back up `gateway/data` with the machine.
 
 The gateway keeps no message content: no disk storage, no content in logs, the context only in GPU memory until it is overwritten.
