@@ -450,6 +450,26 @@ using (var scope = app.Services.CreateScope())
     var everyPage = await knowledgeIndex.SnapshotAsync(new KnowledgeSettings());
     Assert(everyPage.Pages == 3 && everyPage.Search("BLUE-HERON-42").FirstOrDefault()?.Document.Url == sitePages.Single(p => p.Name == "Contact").Url, "Every published page is searchable without importing it: " + everyPage.Pages);
     Assert(sitePages[0].Name == "Ligata Test Studio" && sitePages.Skip(1).All(p => p.Level == 2), "Pages come in tree order.");
+    var contents = services.GetRequiredService<IContentService>();
+    // A published node without a template (settings, redirects) is no web page: Umbraco reports its template as null, not 0.
+    if (services.GetRequiredService<IContentTypeService>().Get("testData") == null)
+    {
+        var strings = services.GetRequiredService<IShortStringHelper>();
+        var dataType = new ContentType(strings, -1) { Alias = "testData", Name = "Data node", AllowedAsRoot = true, Icon = "icon-settings" };
+        dataType.AddPropertyType(new PropertyType(strings, (await services.GetRequiredService<IDataTypeService>().GetByEditorAliasAsync(Constants.PropertyEditors.Aliases.TextArea)).First(), "bodyText") { Name = "Body text" }, "content", "Content");
+        if (!(await services.GetRequiredService<IContentTypeService>().CreateAsync(dataType, Constants.Security.SuperUserKey)).Success) throw new Exception("Seeding the data node type failed.");
+    }
+    var dataNode = contents.Create("Website settings", -1, "testData");
+    dataNode.SetValue("bodyText", "<p>Internal setting SECRET-NODE-9.</p>");
+    contents.Save(dataNode); contents.Publish(dataNode, ["*"]);
+    try
+    {
+        var withData = await knowledgeIndex.SnapshotAsync(new KnowledgeSettings());
+        var listed = (await services.GetRequiredService<ContentKnowledge>().PagesAsync()).Single(p => p.Key == dataNode.Key);
+        Assert(dataNode.TemplateId == null && !withData.Search("SECRET-NODE-9").Any(h => h.Text.Contains("SECRET-NODE-9")) && withData.Documents.All(d => !d.Text.Contains("SECRET-NODE-9")) && !PromptBuilder.SiteMap(withData).Contains("Website settings") && !listed.HasTemplate && listed.Url == "",
+            "Published nodes without a template are not read, listed or searched.");
+    }
+    finally { contents.Delete(dataNode); }
     var withoutContact = await knowledgeIndex.SnapshotAsync(new KnowledgeSettings { ExcludedPages = [contactKey] });
     Assert(withoutContact.Pages == 2 && withoutContact.Search("BLUE-HERON-42").Count == 0 && !PromptBuilder.SiteMap(withoutContact).Contains("Contact"), "A left-out page is neither listed nor searched.");
     Assert((await knowledgeIndex.SnapshotAsync(new KnowledgeSettings { UsePages = false })).Pages == 0, "Website pages can be switched off.");
@@ -458,7 +478,6 @@ using (var scope = app.Services.CreateScope())
     store.SetPinned(delivery.Id, true);
     Assert(!(await knowledgeIndex.SnapshotAsync(new KnowledgeSettings())).Search("GREEN-VAN").Any() && store.Knowledge().Single(k => k.Id == delivery.Id).Pinned, "Always-known documents are in the prompt, not searched.");
     store.Delete(delivery.Id);
-    var contents = services.GetRequiredService<IContentService>();
     var contactPage = contents.GetById(contactKey)!;
     var contactBody = contactPage.GetValue<string>("bodyText");
     contactPage.SetValue("bodyText", contactBody + "<p>New code: RED-FOX-7.</p>");

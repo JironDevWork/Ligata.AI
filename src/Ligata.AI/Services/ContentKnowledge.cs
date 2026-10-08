@@ -31,8 +31,8 @@ public sealed class ContentKnowledge(IUmbracoContextFactory contexts, IDocumentN
     {
         using var reference = contexts.EnsureUmbracoContext();
         // The url in the first language that has one (a page may be published in some languages only).
-        string Url(IPublishedContent p) => p.TemplateId <= 0 ? "" : Cultures(p).Select(c => p.Url(c == "" ? null : c, UrlMode.Relative)).FirstOrDefault(u => u is not ("" or "#")) ?? "";
-        return (await PublishedAsync()).Select(p => new SitePage(p.Key, p.Name ?? "", Url(p), p.Level, p.ContentType.Alias, p.TemplateId > 0)).ToList();
+        string Url(IPublishedContent p) => !WebPage(p) ? "" : Cultures(p).Select(c => p.Url(c == "" ? null : c, UrlMode.Relative)).FirstOrDefault(u => u is not ("" or "#")) ?? "";
+        return (await PublishedAsync()).Select(p => new SitePage(p.Key, p.Name ?? "", Url(p), p.Level, p.ContentType.Alias, WebPage(p))).ToList();
     }
 
     private async Task<List<IPublishedContent>> PublishedAsync()
@@ -53,6 +53,9 @@ public sealed class ContentKnowledge(IUmbracoContextFactory contexts, IDocumentN
         return pages;
     }
 
+    /// <summary>A page visitors can open: it has a template. Umbraco reports a missing one as null, not 0.</summary>
+    private static bool WebPage(IPublishedContent page) => page.TemplateId is > 0;
+
     /// <summary>The languages a page is published in; one empty culture for pages that do not vary by culture.</summary>
     private static List<string> Cultures(IPublishedContent page) =>
         page.Cultures.Keys.Any(c => c != "") ? page.Cultures.Keys.Where(c => c != "" && page.IsPublished(c)).Order(StringComparer.OrdinalIgnoreCase).ToList()
@@ -68,7 +71,7 @@ public sealed class ContentKnowledge(IUmbracoContextFactory contexts, IDocumentN
         var found = new List<(IPublishedContent Page, string Culture, string Url)>();
         foreach (var page in await PublishedAsync())
         {
-            if (page.TemplateId <= 0) continue;
+            if (!WebPage(page)) continue;
             foreach (var culture in Cultures(page))
             {
                 var url = page.Url(culture == "" ? null : culture, UrlMode.Relative);
