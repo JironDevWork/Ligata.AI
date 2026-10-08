@@ -167,7 +167,12 @@
   /** Removes the handoff marker, including a half-streamed "[[te" at the end of an unfinished answer. */
   const stripMark = (text, streaming) => {
     let out = String(text || '').split(TEAM_MARK).join('');
-    if (streaming) for (let n = TEAM_MARK.length - 1; n > 0; n--) if (out.endsWith(TEAM_MARK.slice(0, n))) { out = out.slice(0, -n); break; }
+    if (streaming) {
+      for (let n = TEAM_MARK.length - 1; n > 0; n--) if (out.endsWith(TEAM_MARK.slice(0, n))) { out = out.slice(0, -n); break; }
+      // Bold that is still being written shows as bold, not as raw asterisks.
+      out = out.trimEnd();
+      if ((out.match(/\*\*/g) || []).length % 2) out = out.endsWith('**') ? out.slice(0, -2) : out + '**';
+    }
     return out.trimEnd();
   };
 

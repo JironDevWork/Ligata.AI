@@ -97,3 +97,15 @@ test('wait estimates count rounds of parallel answers', async () => {
   assert.ok(s.estimate(1) <= 10 && s.estimate(2) <= 10 && s.estimate(3) >= 13, 'positions 1-2 start after the first round, 3 after the second');
   await Promise.all(block);
 });
+
+test('the next in line takes the place that frees first', async () => {
+  const s = scheduler({ parallel: 2 });
+  s.durations = [20000];
+  const early = s.enqueue({ keyId: 'k', visitor: 'early', run: () => wait(40) });
+  s.active[0].startedAt -= 15000; // started 15 s ago: about 5 s left
+  const late = s.enqueue({ keyId: 'k', visitor: 'late', run: () => wait(40) }); // about 20 s left
+  assert.equal(s.estimate(1), 5, 'first waiting: when the early answer ends');
+  assert.equal(s.estimate(2), 20, 'second waiting: when the late answer ends');
+  assert.equal(s.estimate(3), 25, 'third waiting: after the first waiting one, in the early place');
+  await Promise.all([early, late]);
+});

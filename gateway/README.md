@@ -67,7 +67,7 @@ Message parts: `{ type: 'text', text }`, `{ type: 'image', data }` (base64 PNG/J
 ## Tests
 
 ```powershell
-npm test   # 47 tests: keys, queue, several answers at once, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
+npm test   # 48 tests: keys, queue, several answers at once, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
 ```
 
 The tests run against a mock llama-server (`test/mock-llm.mjs`) with switchable failure modes; `node test/mock-server.mjs 1298` serves the mock on a fixed port for UI development.

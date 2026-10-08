@@ -36,12 +36,20 @@ export class Scheduler {
     return this.durations.reduce((a, b) => a + b, 0) / this.durations.length / 1000;
   }
 
-  /** Seconds until a job at this waiting position (1 = next) starts: every `parallel` jobs take about one average answer. */
+  /**
+   * Seconds until a job at this waiting position (1 = next) starts. Each running answer frees its place after about
+   * one average answer; the next in line takes the place that frees first and holds it for an average answer.
+   */
   estimate(position) {
-    const average = this.averageSeconds();
-    const oldest = this.active.reduce((max, job) => Math.max(max, (Date.now() - job.startedAt) / 1000), 0);
-    const first = this.active.length ? Math.max(average - oldest, 3) : 0;
-    return Math.round(first + (Math.ceil(position / this.parallel) - 1) * average);
+    const average = this.averageSeconds(), now = Date.now();
+    const places = [...Array(Math.max(0, this.parallel - this.active.length)).fill(0), ...this.active.map(job => Math.max(average - (now - job.startedAt) / 1000, 3))];
+    let start = 0;
+    for (let i = 0; i < position; i++) {
+      places.sort((a, b) => a - b);
+      start = places.shift();
+      places.push(start + average);
+    }
+    return Math.round(start);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.5.1';
+import { icon, number, compact } from './ui.js?v=0.5.2';
 
 export const overviewView = {
   budgetCard(title = 'Context budget', compactView = false) {
