@@ -41,6 +41,8 @@ void Rejects<T>(Action action, string message) where T : Exception { try { actio
 var defaults = new AssistantSettings();
 AssistantValidation.Settings(defaults);
 Assert(true, "Defaults are valid.");
+var linkRules = PromptBuilder.Guardrails(defaults, false);
+Assert(linkRules.Contains("[Contact](/contact/)") && linkRules.Contains("Never put a domain in front of it") && !linkRules.Contains("https://example.com"), "Page links stay site-relative: no full-url example a model could glue to an email domain.");
 Assert(defaults.Appearance.Position == "right", "The bubble sits bottom right by default, clear of consent banners bottom left.");
 Assert(ChatRelay.MaxTokens(defaults.Behaviour) == 1024 && ChatRelay.MaxTokens(defaults.Behaviour with { Thinking = true }) == 1024 + ChatRelay.ThinkingRoom && ChatRelay.ThinkingRoom >= 4096, "GPU mode gives thinking its own room on top of the answer limit.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Appearance = defaults.Appearance with { Accent = "red" } }), "Colours must be hex.");

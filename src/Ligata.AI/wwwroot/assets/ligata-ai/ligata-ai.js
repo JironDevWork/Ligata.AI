@@ -128,7 +128,8 @@
   function inline(text) {
     const code = [];
     let html = escape(text).replace(/`([^`\n]+)`/g, (_, c) => `\u0000${code.push(c) - 1}\u0000`);
-    html = html.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (match, label, href) => {
+    // Models sometimes write a space inside the parentheses: [Contact]( /contact/).
+    html = html.replace(/\[([^\]\n]+)\]\(\s*([^)\s]+)\s*\)/g, (match, label, href) => {
       const url = safeHref(href.replace(/&amp;/g, '&'));
       return url ? `<a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : label;
     });
@@ -246,7 +247,7 @@
   .face{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;overflow:hidden;background:color-mix(in srgb,var(--lai-accent) 16%,var(--lai-bg));color:var(--lai-accent);font-size:11px;font-weight:700}
   .face img{width:100%;height:100%;object-fit:cover}.face svg{width:16px;height:16px}
   .title{flex:1;min-width:0}.title strong{display:block;font-size:15.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .status{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--lai-muted);white-space:nowrap;overflow:hidden}.status i{width:7px;height:7px;border-radius:50%;background:var(--lai-off);flex:none}.status .status-text{overflow:hidden;text-overflow:ellipsis}
+  .status{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--lai-muted);white-space:nowrap;min-width:0}.status i{width:7px;height:7px;border-radius:50%;background:var(--lai-off);flex:none}.status .status-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
   .status[data-tone=ok] i{background:var(--lai-ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--lai-ok) 20%,transparent)}.status[data-tone=warn] i{background:var(--lai-warn)}
   .tool{position:relative;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--lai-muted);transition:background .15s,color .15s;flex:none}.tool:hover{background:var(--lai-surface);color:var(--lai-text)}
   .tool .pip{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--lai-danger);box-shadow:0 0 0 2px var(--lai-bg);display:none}.tool.has-unread .pip{display:block}
