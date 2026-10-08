@@ -35,6 +35,8 @@ public sealed class KnowledgeSnapshot
     /// <summary>The languages of a multilingual website (empty when pages do not vary by culture).</summary>
     public IReadOnlyList<string> Cultures { get; }
     public int Passages => sections.Count;
+    /// <summary>The page list for the prompt, built once per snapshot and budget (see PromptBuilder.SiteMap).</summary>
+    internal System.Collections.Concurrent.ConcurrentDictionary<int, string> SiteMaps { get; } = new();
 
     // Words that say nothing about what a visitor looks for (English, German, French, Italian), without accents.
     private static readonly HashSet<string> Stop = new(StringComparer.Ordinal)

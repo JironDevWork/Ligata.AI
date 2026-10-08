@@ -90,18 +90,43 @@ public static class PromptBuilder
     /// The pages the assistant can read (title and url, indented by level) and the documents it can search. Without their
     /// text: the model looks up what it needs.
     /// </summary>
-    public static string SiteMap(KnowledgeSnapshot snapshot, int maxTokens = SiteMapTokens)
+    /// <remarks>
+    /// Built once per snapshot (it is part of every question's prompt and of the widget's estimate), in one pass over the pages:
+    /// a big website must not cost seconds per question.
+    /// </remarks>
+    public static string SiteMap(KnowledgeSnapshot snapshot, int maxTokens = SiteMapTokens) => snapshot.SiteMaps.GetOrAdd(maxTokens, budget => BuildSiteMap(snapshot, budget));
+
+    private static string BuildSiteMap(KnowledgeSnapshot snapshot, int maxTokens)
     {
         var pages = snapshot.Documents.Where(d => d.Kind == "page").ToList();
         var documents = snapshot.Documents.Where(d => d.Kind != "page").ToList();
         if (pages.Count == 0 && documents.Count == 0) return "";
         var top = pages.Count == 0 ? 1 : pages.Min(p => p.Level);
         string Line(KnowledgeDocument page) => new string(' ', Math.Min(6, page.Level - top) * 2) + "- " + Clean(page.Title, 120) + ": " + page.Url;
+        var lines = pages.Select(Line).ToList();
+        var room = (long)(maxTokens * 3.6);
+        long Length(IEnumerable<int> shown) => shown.Sum(i => (long)lines[i].Length + 1);
         // Deeper levels go first when the list is too long, so the structure of the website stays.
-        var shown = pages.ToList();
-        for (var level = pages.Count == 0 ? 0 : pages.Max(p => p.Level); level > top && Estimate(string.Join('\n', shown.Select(Line))) > maxTokens; level--)
-            shown = shown.Where(p => p.Level < level).ToList();
-        while (shown.Count > 1 && Estimate(string.Join('\n', shown.Select(Line))) > maxTokens) shown.RemoveAt(shown.Count - 1);
+        var kept = Enumerable.Range(0, pages.Count).ToList();
+        for (var level = pages.Count == 0 ? 0 : pages.Max(p => p.Level); level > top && Length(kept) > room; level--)
+            kept = kept.Where(i => pages[i].Level < level).ToList();
+        if (Length(kept) > room)
+        {
+            // Still too long: the first pages of every language in turn (tree order), so no language is left out.
+            var languages = kept.GroupBy(i => pages[i].Culture).Select(g => g.ToList()).ToList();
+            var chosen = new List<int>();
+            long used = 0;
+            var full = false;
+            for (var position = 0; !full && languages.Any(l => position < l.Count); position++)
+                foreach (var language in languages.Where(l => position < l.Count))
+                {
+                    var length = lines[language[position]].Length + 1;
+                    if (used + length > room && chosen.Count > 0) { full = true; break; }
+                    chosen.Add(language[position]); used += length;
+                }
+            kept = [.. chosen.Order()];
+        }
+        var shown = kept.Select(i => pages[i]).ToList();
         var text = new StringBuilder();
         if (pages.Count > 0)
         {

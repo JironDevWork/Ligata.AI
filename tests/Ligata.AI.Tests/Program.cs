@@ -38,6 +38,44 @@ var assertions = 0;
 void Assert(bool condition, string message) { assertions++; if (!condition) throw new Exception("FAILED: " + message); }
 void Rejects<T>(Action action, string message) where T : Exception { try { action(); } catch (T) { assertions++; return; } throw new Exception("FAILED (no " + typeof(T).Name + "): " + message); }
 
+// --bench: a big website (2,000 pages in three languages plus documents): building the index, the page list and searching.
+if (args.Contains("--bench"))
+{
+    var random = new Random(7);
+    var words = Enumerable.Range(0, 60_000).Select(i => new string(Enumerable.Range(0, 4 + i % 9).Select(_ => (char)('a' + random.Next(26))).ToArray())).Distinct().ToArray();
+    string Text(int length) { var b = new StringBuilder(); while (b.Length < length) b.Append(words[random.Next(words.Length)]).Append(b.Length % 90 < 8 ? ".\n" : " "); return b.ToString(); }
+    var documents = new List<KnowledgeDocument>();
+    foreach (var culture in new[] { "de-CH", "en", "fr" })
+        for (var i = 0; i < 2000; i++)
+            documents.Add(new KnowledgeDocument("page", $"Page {i} {culture}", $"/{culture[..2]}/section-{i / 100}/page-{i}/", 2 + i % 3, Text(3000) + (i == 1234 ? "\nThe secret needle phrase is zanzibar-quokka." : ""), culture, i.ToString()));
+    for (var i = 0; i < 100; i++) documents.Add(new KnowledgeDocument("file", $"Document {i}", "", 0, Text(20_000)));
+    var memory = GC.GetTotalMemory(true);
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    var big = new KnowledgeSnapshot(documents);
+    var buildMs = clock.ElapsedMilliseconds;
+    var used = (GC.GetTotalMemory(true) - memory) / 1_048_576;
+    clock.Restart();
+    var map = PromptBuilder.SiteMap(big);
+    var mapMs = clock.ElapsedMilliseconds;
+    clock.Restart();
+    var queries = new[] { "zanzibar quokka", "page 1234", "opening hours price", words[5] + " " + words[77], "kontakt", "secret needle" };
+    var found = queries.Select(q => big.Search(q, 8, "en")).ToList();
+    var searchMs = clock.ElapsedMilliseconds / (double)queries.Length;
+    clock.Restart();
+    var mentions = Enumerable.Range(0, 20).Count(i => big.Mentions("Was kostet " + words[i * 13] + " bei euch?"));
+    var mentionMs = clock.ElapsedMilliseconds / 20.0;
+    Console.WriteLine($"{documents.Count} documents, {big.Passages} passages: built in {buildMs} ms using about {used} MB; page list {map.Length} characters in {mapMs} ms; search {searchMs:0.0} ms; question check {mentionMs:0.0} ms.");
+    Assert(found[0].FirstOrDefault()?.Text.Contains("zanzibar-quokka") == true && found[0][0].Document.Culture == "en", "The one page with the needle is found among 6,000, in the visitor's language.");
+    var pagesPart = map[..map.IndexOf("# Documents")];
+    // The budget is for the page lines; the headings of the list and of each language come on top.
+    Assert(pagesPart.Length / 3.6 <= PromptBuilder.SiteMapTokens + 200 && pagesPart.Contains("more pages") && pagesPart.Split('\n').Count(l => l.StartsWith("## ")) == 3 && pagesPart.Contains("/fr/section-0/page-"), "The page list stays within its budget, keeps every language and says that there are more pages.");
+    clock.Restart();
+    Assert(ReferenceEquals(PromptBuilder.SiteMap(big), map) && clock.ElapsedMilliseconds < 5, "The page list is built once per snapshot.");
+    Console.WriteLine($"Benchmark checks passed: {assertions} assertions.");
+    return;
+}
+
+
 // ---------- settings validation ----------
 var defaults = new AssistantSettings();
 AssistantValidation.Settings(defaults);
