@@ -1,6 +1,6 @@
 # Ligata AI gateway
 
-The shared inference service on the Ligata mini PC. Every website with the Ligata.AI Umbraco package sends its questions here; the gateway answers them one at a time on the RTX 3060 with Gemma 4 12B.
+The shared inference service on the Ligata mini PC. Every website with the Ligata.AI Umbraco package sends its questions here; the gateway answers up to three at once on the RTX 3060 with Gemma 4 12B.
 
 ```
 Umbraco site ──HTTPS (API key)──► Cloudflare Tunnel ──► gateway :1210 ──► llama-server :1211 (VRAM only)
@@ -8,12 +8,12 @@ Umbraco site ──HTTPS (API key)──► Cloudflare Tunnel ──► gateway 
 ```
 
 - **API keys**: one per website, `lai_<id>_<secret>`. Only a SHA-256 hash is stored (`data/keys.json`). Keys are checked in constant time, can be revoked instantly and carry their own limits.
-- **Global queue**: exactly one answer is generated at a time, in arrival order, across all websites. Visitors see their position and an estimated wait.
+- **Several answers at once, then a global queue**: up to `parallel.conversations` answers (3, at most one per llama-server slot) are written at the same time; further questions wait in arrival order across all websites. Visitors see their position and an estimated wait.
 - **Fairness**: one queued or running question per visitor and site (visitors are HMAC-pseudonymised by the site, raw IPs never arrive here), a per-site queue cap, a global queue cap and a daily quota per key. Full queues answer `503` with `Retry-After`.
 - **Streaming**: Server-Sent Events with `queued`, `started`, `progress` (long prompts), `thinking`, `delta`, `done` (usage, context used/limit, speed) and `error`. Heartbeats every 15 s keep tunnels and proxies open during long prompt processing.
-- **Prompt-cache slots**: llama-server runs 3 slots over one unified 256k KV pool in VRAM. Each website is pinned to a slot, so its instructions and knowledge stay processed: the next visitor of a recently active site gets the first word in well under a second instead of waiting ~1 s per 1,000 knowledge tokens. When a request needs room, idle sites' caches are erased least-recently-used first; idle caches are capped at 64k tokens because attention spans every occupied cell (a fuller pool makes cold prompts ~20–35 % slower).
+- **Slots and prompt caches**: llama-server runs 3 slots over a 320k KV cache split between them (`model/profile.json`: `slots`, `ctx`, `unified: false`), so each conversation may use 109k tokens and runs at the speed of its own length. Each answer gets the slot that holds its conversation, else one that holds its website's instructions and knowledge, so follow-ups and the next visitor of a recently active site get the first word in well under a second instead of waiting ~1 s per 1,000 tokens. With a shared pool (`unified: true`, `-kvu`) one conversation could use the whole window, but attention then spans every occupied cell and conversations slow each other down: the gateway caps a conversation at `parallel.conversationTokens`, starts an answer only when it fits next to the running ones and erases idle caches least-recently-used first.
 - **Attachments**: PNG/JPEG screenshots (≤ 5 MB, ≤ 8 per conversation) go to the vision model; PDFs (≤ 10 MB, ≤ 80 pages) are converted to text in memory (`/v1/extract`). Nothing is written to disk.
-- **Failure handling**: model offline/starting → immediate `503 model_unavailable`/`model_loading` (never queued). A broken stream ends with an `error` event and the queue continues. Answers stop after 300 s. A visitor who leaves is removed from the queue, and leaving mid-answer cancels the GPU work.
+- **Failure handling**: model offline/starting → immediate `503 model_unavailable`/`model_loading` (never queued). A broken stream ends with an `error` event and the queue continues. Answers stop 300 s after the model starts on them. A visitor who leaves is removed from the queue, and leaving mid-answer cancels the GPU work.
 - **Memory watch**: every 30 s the gateway samples llama-server's RAM, VRAM and GPU-shared RAM. Shared RAM growing more than 300 MB above its level after load is reported as a VRAM spill (`gpu.healthy: false`).
 - **Logs** contain metadata only (key id, token counts, durations, error codes), never prompts, answers or files.
 
@@ -47,7 +47,9 @@ Websites on this machine use `http://127.0.0.1:1210`. For client sites hosted el
 
 ## Configuration
 
-Defaults are in `src/config.mjs`; override them in `data/config.json` (same shape) or with `LIGATA_AI_PORT`, `LIGATA_AI_ADMIN_PORT`, `LIGATA_AI_UPSTREAM`, `LIGATA_AI_DATA`, `LIGATA_AI_MEMORY_PROBE`. Useful settings: `queue.maxLength` (40), `queue.maxPerKey` (10), `queue.maxWaitSeconds` (420), `generation.maxSeconds` (300), `generation.maxTokensCap` (4096), `keyDefaults` (2000 questions/day, 256k context, 10 queued).
+Defaults are in `src/config.mjs`; override them in `data/config.json` (same shape) or with `LIGATA_AI_PORT`, `LIGATA_AI_ADMIN_PORT`, `LIGATA_AI_UPSTREAM`, `LIGATA_AI_DATA`, `LIGATA_AI_MEMORY_PROBE`. Useful settings: `queue.maxLength` (40), `queue.maxPerKey` (10), `queue.maxWaitSeconds` (420), `generation.maxSeconds` (300, counted from the moment the model starts on the answer), `generation.maxTokensCap` (8192), `keyDefaults` (2000 questions/day, 256k context, 10 queued), `parallel.conversations` (3: answers at once, at most llama-server's slots), `parallel.sharedPool` (`auto` reads `unified` from `model/profile.json`) and `parallel.conversationTokens` (131072: the most one conversation may use of a shared pool).
+
+How many conversations run at once and how much memory each gets is set in `model/profile.json`: `slots` (conversations at once) and `ctx` (the whole KV cache, split evenly). Restart `ligata-ai-llm` and then `ligata-ai` after a change. Measurements and limits: [model/README](../model/README.md#several-conversations-at-once).
 
 ## API (server-to-server)
 
@@ -65,7 +67,7 @@ Message parts: `{ type: 'text', text }`, `{ type: 'image', data }` (base64 PNG/J
 ## Tests
 
 ```powershell
-npm test   # 33 tests: keys, queue, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
+npm test   # 47 tests: keys, queue, several answers at once, limits, disconnects, outages, broken streams, timeouts, attachments, PDF text, slots, admin page
 ```
 
 The tests run against a mock llama-server (`test/mock-llm.mjs`) with switchable failure modes; `node test/mock-server.mjs 1298` serves the mock on a fixed port for UI development.

@@ -9,7 +9,7 @@ export function startMockLlm() {
     tokens: ['Hello', ' from', ' the', ' mock', '.'],
     contextTokens: 8192,
     vision: true,
-    slots: 1, erased: [],
+    slots: 1, erased: [], slotLog: [],
     active: 0, maxActive: 0, requests: 0, aborted: 0, lastBody: null,
   };
   const count = text => Math.ceil(String(text).length / 4);
@@ -27,7 +27,7 @@ export function startMockLlm() {
     if (request.url === '/tokenize') return json(200, { tokens: Array.from({ length: count(body.content) }, (_, i) => i) });
     if (request.url === '/apply-template') return json(200, { prompt: body.messages.map(m => `<${m.role}>${m.content}`).join('\n') });
     if (request.url === '/v1/chat/completions') {
-      state.requests++; state.lastBody = body;
+      state.requests++; state.lastBody = body; state.slotLog.push(body.id_slot);
       if (state.mode === 'context') return json(400, { error: { type: 'exceed_context_size_error', n_prompt_tokens: 9999, n_ctx: state.contextTokens } });
       if (state.mode === 'error') return json(500, { error: { message: 'boom' } });
       state.active++; state.maxActive = Math.max(state.maxActive, state.active);

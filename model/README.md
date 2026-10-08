@@ -9,9 +9,25 @@ Everything the model needs lives in **VRAM**: weights, the 1-billion-parameter t
 | Weights | `gemma-4-12B-it-qat-UD-Q4_K_XL.gguf` (Unsloth, quantization-aware trained by Google, 6.7 GB) |
 | Vision | `mmproj-F16.gguf` (screenshots) |
 | Speed | MTP speculative decoding, `mtp-gemma-4-12B-it-Q4_0.gguf`, 3 draft tokens |
-| Context | **262,144 tokens** (the model's native maximum), KV cache `q4_0` |
-| Memory | **10.6 GB VRAM**, **≈ 1.6 GB RAM, flat** |
+| Context | **327,680 tokens** of KV cache (`q4_0`) split into **3 slots: three conversations at once, 109k tokens each** (see below) |
+| Memory | **11.1 GB VRAM**, **≈ 1.6 GB RAM, flat** |
 | Speed | ~1,000–1,100 tok/s prompt processing, **61–68 tok/s** writing at short context, ~35–45 at 120k, ~25–32 at 250k |
+
+## Several conversations at once
+
+`slots` is how many conversations are answered at the same time, `ctx` the whole KV cache. With `unified: false` every slot owns `ctx / slots` tokens; with `unified: true` (`-kvu`) they share one pool. Measured with `parallel-test.mjs` (rows in `parallel.jsonl`, via `node model/sweep.mjs --profiles np3-split-320k --run parallel-test.mjs` while `ligata-ai-llm` is stopped):
+
+| | 3 slots sharing 256k (until 0.5) | **3 slots × 109k, split (320k)** |
+| --- | --- | --- |
+| VRAM | 10.8 GB | **11.1 GB** |
+| Writing, short chats: 1 / 2 / 3 at once | 53 / 37 / 38 tok/s each | 54 / 37 / 38 tok/s each (≈ 115 together) |
+| Three long chats at once (89k shared, 109k split) | 3rd first word after 12 min; 3 × 89k overflowed the pool and one cache was silently dropped | 3rd first word after 8.4 min, nothing lost |
+| Writing with all three full | 20 / 12.5 / 1 tok/s (one re-reading its lost cache) | **17 / 16 / 14 tok/s** |
+| Two chats of 127k at once (shared only) | 2nd first word after 11 min, then 17 tok/s each | – (a split slot holds 109k) |
+
+- In a shared pool attention spans every occupied cell: every conversation slows down as the others grow, and the pool can overflow. Split slots run at the speed of their own length and cannot take each other's memory, so the gateway needs no pool accounting and never erases a cache for room.
+- **llama-server reads one long prompt at a time**, in either layout: a short question that arrives while a 40k document is read waits until it is read (40 s, then 48 tok/s), and answers being written meanwhile slow to 2–4 tok/s. Short questions in parallel are where three slots pay off; there is no fair-share option in llama.cpp b11456.
+- 3 × 128k (384k) would need about 11.4 GB; 3 × 109k leaves more headroom on the 12 GB card. Conversations that reach their slot are summarized by the widget before they no longer fit.
 
 `../gateway/src/llm-launcher.mjs` starts it (PM2 process `ligata-ai-llm`). The flags and why each exists are in `llm-args.mjs`:
 

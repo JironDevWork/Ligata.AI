@@ -30,6 +30,9 @@ const profiles = {
   'q4xl-256k-mtp-q4kv': { ...base, kv: 'q4_0', mtp: 'mtp-gemma-4-12B-it-Q4_0.gguf', draftMax: 3 },
   'q4xl-192k-mtp': { ...base, ctx: 196608, mtp: 'mtp-gemma-4-12B-it-Q4_0.gguf', draftMax: 3 },
   'q6k-128k-q4kv': { ...base, model: 'gemma-4-12b-it-Q6_K.gguf', ctx: 131072, kv: 'q4_0' },
+  // Several conversations at once (parallel-test.mjs): the production profile with unified or split slots.
+  ...Object.fromEntries([['np3-kvu', 3, 262144, true], ['np2-split', 2, 262144, false], ['np3-split', 3, 262144, false], ['np3-split-320k', 3, 327680, false], ['np3-split-384k', 3, 393216, false]]
+    .map(([name, slots, ctx, unified]) => [name, { ...base, kv: 'q4_0', ctx, slots, unified, checkpoints: 2, mtp: 'mtp-gemma-4-12B-it-Q4_0.gguf', draftMax: 3, slotSavePath: path.join(runtime, 'slots') }])),
 };
 
 const kill = () => { try { execFileSync('taskkill', ['/F', '/IM', 'llama-server.exe'], { stdio: 'ignore' }); } catch {} };
@@ -54,7 +57,8 @@ for (const name of (arg('profiles') || 'q4xl-256k').split(',')) {
     const next = () => {
       const script = scripts.shift();
       if (!script) return resolve();
-      const extra = script === 'bench.mjs' ? ['--depths', arg('depths') || '1000,32000,128000', ...(arg('image') ? ['--image', arg('image')] : [])] : [];
+      const extra = script === 'bench.mjs' ? ['--depths', arg('depths') || '1000,32000,128000', ...(arg('image') ? ['--image', arg('image')] : [])]
+        : script === 'parallel-test.mjs' ? ['--run', arg('tests') || 'speed,mixed,long', '--depths', arg('depths') || 'auto'] : [];
       spawn(process.execPath, [path.join(here, script), '--url', `http://127.0.0.1:${port}`, '--label', name, ...extra], { stdio: 'inherit' }).on('exit', next);
     };
     next();

@@ -85,8 +85,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.5.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.5.0 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.5.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.5.1 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -108,7 +108,7 @@ Then, in the backoffice:
 | --- | --- | --- |
 | Model | Gemma 4 12B on the Ligata GPU | Claude Haiku 5.5 (`LigataAI:Claude:Model`) |
 | Needs | the Ligata AI gateway (`gateway/`) and a `lai_…` key | an Anthropic API key, nothing else |
-| Requests | site → gateway → GPU, one answer at a time, queue | site → Anthropic directly, several answers at once |
+| Requests | site → gateway → GPU, three answers at once, then a queue | site → Anthropic directly, several answers at once |
 | PDFs | read by the gateway | read on the site's own server |
 | Data | stays on your hardware | processed by Anthropic |
 

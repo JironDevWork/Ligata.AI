@@ -58,7 +58,7 @@ input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%
   <div class="card"><div class="muted">GPU-shared RAM</div><div class="big" id="shared">–</div><div id="spill"></div></div>
 </div>
 <div class="card"><h2>RAM over time</h2><svg id="chart" viewBox="0 0 600 80" preserveAspectRatio="none"></svg><div class="muted" id="chart2"></div></div>
-<div class="card" style="margin-top:14px"><h2>Prompt caches (one slot per recently active website)</h2><div class="slots" id="slots"></div></div>
+<div class="card" style="margin-top:14px"><h2>Slots (answers running now, and caches of recent conversations)</h2><div class="slots" id="slots"></div></div>
 <div class="card" style="margin-top:14px"><h2>Website keys</h2>
 <form id="create"><label><span>Website / client</span><input name="name" required maxlength="100" placeholder="Muster AG – www.muster.ch"></label><label><span>Questions per day</span><input name="requestsPerDay" type="number" min="1" value="2000"></label><label><span>Max context (tokens)</span><input name="maxContextTokens" type="number" min="4096" value="262144"></label><label><span>Max waiting</span><input name="maxQueued" type="number" min="1" value="10"></label><button class="primary">Create key</button></form>
 <div id="created"></div>
@@ -72,7 +72,7 @@ async function post(path, body) { const r = await fetch(path, { method: 'POST', 
 async function load() {
   const s = await (await fetch('/status', { cache: 'no-store' })).json();
   $('model').innerHTML = (s.model === 'ready' ? '<span class="pill ok"><i></i>Model ready</span> ' : '<span class="pill bad"><i></i>Model ' + esc(s.model) + '</span> ') + (s.props ? esc(s.props.model) + ' · ' + fmt(s.props.contextTokens) + ' tokens · ' + s.props.slots + ' slots · vision ' + (s.props.vision ? 'on' : 'off') : '');
-  $('queue').textContent = (s.queue.running ? 'answering' : 'idle') + (s.queue.waiting ? ' · ' + s.queue.waiting + ' waiting' : '');
+  $('queue').textContent = (s.queue.active ? 'answering ' + s.queue.active + ' of ' + s.queue.parallel : 'idle') + (s.queue.waiting ? ' · ' + s.queue.waiting + ' waiting' : '');
   $('queue2').textContent = fmt(s.queue.completed) + ' answered since start · ~' + s.queue.averageSeconds + ' s each';
   const m = s.memory || {};
   $('ram').textContent = m.running ? fmt(m.workingSetMB) + ' MB' : '–'; $('ram2').textContent = 'working set';
@@ -82,7 +82,7 @@ async function load() {
   const h = (s.memoryHistory || []).filter(x => x.ws > 0);
   if (h.length > 1) { const max = Math.max(...h.map(x => x.ws)) * 1.1, min = Math.min(...h.map(x => x.ws)) * .9; $('chart').innerHTML = '<polyline fill="none" stroke="#2f5bff" stroke-width="2" points="' + h.map((x, i) => (i / (h.length - 1) * 600).toFixed(1) + ',' + (80 - (x.ws - min) / (max - min || 1) * 76 - 2).toFixed(1)).join(' ') + '"/>'; $('chart2').textContent = 'Last ' + h.length + ' samples: ' + fmt(Math.min(...h.map(x => x.ws))) + '–' + fmt(Math.max(...h.map(x => x.ws))) + ' MB'; }
   const names = Object.fromEntries(s.keys.map(k => [k.id, k.name]));
-  $('slots').innerHTML = s.slots.map(x => '<div class="slot"><b>Slot ' + x.id + '</b><div class="muted">' + (x.site ? esc(names[x.site] || x.site) + '<br>' + fmt(x.tokens) + ' tokens cached · idle ' + x.idleSeconds + ' s' : 'empty') + '</div></div>').join('');
+  $('slots').innerHTML = s.slots.map(x => '<div class="slot"><b>Slot ' + x.id + '</b><div class="muted">' + (x.busy ? '<span class="pill ok"><i></i>answering</span><br>' + esc(names[x.site] || x.site) + ' · ' + fmt(x.tokens) + ' tokens' : x.site ? esc(names[x.site] || x.site) + '<br>' + fmt(x.tokens) + ' tokens cached · idle ' + x.idleSeconds + ' s' : 'empty') + '</div></div>').join('');
   $('keys').innerHTML = s.keys.map(k => '<tr><td><b>' + esc(k.name) + '</b><div class="muted">' + k.id + '</div></td><td>' + (k.revokedAt ? '<span class="pill bad"><i></i>revoked</span>' : '<span class="pill ok"><i></i>active</span>') + '</td><td class="num">' + fmt(k.usage?.requests) + ' / ' + fmt(k.limits.requestsPerDay) + '</td><td class="num">' + fmt(k.usage?.totalRequests) + ' questions<br><span class="muted">' + fmt((k.usage?.totalPromptTokens || 0) + (k.usage?.totalCompletionTokens || 0)) + ' tokens</span></td><td class="num">' + fmt(k.limits.maxContextTokens) + ' ctx<br><span class="muted">' + k.limits.maxQueued + ' waiting</span></td><td class="muted">' + (k.usage?.lastUsedAt ? new Date(k.usage.lastUsedAt).toLocaleString() : 'never') + '</td><td>' + (k.revokedAt ? '' : '<button class="danger" data-revoke="' + k.id + '">Revoke</button>') + '</td></tr>').join('') || '<tr><td colspan="7" class="muted">No keys yet.</td></tr>';
 }
 $('create').addEventListener('submit', async e => {

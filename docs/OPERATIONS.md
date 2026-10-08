@@ -69,7 +69,7 @@ Sites on this machine use `http://127.0.0.1:1210`. For others, add a public host
 
 | Situation | Behaviour |
 | --- | --- |
-| Many visitors at once | One answer at a time across all sites, FIFO. Visitors see their position and wait estimate. Max one question per visitor, 10 per site, 40 in total; beyond that a clear "busy, try again in a minute" with `Retry-After`. Waiting longer than 7 min ends with the same message. |
+| Many visitors at once | Up to three answers at the same time (one per slot of the model, each conversation up to 109k tokens), further questions wait in line across all sites, FIFO. Visitors see their position and wait estimate. Max one question per visitor, 10 per site, 40 in total; beyond that a clear "busy, try again in a minute" with `Retry-After`. Waiting longer than 7 min ends with the same message. |
 | A visitor closes the tab | Removed from the queue; if their answer was being written, the GPU stops. |
 | llama-server crashes / eGPU disconnects | Running answer ends with "something went wrong" + retry. New questions get "offline/starting" immediately (never queued). The launcher restarts the model with back-off (10 s → 5 min). |
 | Gateway down / machine off | Websites show the offline message with the configured email/contact link; the bubble keeps working on static pages. The backoffice shows "AI gateway offline". |

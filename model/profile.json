@@ -1,16 +1,17 @@
 {
-  "description": "Production profile chosen from the benchmarks in model/README.md: Gemma 4 12B QAT (Unsloth UD-Q4_K_XL), vision, MTP speculative decoding, 256k context with a 4-bit KV cache shared by 3 slots (one per recently active website). ~10.7 GB VRAM, ~1.6-2.0 GB RAM, bounded.",
+  "description": "Production profile chosen from the benchmarks in model/README.md: Gemma 4 12B QAT (Unsloth UD-Q4_K_XL), vision, MTP speculative decoding, a 320k 4-bit KV cache split into 3 slots: three conversations at once, each up to 109k tokens, each at the speed of its own length. ~11.1 GB VRAM, ~1.6-2.0 GB RAM, bounded.",
   "runtimeDir": "runtime",
   "port": 1211,
   "model": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
   "mmproj": "mmproj-F16.gguf",
   "mtp": "mtp-gemma-4-12B-it-Q4_0.gguf",
   "draftMax": 3,
-  "ctx": 262144,
+  "ctx": 327680,
   "kv": "q4_0",
   "ubatch": 512,
   "checkpoints": 2,
   "embeddingsOnGpu": true,
   "slotSavePath": "runtime/slots",
-  "slots": 3
+  "slots": 3,
+  "unified": false
 }

@@ -5,14 +5,14 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 ## Repeatable checks
 
 ```powershell
-# Gateway: 37 tests against a mock llama-server (no GPU needed)
+# Gateway: 47 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 128 assertions
+# Package domain and security checks (no database): 129 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
-# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records: 178 assertions in total
+# counters, team conversations, limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records: 181 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 23 checks, needs the host above and a gateway
@@ -52,6 +52,7 @@ Results (8 October 2026, version 0.4.0):
 - Regression with consent: AI suite 23/23, team suite 16/16 (also on the installed-package host), API suite 13/13, no-AI suite 5/5 (no consent asked without the AI).
 - Package checks: 114 domain and 164 total with the database.
 - 0.4.1: the GPU server's country defaults to Switzerland (`CH`); package checks 116 domain and 166 total.
+- 0.5.1: three conversations at once on the GPU. The model profile splits a 320k KV cache into 3 slots of 109k (11.1 GB VRAM); the gateway runs one answer per slot, gives each answer the slot that holds its conversation (else one warm with its site), and counts the answer time from when the model starts on it. Measured on the RTX 3060 (`model/parallel-test.mjs`, rows in `model/parallel.jsonl`): 54 / 37 / 38 tok/s per chat with 1 / 2 / 3 writing at once; three 109k chats at once all found their needle and wrote at 14–17 tok/s each, against a 256k shared pool where three 89k chats overflowed and one lost its cache. Sites now default to a 128k conversation limit (capped by the gateway at 109k; the untouched 64k of earlier versions reads as the new default). Gateway 47 tests (parallel answers, room in a shared pool, slot per conversation, split slots never erase); package checks 129 and 181.
 - 0.5.0: while a long prompt is read the chat says *Reading…* / *Reading your document…* (no percentage, no bar). The memory bar shows how full the memory is in percent; tokens only in the backoffice preview and not on attachment chips. Before a question would no longer fit (conversation + question + the longest answer or a summary, plus thinking in GPU mode), the widget asks for a summary of the conversation (with a progress bar) and continues with the summary and the latest exchange; a `context_full` from the server leads to one summary and a retry. `tests/e2e/memory.mjs` 6/6. On the real GPU (`model/summary-check.mjs`, English and German, 2 rounds each) summaries take 3–4 s, are about 100 words, keep 4/4 details, are in the visitor's language (the first instruction wrote an English conversation's summary in German, so it now names the visitor's language first) and the model answers 4/4 detail questions from the summary alone. Package checks 128 and 178; AI suite 23/23, privacy 7/7, team 16/16, API suite 14/14.
 - 0.4.5: page links stay site-relative. The prompt's only link example was a full URL, so the model glued page paths to the domain of an email address in the knowledge (8 of 9 answers on the real GPU); now 0 of 9, with 9 of 9 proper [Page](/path/) links. The widget accepts a space inside link parentheses, and the status dot's glow is no longer cut off.
 - 0.4.4: "Think before answering" in GPU mode gets 4,096 tokens of thinking on top of the answer limit (it used to share the 1,024-token answer limit, so a long thought left no answer and visitors saw "something went wrong"). If thinking still uses up the limit, the gateway and API mode answer `thinking_limit`, which the widget explains with a retry. Gateway cap 8,192 tokens per answer.

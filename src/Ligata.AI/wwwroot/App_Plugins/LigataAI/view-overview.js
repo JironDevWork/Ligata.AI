@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.5.0';
+import { icon, number, compact } from './ui.js?v=0.5.1';
 
 export const overviewView = {
   budgetCard(title = 'Context budget', compactView = false) {
@@ -77,10 +77,10 @@ export const overviewView = {
           <header><div><h2>Claude API</h2><p class="muted">Answers come from Anthropic, straight from this website's server. Several visitors are answered at the same time.</p></div><button class="btn small" @click=${() => this.refreshStatus()}>${icon('refresh')}Refresh</button></header>
           ${s?.ok ? this.claudeStatus(s) : html`<div class="notice ${s ? 'error' : ''}">${icon('info')}<div>${s ? s.message : 'Checking…'}</div></div>`}
         </section>` : e.assistant ? html`<section class="card">
-          <header><div><h2>Shared AI server</h2><p class="muted">All Ligata websites share one GPU and answer one question at a time, in order.</p></div><button class="btn small" @click=${() => this.refreshStatus()}>${icon('refresh')}Refresh</button></header>
+          <header><div><h2>Shared AI server</h2><p class="muted">All Ligata websites share one GPU. It answers a few questions at once; further ones wait in line, in order.</p></div><button class="btn small" @click=${() => this.refreshStatus()}>${icon('refresh')}Refresh</button></header>
           ${s?.ok ? html`<dl class="facts">
             <dt>Model</dt><dd>${s.status.model || '-'} <span class="pill ${ready ? 'ok' : 'warn'}"><i></i>${s.status.state}</span></dd>
-            <dt>Context window</dt><dd>${number(s.status.contextTokens)} tokens</dd>
+            <dt>Memory per conversation</dt><dd>${number(s.status.contextTokens)} tokens</dd>
             <dt>Queue</dt><dd>${s.status.queueRunning ? 'Answering' : 'Idle'}${s.status.queueWaiting ? ` · ${s.status.queueWaiting} waiting (≈ ${s.status.estimatedWaitSeconds} s)` : ''}</dd>
             <dt>GPU memory</dt><dd>${s.status.gpuHealthy ? 'Healthy (everything in VRAM)' : 'Warning: VRAM overflowing into system RAM'}</dd>
             <dt>Your usage today</dt><dd>${number(s.status.usage?.requests)} of ${number(s.status.limits?.requestsPerDay)} questions</dd>

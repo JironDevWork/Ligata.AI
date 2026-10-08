@@ -12,14 +12,14 @@ const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000
 before(async () => {
   mock = await startMockLlm();
   dataDir = mkdtempSync(path.join(tmpdir(), 'ligata-ai-test-'));
-  gateway = startGateway({ port: 0, adminPort: 0, upstream: mock.url, dataDir, memoryProbeSeconds: 0, queue: { maxLength: 4, maxPerKey: 3, maxWaitSeconds: 5 }, generation: { maxSeconds: 3 } });
+  gateway = startGateway({ port: 0, adminPort: 0, upstream: mock.url, dataDir, memoryProbeSeconds: 0, queue: { maxLength: 4, maxPerKey: 3, maxWaitSeconds: 5 }, generation: { maxSeconds: 3 }, parallel: { conversations: 3, conversationTokens: 131072, sharedPool: true } });
   await new Promise(r => gateway.server.listening ? r() : gateway.server.once('listening', r));
   base = `http://127.0.0.1:${gateway.server.address().port}`;
   const a = gateway.keys.create('Site A'); keyA = a.key; idA = a.record.id;
   keyB = gateway.keys.create('Site B').key;
 });
 after(async () => { await gateway.stop(); await mock.close(); rmSync(dataDir, { recursive: true, force: true }); });
-beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, maxActive: 0, active: 0, aborted: 0, contextTokens: 8192, vision: true, slots: 1, erased: [] }); gateway.llm.cachedProps = null; });
+beforeEach(() => { Object.assign(mock.state, { mode: 'ok', delayMs: 20, maxActive: 0, active: 0, aborted: 0, contextTokens: 8192, vision: true, slots: 1, erased: [], slotLog: [] }); gateway.llm.cachedProps = null; });
 
 const call = (route, key, body, method = body ? 'POST' : 'GET') => fetch(base + route, { method, headers: { ...(key ? { Authorization: 'Bearer ' + key } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
 
@@ -273,4 +273,48 @@ test('websites are pinned to prompt-cache slots and idle caches are freed for bi
   const third = gateway.keys.create('Site C').key;
   await chat(third, { visitor: 's4', messages: [{ role: 'system', content: 'y'.repeat(16000) }, { role: 'user', content: 'd' }], maxTokens: 64 });
   assert.deepEqual(mock.state.erased, [slotB], 'the least recently used idle site is erased to make room');
+});
+
+test('several conversations run at once when llama-server has several slots, each in its own slot', async () => {
+  mock.state.slots = 3; mock.state.delayMs = 60;
+  const results = await Promise.all([chat(keyA, { visitor: 'p1' }), chat(keyA, { visitor: 'p2' }), chat(keyB, { visitor: 'p3' })]);
+  assert.ok(results.every(r => r.text === 'Hello from the mock.'));
+  assert.equal(mock.state.maxActive, 3, 'three answers at the same time');
+  assert.deepEqual([...mock.state.slotLog].sort(), [0, 1, 2], 'each in its own slot');
+  assert.ok(results.every(r => !r.events.some(e => e.name === 'queued')), 'nobody waited');
+});
+
+test('more conversations than slots wait in line, and a returning visitor gets their own slot back', async () => {
+  mock.state.slots = 2; mock.state.delayMs = 50;
+  const runs = [chat(keyA, { visitor: 'r1' }), chat(keyB, { visitor: 'r2' }), chat(keyA, { visitor: 'r3' })];
+  const results = await Promise.all(runs);
+  assert.equal(mock.state.maxActive, 2, 'never more answers than slots');
+  assert.ok(results[2].events.some(e => e.name === 'queued' && e.data.position === 1), 'the third waits');
+  const first = mock.state.slotLog[0];
+  mock.state.slotLog = [];
+  await chat(keyB, { visitor: 'r2' }); await chat(keyA, { visitor: 'r1' });
+  assert.equal(mock.state.slotLog[1], first, 'r1 returns to the slot that holds its conversation');
+});
+
+test('in a shared pool one conversation may use its share, and the status says so', async () => {
+  mock.state.slots = 3; mock.state.contextTokens = 262144;
+  const status = await (await call('/v1/status', keyA)).json();
+  assert.equal(status.model.contextTokens, 131072);
+  assert.equal(status.queue.parallel, 3);
+  const started = (await chat(keyA, { visitor: 'share' })).events.find(e => e.name === 'started');
+  assert.equal(started.data.contextTokens, 131072);
+});
+
+test('split slots: each conversation may use its whole slot, and nothing is erased to make room', async () => {
+  gateway.config.parallel.sharedPool = false;
+  try {
+    // A pool this small would make a shared pool erase idle caches for every new conversation.
+    mock.state.slots = 3; mock.state.contextTokens = 3000;
+    const status = await (await call('/v1/status', keyA)).json();
+    assert.equal(status.model.contextTokens, 3000, 'the slot is the limit');
+    const long = 'z'.repeat(4000);
+    for (const round of [0, 1]) await Promise.all([keyA, keyB, keyA].map((key, i) => chat(key, { visitor: 'split' + round + i, messages: [{ role: 'system', content: long + round }, { role: 'user', content: 'q' }], maxTokens: 64 })));
+    assert.deepEqual(mock.state.erased, [], 'split slots never erase another conversation');
+    assert.equal(mock.state.maxActive, 3);
+  } finally { gateway.config.parallel.sharedPool = true; }
 });

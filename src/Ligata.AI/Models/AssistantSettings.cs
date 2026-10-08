@@ -170,8 +170,14 @@ public sealed record AssistantBehaviour
     public bool Thinking { get; init; }
     public double Temperature { get; init; } = 0.7;
     public int MaxAnswerTokens { get; init; } = 1024;
-    /// <summary>Maximum tokens of one conversation, including instructions and knowledge.</summary>
-    public int ContextLimit { get; init; } = 65536;
+    /// <summary>
+    /// Maximum tokens of one conversation, including instructions and knowledge. The AI server's own limit per conversation
+    /// (Ligata GPU: about 107k with three conversations at once) or LigataAI:Claude:MaxContextTokens caps it.
+    /// </summary>
+    public int ContextLimit { get; init; } = DefaultContextLimit;
+    public const int DefaultContextLimit = 131072;
+    /// <summary>The default before 0.5.1, when one GPU conversation could fill the whole 256k pool; untouched, it reads as today's default.</summary>
+    public const int EarlierDefaultContextLimit = 65536;
     /// <summary>Maximum tokens of enabled knowledge.</summary>
     public int KnowledgeBudget { get; init; } = 24576;
     public bool AllowImages { get; init; } = true;

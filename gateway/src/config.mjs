@@ -35,6 +35,13 @@ export const defaults = {
   // Cached prompts of idle websites kept in the shared KV pool (tokens). More is faster for returning
   // sites but slows everyone a little, because attention spans every occupied cell.
   cache: { maxIdleTokens: 65536 },
+  // Conversations answered at the same time (at most llama-server's slots). They share the GPU: each one writes a
+  // bit slower, together they write much faster. They also share the KV pool: one conversation may use at most
+  // conversationTokens, and an answer starts only when its prompt plus its longest answer fit next to the running
+  // ones; otherwise it waits in line. See model/README.md for the measurements behind the defaults.
+  // sharedPool: true when the slots share one pool (-kvu); 'auto' reads model/profile.json (unified: false splits it,
+  // and then each slot owns its part: one conversation may use ctx / slots, conversationTokens does not apply).
+  parallel: { conversations: 3, conversationTokens: 131072, sharedPool: 'auto' },
   // Default per-key limits; each key can override them.
   keyDefaults: { requestsPerDay: 2000, maxContextTokens: 262144, maxQueued: 10 },
   // Measured vision cost of one image, used before the exact count is known.
@@ -51,6 +58,12 @@ function merge(base, override) {
   return result;
 }
 
+// The model profile tells whether llama-server's slots share one KV pool; llama-server itself does not report it.
+function sharedPool() {
+  try { return JSON.parse(readFileSync(process.env.LIGATA_AI_PROFILE || path.join(gatewayRoot, '..', 'model', 'profile.json'), 'utf8')).unified !== false; }
+  catch { return true; }
+}
+
 export function loadConfig(overrides = {}) {
   const file = process.env.LIGATA_AI_CONFIG || path.join(defaults.dataDir, 'config.json');
   const fromFile = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
@@ -60,5 +73,7 @@ export function loadConfig(overrides = {}) {
   if (process.env.LIGATA_AI_UPSTREAM) fromEnv.upstream = process.env.LIGATA_AI_UPSTREAM;
   if (process.env.LIGATA_AI_DATA) fromEnv.dataDir = process.env.LIGATA_AI_DATA;
   if (process.env.LIGATA_AI_MEMORY_PROBE) fromEnv.memoryProbeSeconds = Number(process.env.LIGATA_AI_MEMORY_PROBE);
-  return merge(merge(merge(defaults, fromFile), fromEnv), overrides);
+  const config = merge(merge(merge(defaults, fromFile), fromEnv), overrides);
+  if (typeof config.parallel.sharedPool !== 'boolean') config.parallel.sharedPool = sharedPool();
+  return config;
 }

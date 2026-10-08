@@ -67,3 +67,33 @@ test('a failing job does not stop the queue', async () => {
   await assert.rejects(failing, /gpu/);
   assert.equal(await next, 'ok');
 });
+
+test('runs up to the configured number of jobs at once, in arrival order', async () => {
+  const s = scheduler({ parallel: 2 });
+  const started = []; let active = 0, maxActive = 0;
+  const job = name => s.enqueue({ keyId: 'k', visitor: name, run: async () => { started.push(name); active++; maxActive = Math.max(maxActive, active); await wait(20); active--; } });
+  await Promise.all(['a', 'b', 'c', 'd'].map(job));
+  assert.equal(maxActive, 2);
+  assert.deepEqual(started, ['a', 'b', 'c', 'd']);
+});
+
+test('a job waits while the running ones leave too little room in the pool, and later ones do not pass it', async () => {
+  const s = scheduler({ parallel: 3, capacity: 100 });
+  const started = [];
+  const job = (name, tokens, ms) => s.enqueue({ keyId: 'k', visitor: name, tokens, run: async () => { started.push(name); await wait(ms); } });
+  const runs = [job('big1', 60, 40), job('big2', 60, 10), job('small', 10, 10)];
+  await wait(5);
+  assert.deepEqual(started, ['big1'], 'big2 does not fit next to big1, and small waits behind it');
+  assert.equal(s.snapshot().active, 1);
+  await Promise.all(runs);
+  assert.deepEqual(started, ['big1', 'big2', 'small']);
+});
+
+test('wait estimates count rounds of parallel answers', async () => {
+  const s = scheduler({ parallel: 2 });
+  s.durations = [10000];
+  assert.equal(s.estimate(1), 0, 'idle: no wait');
+  const block = [s.enqueue({ keyId: 'k', visitor: '1', run: () => wait(30) }), s.enqueue({ keyId: 'k', visitor: '2', run: () => wait(30) })];
+  assert.ok(s.estimate(1) <= 10 && s.estimate(2) <= 10 && s.estimate(3) >= 13, 'positions 1-2 start after the first round, 3 after the second');
+  await Promise.all(block);
+});

@@ -17,9 +17,10 @@ export function buildArgs(p) {
     '--jinja',
     '--no-webui',
   ];
-  // Several slots share ONE KV pool (-kvu): the gateway pins each website to a slot so its knowledge stays
-  // cached in VRAM, while any single conversation can still use the whole window.
-  args.push('-np', String(p.slots || 1), ...(p.slots > 1 ? ['-kvu'] : []));
+  // Several slots, one answer each. unified: they share ONE KV pool (-kvu), so one conversation can use the whole
+  // window, but attention spans every occupied cell and conversations slow each other down. Split (unified: false):
+  // each slot owns ctx / slots of the pool and runs at the speed of its own length. See README.md.
+  args.push('-np', String(p.slots || 1), ...(p.slots > 1 && p.unified !== false ? ['-kvu'] : []));
   // llama.cpp keeps the 1B-parameter token-embedding table in host RAM by default. Force it into VRAM.
   if (p.embeddingsOnGpu) args.push('-ot', 'token_embd.weight=CUDA0');
   if (p.mmproj) args.push('--mmproj', file(p.mmproj));

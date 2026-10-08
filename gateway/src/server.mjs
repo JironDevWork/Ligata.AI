@@ -78,14 +78,26 @@ export function normalizeMessages(input, limits) {
 }
 
 export function createServer({ config, keys, scheduler, llm, monitor, slots, log = () => {} }) {
+  // How many answers run at once and how much of the KV pool one conversation may use.
+  const parallel = props => Math.max(1, Math.min(config.parallel?.conversations || 1, props.slots || 1));
+  // Shared pool: one conversation may use conversationTokens of it. Split slots: each slot's own part is the limit.
+  const shared = () => config.parallel?.sharedPool !== false;
+  const conversationTokens = props => Math.min(props.contextTokens, shared() && parallel(props) > 1 ? config.parallel?.conversationTokens || props.contextTokens : props.contextTokens);
+  const configure = props => {
+    if (slots.epoch !== llm.epoch) { slots.reset(); slots.epoch = llm.epoch; }
+    slots.resize(props.slots); slots.contextTokens = props.contextTokens; slots.shared = shared();
+    scheduler.configure({ parallel: parallel(props), capacity: shared() ? props.contextTokens - slots.reserve : Infinity });
+  };
+
   const routes = {
     'GET /v1/health': async () => ({ status: 200, body: { ok: true, model: await llm.health() } }),
 
     'GET /v1/status': async ({ key }) => {
       const model = await llm.health();
       const props = model === 'ready' ? await llm.props().catch(() => null) : null;
+      if (props) configure(props);
       return { status: 200, body: {
-        model: { state: model, name: props?.model ?? null, contextTokens: props ? Math.min(props.contextTokens, key.limits.maxContextTokens) : 0, vision: props?.vision ?? false },
+        model: { state: model, name: props?.model ?? null, contextTokens: props ? Math.min(conversationTokens(props), key.limits.maxContextTokens) : 0, vision: props?.vision ?? false },
         queue: scheduler.snapshot(),
         gpu: { healthy: !monitor.latest?.spilling },
         limits: { ...key.limits, maxImages: config.limits.maxImages, maxImageBytes: config.limits.maxImageBytes, maxPdfBytes: config.limits.maxPdfBytes, maxPdfPages: config.limits.maxPdfPages, maxTokensCap: config.generation.maxTokensCap },
@@ -117,7 +129,8 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
     const { messages, images } = normalizeMessages(body.messages, config.limits);
     if (images && !(await llm.props().catch(() => ({ vision: false }))).vision) throw new HttpError(422, 'vision_unavailable', 'Image understanding is not available right now.');
     const props = await llm.props();
-    const contextLimit = Math.min(props.contextTokens, key.limits.maxContextTokens, Number(body.contextLimit) || Infinity);
+    configure(props);
+    const contextLimit = Math.min(conversationTokens(props), key.limits.maxContextTokens, Number(body.contextLimit) || Infinity);
     const maxTokens = Math.min(Math.max(Number(body.maxTokens) || config.generation.defaultMaxTokens, 16), config.generation.maxTokensCap);
     const promptTokens = await llm.countPrompt(messages, config.imageTokens);
     if (promptTokens + Math.min(maxTokens, 256) > contextLimit) throw new HttpError(413, 'context_full', 'This conversation no longer fits into the assistant\'s memory. Start a new chat.', { promptTokens, contextTokens: contextLimit });
@@ -135,41 +148,49 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
     };
     const heartbeat = setInterval(() => open && response.write(': ping\n\n'), 15000);
     const started = Date.now();
+    const visitor = typeof body.visitor === 'string' ? body.visitor.slice(0, 128) : '';
     try {
       await scheduler.enqueue({
-        keyId: key.id, visitor: typeof body.visitor === 'string' ? body.visitor.slice(0, 128) : '', maxQueued: key.limits.maxQueued, signal: abort.signal,
+        keyId: key.id, visitor, maxQueued: key.limits.maxQueued, signal: abort.signal, tokens: promptTokens + maxTokens,
         onUpdate: ({ position, estimate }) => position > 0 && event('queued', { position, estimatedWaitSeconds: estimate }),
         run: async signal => {
-          const limit = AbortSignal.any([signal, AbortSignal.timeout(config.generation.maxSeconds * 1000)]);
           keys.take(key);
-          // Pin this website to a prompt-cache slot and make room in the shared KV pool if needed.
+          // A slot for this answer: the conversation's own, else one warm with the site's knowledge. Frees room in the pool if needed.
           const fresh = await llm.props();
-          if (slots.epoch !== llm.epoch) { slots.reset(); slots.epoch = llm.epoch; }
-          slots.resize(fresh.slots); slots.contextTokens = fresh.contextTokens;
-          const slot = await slots.assign(key.id, promptTokens + maxTokens, id => llm.eraseSlot(id));
-          slots.record(slot, promptTokens);
-          event('started', { promptTokens, contextTokens: contextLimit, waitedMs: Date.now() - started });
-          let completion = 0, firstToken = 0, wrote = false;
-          for await (const part of llm.chat(messages, { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking, slot: slots.slots.length > 1 ? slot : undefined }, limit)) {
-            if (part.type === 'progress') { if (part.total > 2048) event('progress', { processed: Math.max(part.processed || 0, part.cache || 0), total: part.total }); }
-            else if (part.type === 'reasoning') event('thinking', {});
-            else if (part.type === 'delta') { firstToken ||= Date.now(); wrote = true; event('delta', { text: part.text }); }
-            else {
-              const prompt = part.usage?.prompt_tokens ?? promptTokens;
-              completion = part.usage?.completion_tokens ?? part.timings?.predicted_n ?? 0;
-              keys.record(key, part.timings?.prompt_n ?? prompt, completion);
-              slots.record(slot, prompt + completion);
-              // The token limit ran out while the model was still thinking: no answer text at all.
-              if (!wrote && part.finishReason === 'length') { event('error', { code: 'thinking_limit', message: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.' }); continue; }
-              event('done', {
-                finishReason: part.finishReason,
-                usage: { promptTokens: prompt, completionTokens: completion, cachedTokens: part.timings?.cache_n ?? 0 },
-                context: { used: prompt + completion, limit: contextLimit },
-                timings: { promptPerSecond: Math.round(part.timings?.prompt_per_second || 0), tokensPerSecond: Math.round((part.timings?.predicted_per_second || 0) * 10) / 10, firstTokenMs: firstToken ? firstToken - started : null, totalMs: Date.now() - started },
-              });
+          configure(fresh);
+          const slot = await slots.assign(key.id, promptTokens + maxTokens, id => llm.eraseSlot(id), visitor || null);
+          // maxSeconds counts from the moment llama-server works on this answer. Running next to others, it can first
+          // wait for another conversation's long prompt to be read (llama-server reads prompts one after the other).
+          const timeout = new AbortController();
+          const expire = () => timeout.abort(new DOMException('The answer took too long.', 'TimeoutError'));
+          let timer = setTimeout(expire, config.generation.maxSeconds * 2000), working = false;
+          const limit = AbortSignal.any([signal, timeout.signal]);
+          try {
+            slots.record(slot, promptTokens);
+            event('started', { promptTokens, contextTokens: contextLimit, waitedMs: Date.now() - started });
+            let completion = 0, firstToken = 0, wrote = false;
+            for await (const part of llm.chat(messages, { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking, slot: slots.slots.length > 1 ? slot : undefined }, limit)) {
+              if (!working) { working = true; clearTimeout(timer); timer = setTimeout(expire, config.generation.maxSeconds * 1000); }
+              if (part.type === 'progress') { if (part.total > 2048) event('progress', { processed: Math.max(part.processed || 0, part.cache || 0), total: part.total }); }
+              else if (part.type === 'reasoning') event('thinking', {});
+              else if (part.type === 'delta') { firstToken ||= Date.now(); wrote = true; event('delta', { text: part.text }); }
+              else {
+                const prompt = part.usage?.prompt_tokens ?? promptTokens;
+                completion = part.usage?.completion_tokens ?? part.timings?.predicted_n ?? 0;
+                keys.record(key, part.timings?.prompt_n ?? prompt, completion);
+                slots.record(slot, prompt + completion);
+                // The token limit ran out while the model was still thinking: no answer text at all.
+                if (!wrote && part.finishReason === 'length') { event('error', { code: 'thinking_limit', message: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.' }); continue; }
+                event('done', {
+                  finishReason: part.finishReason,
+                  usage: { promptTokens: prompt, completionTokens: completion, cachedTokens: part.timings?.cache_n ?? 0 },
+                  context: { used: prompt + completion, limit: contextLimit },
+                  timings: { promptPerSecond: Math.round(part.timings?.prompt_per_second || 0), tokensPerSecond: Math.round((part.timings?.predicted_per_second || 0) * 10) / 10, firstTokenMs: firstToken ? firstToken - started : null, totalMs: Date.now() - started },
+                });
+              }
             }
-          }
-          log('chat', { key: key.id, promptTokens, completion, ms: Date.now() - started });
+            log('chat', { key: key.id, promptTokens, completion, ms: Date.now() - started });
+          } finally { clearTimeout(timer); slots.release(slot); }
         },
       });
     } catch (error) {

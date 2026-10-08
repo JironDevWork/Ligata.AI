@@ -41,6 +41,8 @@ public sealed class AssistantStore(IScopeProvider scopes)
         var settings = AssistantJson.Read<AssistantSettings>(row.Json);
         // An untouched notice from an earlier version reads as today's default (shown translated to visitors).
         if (AssistantIdentity.EarlierDefaultNotices.Contains(settings.Identity.PrivacyNotice)) settings = settings with { Identity = settings.Identity with { PrivacyNotice = AssistantIdentity.DefaultPrivacyNotice } };
+        // Likewise the earlier conversation limit: conversations may now use what the AI server gives each one.
+        if (settings.Behaviour.ContextLimit == AssistantBehaviour.EarlierDefaultContextLimit) settings = settings with { Behaviour = settings.Behaviour with { ContextLimit = AssistantBehaviour.DefaultContextLimit } };
         return (settings, row.Version);
     }
 
