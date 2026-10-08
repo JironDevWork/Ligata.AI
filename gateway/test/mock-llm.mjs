@@ -38,6 +38,13 @@ export function startMockLlm() {
         // Questions about a person or something unknown get a handoff answer; the marker arrives split across chunks.
         const last = body.messages.at(-1);
         const asked = typeof last?.content === 'string' ? last.content : (last?.content || []).map(part => part.text || '').join(' ');
+        // "think-forever" thinks until the token limit runs out and never writes an answer.
+        if (/think-forever/i.test(asked)) {
+          for (let i = 0; i < 5; i++) response.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'hmm ' } }] })}\n\n`);
+          response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }], usage: { prompt_tokens: 10, completion_tokens: body.max_tokens || 5 }, timings: { prompt_n: 10, cache_n: 0, predicted_n: body.max_tokens || 5 } })}\n\n`);
+          response.end('data: [DONE]\n\n');
+          return;
+        }
         const tokens = /person|human|unknown|mensch|weiss nicht/i.test(asked) ? ['Sorry, ', 'I could ', 'not find ', 'that in ', 'my information. ', 'Our team ', 'can help.', '\n[[', 'te', 'am]]'] : state.tokens;
         for (const [i, token] of tokens.entries()) {
           await new Promise(r => setTimeout(r, state.delayMs));

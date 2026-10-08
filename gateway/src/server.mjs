@@ -149,16 +149,18 @@ export function createServer({ config, keys, scheduler, llm, monitor, slots, log
           const slot = await slots.assign(key.id, promptTokens + maxTokens, id => llm.eraseSlot(id));
           slots.record(slot, promptTokens);
           event('started', { promptTokens, contextTokens: contextLimit, waitedMs: Date.now() - started });
-          let completion = 0, firstToken = 0;
+          let completion = 0, firstToken = 0, wrote = false;
           for await (const part of llm.chat(messages, { ...config.generation, maxTokens, temperature: body.temperature ?? config.generation.temperature, thinking: !!body.thinking, slot: slots.slots.length > 1 ? slot : undefined }, limit)) {
             if (part.type === 'progress') { if (part.total > 2048) event('progress', { processed: Math.max(part.processed || 0, part.cache || 0), total: part.total }); }
             else if (part.type === 'reasoning') event('thinking', {});
-            else if (part.type === 'delta') { firstToken ||= Date.now(); event('delta', { text: part.text }); }
+            else if (part.type === 'delta') { firstToken ||= Date.now(); wrote = true; event('delta', { text: part.text }); }
             else {
               const prompt = part.usage?.prompt_tokens ?? promptTokens;
               completion = part.usage?.completion_tokens ?? part.timings?.predicted_n ?? 0;
               keys.record(key, part.timings?.prompt_n ?? prompt, completion);
               slots.record(slot, prompt + completion);
+              // The token limit ran out while the model was still thinking: no answer text at all.
+              if (!wrote && part.finishReason === 'length') { event('error', { code: 'thinking_limit', message: 'The assistant thought for too long and could not finish its answer. Please try again or ask more specifically.' }); continue; }
               event('done', {
                 finishReason: part.finishReason,
                 usage: { promptTokens: prompt, completionTokens: completion, cachedTokens: part.timings?.cache_n ?? 0 },

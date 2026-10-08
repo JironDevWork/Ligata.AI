@@ -42,6 +42,7 @@ var defaults = new AssistantSettings();
 AssistantValidation.Settings(defaults);
 Assert(true, "Defaults are valid.");
 Assert(defaults.Appearance.Position == "right", "The bubble sits bottom right by default, clear of consent banners bottom left.");
+Assert(ChatRelay.MaxTokens(defaults.Behaviour) == 1024 && ChatRelay.MaxTokens(defaults.Behaviour with { Thinking = true }) == 1024 + ChatRelay.ThinkingRoom && ChatRelay.ThinkingRoom >= 4096, "GPU mode gives thinking its own room on top of the answer limit.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Appearance = defaults.Appearance with { Accent = "red" } }), "Colours must be hex.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Appearance = defaults.Appearance with { Accent = "#12345g" } }), "Colours must be valid hex.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Behaviour = defaults.Behaviour with { KnowledgeBudget = 64000, ContextLimit = 65536 } }), "Knowledge budget must leave room for the chat.");

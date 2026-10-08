@@ -174,6 +174,12 @@ test('a visitor leaving while queued is removed; leaving while answering aborts 
   assert.equal(gateway.scheduler.length, 0);
 });
 
+test('thinking that uses up the token limit ends with thinking_limit, not an empty answer', async () => {
+  const result = await chat(keyA, { messages: [{ role: 'user', content: 'think-forever' }], thinking: true, maxTokens: 64 });
+  assert.deepEqual(result.events.map(e => e.name), ['started', 'thinking', 'error']);
+  assert.equal(result.events.at(-1).data.code, 'thinking_limit');
+});
+
 test('answers that run too long are stopped', async () => {
   mock.state.delayMs = 1000; // 5 tokens > 3 s limit
   const result = await chat(keyA, { visitor: 'slow' });

@@ -69,6 +69,13 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         return result;
     }
 
+    /// <summary>
+    /// Thinking shares the token limit with the answer, so "Think before answering" adds room on top (as in API mode).
+    /// 4,096 tokens are at most about a minute of thinking on the Ligata GPU; usual thinking takes a few hundred.
+    /// </summary>
+    public const int ThinkingRoom = 4096;
+    public static int MaxTokens(AssistantBehaviour behaviour) => behaviour.MaxAnswerTokens + (behaviour.Thinking ? ThinkingRoom : 0);
+
     public async Task RunAsync(HttpContext http, ChatRequest request, AssistantSettings settings, string visitor, bool countStats = true)
     {
         var token = http.RequestAborted;
@@ -98,7 +105,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, countStats); return; }
         var body = new
         {
-            messages, visitor, maxTokens = settings.Behaviour.MaxAnswerTokens, temperature = settings.Behaviour.Temperature,
+            messages, visitor, maxTokens = MaxTokens(settings.Behaviour), temperature = settings.Behaviour.Temperature,
             thinking = settings.Behaviour.Thinking, contextLimit = settings.Behaviour.ContextLimit,
         };
         HttpResponseMessage response;

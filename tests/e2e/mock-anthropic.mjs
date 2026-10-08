@@ -45,6 +45,8 @@ export function startMockAnthropic(port = 1230) {
     const blocks = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : last.content;
     const asked = blocks.filter(b => b.type === 'text').map(b => b.text).join(' ');
     if (/refuse-me/i.test(asked)) return { refusal: true, parts: [] };
+    // Thinks until max_tokens runs out, without any answer text.
+    if (/think-forever/i.test(asked)) return { exhausted: true, parts: [] };
     if (/person|human|unknown|mensch|weiss nicht/i.test(asked)) return { parts: ['Sorry, ', 'I could not find ', 'that in my information. ', 'Our team can help.', '\n[[', 'te', 'am]]'] };
     const extras = [];
     const images = blocks.filter(b => b.type === 'image').length, documents = blocks.filter(b => b.type === 'document');
@@ -92,7 +94,7 @@ export function startMockAnthropic(port = 1230) {
     if (prefix) state.cachedPrefix = prefix;
     const input = Math.max(1, tokens(body.system) + tokens(body.messages) - read - created);
 
-    const { parts, refusal } = answerFor(body);
+    const { parts, refusal, exhausted } = answerFor(body);
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
     const send = (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify({ type: event, ...data })}\n\n`);
     const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -102,7 +104,7 @@ export function startMockAnthropic(port = 1230) {
     send('ping', {});
     let index = 0;
     // Higher effort thinks first (the thinking text is omitted by default, only a signature arrives).
-    if (body.output_config?.effort && body.output_config.effort !== 'low') {
+    if (exhausted || (body.output_config?.effort && body.output_config.effort !== 'low')) {
       send('content_block_start', { index, content_block: { type: 'thinking', thinking: '', signature: '' } });
       await wait(state.mode === 'slow' ? 1500 : 150);
       send('content_block_delta', { index, delta: { type: 'signature_delta', signature: 'mock-signature' } });
@@ -117,7 +119,7 @@ export function startMockAnthropic(port = 1230) {
       }
       send('content_block_stop', { index });
     }
-    send('message_delta', { delta: { stop_reason: refusal ? 'refusal' : 'end_turn', stop_sequence: null }, usage: { output_tokens: parts.length * 3 } });
+    send('message_delta', { delta: { stop_reason: refusal ? 'refusal' : exhausted ? 'max_tokens' : 'end_turn', stop_sequence: null }, usage: { output_tokens: exhausted ? body.max_tokens : parts.length * 3 } });
     send('message_stop', {});
     response.end();
   });

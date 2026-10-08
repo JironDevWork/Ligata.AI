@@ -19,7 +19,7 @@ export const defaults = {
   },
   generation: {
     defaultMaxTokens: 1024,
-    maxTokensCap: 4096,
+    maxTokensCap: 8192,     // the largest answer limit (4,096) plus room for thinking (4,096); well inside maxSeconds
     maxSeconds: 300,        // hard stop for one answer, including prompt processing
     temperature: 1.0, topP: 0.95, topK: 64, // Gemma's recommended sampling
   },

@@ -324,6 +324,12 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             gate.Healthy();
             finished = true;
 
+            if (stopReason == "max_tokens" && answer.Length == 0)
+            {
+                if (countStats) store.Count(s => s.Failed++);
+                await sse.Send("error", new { code = "thinking_limit", message = "The assistant thought for too long and could not finish its answer. Please try again or ask more specifically." });
+                return;
+            }
             if (stopReason == "refusal" && answer.Length == 0)
             {
                 if (countStats) store.Count(s => s.Failed++);

@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.4.3';
+import { icon, number, compact } from './ui.js?v=0.4.4';
 
 export const connectionView = {
   async saveConnection(event) {

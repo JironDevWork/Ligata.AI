@@ -167,6 +167,14 @@ await check('a declined request is explained without a pointless retry', async (
   assert(await widget.locator('.notice.error [data-retry]').count() === 0, 'no retry for a refusal');
 });
 
+await check('thinking that uses up the token limit is explained, with a retry', async () => {
+  const exhausted = await chat([{ role: 'user', content: 'think-forever' }]);
+  assert(exhausted.events.at(-1)?.name === 'error' && exhausted.events.at(-1).data.code === 'thinking_limit', 'thinking_limit error: ' + exhausted.text.slice(0, 300));
+  await ask('think-forever please');
+  await widget.locator('.notice.error', { hasText: /thought for too long/ }).waitFor({ timeout: 20000 });
+  assert(await widget.locator('.notice.error [data-retry]').count() === 1, 'the visitor can try again');
+});
+
 const admin = await (await browser.newContext({ viewport: { width: 1500, height: 950 } })).newPage();
 admin.on('pageerror', e => errors.push('admin: ' + e.message));
 const backoffice = [];
