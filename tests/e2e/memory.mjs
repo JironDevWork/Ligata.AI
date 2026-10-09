@@ -25,6 +25,9 @@ const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
 const tokens = text => Math.ceil(String(text || '').length / 3.5);
 const requests = [];
 let failNext = null; // 'context_full' makes the next question fail as if the estimate had been too low
+let streamFail = null; // 'partial': the answer breaks off after some text; 'context': it no longer fits after a lookup (in the stream)
+let queueSummary = false; // the next summary waits in line first
+let slowAnswer = 0; // ms per streamed piece of the next answer
 const SUMMARY = 'The visitor asked about the long test questions one and two. Facts given: blue plan CHF 40. Language: English.';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const server = http.createServer(async (req, res) => {
@@ -42,12 +45,21 @@ const server = http.createServer(async (req, res) => {
     }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const send = (name, data) => res.write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (body.compact && queueSummary) { queueSummary = false; send('queued', { position: 2, estimatedWaitSeconds: 40 }); await sleep(900); send('queued', { position: 1, estimatedWaitSeconds: 20 }); await sleep(300); }
     send('started', { promptTokens: prompt, contextTokens: LIMIT });
+    if (!body.compact && streamFail) {
+      const mode = streamFail; streamFail = null;
+      if (mode === 'partial') { send('delta', { text: 'This answer breaks ' }); await sleep(50); send('error', { code: 'model_failed', message: 'The model stopped while answering.' }); }
+      else { send('lookup', { calls: [{ name: 'read_pages', arguments: { pages: ['/long/'] } }] }); await sleep(50); send('error', { code: 'context_full', message: 'Too long.', promptTokens: LIMIT - 100, contextTokens: LIMIT }); }
+      return res.end();
+    }
     // Reading takes a moment, then the text streams.
     for (const done of [0.3, 0.7]) { send('progress', { processed: Math.round(prompt * done), total: prompt }); await sleep(350); }
     // A question for a person gets the handoff marker, as the model writes it when the website has no answer.
     const text = body.compact ? SUMMARY : /person/i.test(body.messages.at(-1).content) ? 'I could not find that here. [[team]]' : `Answer ${requests.filter(r => !r.compact).length}.`;
-    for (const part of text.match(/.{1,12}/g)) { send('delta', { text: part }); await sleep(body.compact ? 60 : 10); }
+    const pause = body.compact ? 60 : slowAnswer || 10;
+    if (!body.compact) slowAnswer = 0;
+    for (const part of text.match(/.{1,12}/g)) { send('delta', { text: part }); await sleep(pause); }
     send('done', { finishReason: 'stop', usage: { promptTokens: prompt, completionTokens: tokens(text) }, context: { used: prompt + tokens(text), limit: LIMIT }, timings: {} });
     return res.end();
   }
@@ -169,6 +181,65 @@ await check('without live chat and email, an answer the AI cannot give offers th
   assert(await card.locator('a[href="mailto:team@example.com"]').count() === 1, 'a mailto button to the contact email');
   assert(!(await widget.locator('.msg.bot').last().innerText()).includes('[[team]]'), 'the marker never shows');
   await tab.screenshot({ path: path.join(out, 'memory-contact-handoff.png') });
+});
+
+await check('the header always says that the assistant is an AI', async () => {
+  assert(/^AI assistant · /.test(await widget.locator('.status-text').innerText()), 'header status: ' + await widget.locator('.status-text').innerText());
+});
+
+await check('Try again after an answer broke off part-way asks the question again, without the broken part', async () => {
+  const count = requests.length;
+  streamFail = 'partial';
+  await input.fill('Will this break?');
+  await input.press('Enter');
+  const retry = widget.locator('.notice.error [data-retry]');
+  await retry.waitFor({ timeout: 10000 });
+  await retry.click();
+  await widget.locator('.waiting').waitFor({ state: 'detached', timeout: 15000 });
+  await widget.locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 15000 });
+  const again = requests.slice(count)[1];
+  assert(again && again.messages.at(-1).role === 'user' && again.messages.at(-1).content === 'Will this break?', 'the question is asked again, as the last message: ' + JSON.stringify(again?.messages.at(-1)));
+  const last = await widget.locator('.msg.bot').last().innerText();
+  assert(/^Answer \d+\./.test(last.trim()) && !(await widget.locator('.msg.bot', { hasText: 'This answer breaks' }).count()), 'the broken part is gone, the answer is there: ' + last);
+});
+
+await check('an answer that no longer fits after a lookup is summarized and asked again', async () => {
+  const count = requests.length;
+  streamFail = 'context';
+  await input.fill('Read the long page, please.');
+  await input.press('Enter');
+  await widget.locator('.waiting.compacting').waitFor({ timeout: 10000 });
+  await widget.locator('.waiting').waitFor({ state: 'detached', timeout: 20000 });
+  await widget.locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 15000 });
+  const kinds = requests.slice(count).map(r => r.compact ? 'summary' : 'question');
+  assert(kinds.join(',') === 'question,summary,question', 'refused in the stream, summarized, asked again: ' + kinds.join(','));
+  assert(await widget.locator('.notice.error').count() === 0, 'no error shown');
+});
+
+await check('a summary waiting in line shows its place', async () => {
+  // Fill the memory to about three quarters, so the next long question needs a summary first.
+  while (parseInt(await widget.locator('.meter-text').innerText(), 10) < 70) await ask(long('Filler', 60));
+  queueSummary = true;
+  await input.fill(long('Question five', 140));
+  await input.press('Enter');
+  const text = widget.locator('.waiting.compacting .wait-text');
+  await text.filter({ hasText: 'You are number 2 in line' }).waitFor({ timeout: 10000 });
+  await tab.waitForTimeout(1500); // the log scrolls smoothly past the long question
+  await tab.screenshot({ path: path.join(out, 'memory-summary-in-line.png') });
+  await widget.locator('.waiting').waitFor({ state: 'detached', timeout: 20000 });
+  await widget.locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 15000 });
+});
+
+await check('closing and reopening the chat while an answer streams: the answer keeps appearing', async () => {
+  slowAnswer = 120;
+  const before = await widget.locator('.msg.bot').count();
+  await input.fill('A slow one, please.');
+  await input.press('Enter');
+  await widget.locator('.msg.bot').nth(before).waitFor({ timeout: 10000 });
+  await tab.evaluate(() => { window.LigataAI.close(); window.LigataAI.open(); });
+  await widget.locator('.bubble.streaming').waitFor({ state: 'detached', timeout: 15000 });
+  const shown = (await widget.locator('.msg.bot .bubble').last().innerText()).trim();
+  assert(/^Answer \d+\.$/.test(shown), 'the whole answer is on screen: ' + shown);
 });
 
 await check('no script errors', async () => { assert(!errors.length, errors.join('; ')); });

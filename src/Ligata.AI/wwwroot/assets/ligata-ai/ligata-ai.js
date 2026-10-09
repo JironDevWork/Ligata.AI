@@ -145,7 +145,7 @@
     return abs < 60 ? rtf.format(0, 'second') : abs < 3600 ? rtf.format(Math.round(seconds / 60), 'minute') : abs < 86400 ? rtf.format(Math.round(seconds / 3600), 'hour') : rtf.format(Math.round(seconds / 86400), 'day');
   };
   const teamName = () => team.teamName || t.ourTeam;
-  const chatWith = () => team.teamName ? t.chatWithTeam(team.teamName) : t.chatWithOurTeam;
+  const chatWith = () => escape(team.teamName ? t.chatWithTeam(team.teamName) : t.chatWithOurTeam);
   const days = () => Math.max(1, Math.min(30, +team.days || 3));
 
   // ---------- markup helpers ----------
@@ -161,7 +161,8 @@
     });
     html = html.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g, (m, pre, url) => `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
     html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>').replace(/(^|\W)_([^_\n]+)_(?=\W|$)/g, '$1<em>$2</em>');
-    return html.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${escape(code[i])}</code>`);
+    // The code spans were taken from the escaped text: insert them as they are.
+    return html.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${code[i] ?? ''}</code>`);
   }
   /** Small, safe Markdown subset: paragraphs, lists, code blocks, bold/italic, links. HTML is always escaped. */
   function markdown(source) {
@@ -726,12 +727,14 @@
     return { ready: [t.online, 'ok'], busy: [t.busy, 'warn'], starting: [t.starting, 'warn'], degraded: [t.degraded, 'warn'], offline: [t.offline, ''], disabled: [t.offline, ''], checking: [t.checking, ''] }[state.status] || [t.offline, ''];
   }
   const teamStatus = () => state.teamOnline > 0 ? [t.teamOnline(state.teamOnline), 'ok'] : [t.teamOfflineShort, ''];
+  /** The AI's status, always marked as an AI (AI Act Art. 50): the name and every text are the site's to choose. */
+  const aiHeader = () => { const [text, tone] = aiStatus(); return [`${t.statusAI} · ${text}`, tone]; };
   function renderHeader() {
     const c = current();
     const inList = state.view === 'list', inHome = state.view === 'home';
     let avatarHtml, title, status;
     if (inList) { avatarHtml = `<div class="avatar">${svg('chats')}</div>`; title = t.conversations; status = F.ai ? aiStatus() : teamStatus(); }
-    else if (inHome || !c) { avatarHtml = `<div class="avatar">${F.ai ? botAvatar : svg('team')}</div>`; title = F.ai ? name : teamName(); status = F.ai ? aiStatus() : teamStatus(); }
+    else if (inHome || !c) { avatarHtml = `<div class="avatar">${F.ai ? botAvatar : svg('team')}</div>`; title = F.ai ? name : teamName(); status = F.ai ? aiHeader() : teamStatus(); }
     else if (c.team) {
       const agents = c.team.agents || [];
       if (c.team.kind === 'email') { avatarHtml = `<div class="avatar">${svg('mail')}</div>`; title = teamName(); status = [t.statusSent, 'ok']; }
@@ -743,7 +746,7 @@
         avatarHtml = `<div class="avatar">${svg('team')}</div>`; title = teamName();
         status = c.team.state === 'closed' || c.team.gone ? [t.statusClosed, ''] : state.teamOnline > 0 ? [t.teamOnline(state.teamOnline), 'ok'] : [t.teamOfflineShort, ''];
       }
-    } else { avatarHtml = `<div class="avatar">${botAvatar}</div>`; title = name; status = aiStatus(); }
+    } else { avatarHtml = `<div class="avatar">${botAvatar}</div>`; title = name; status = aiHeader(); }
     $('.who-box').innerHTML = avatarHtml;
     $('.title-text').textContent = title;
     $('.status-text').textContent = status[0];
@@ -828,6 +831,7 @@
       return node;
     }
     node.className = 'msg bot';
+    if (message.at) node.dataset.at = message.at;
     node.innerHTML = `<div class="bubble">${markdown(stripMark(message.content))}</div><div class="meta"><button type="button" data-copy>${svg('copy')}<span>${t.copy}</span></button></div>`;
     node.querySelector('[data-copy]').addEventListener('click', event => {
       const label = event.currentTarget.querySelector('span');
@@ -883,6 +887,8 @@
     if (last?.role === 'assistant' && last.handoff && !c.team && !c.handoffDismissed && canHandOff() && team.suggest !== false) log.append(handoffCard(c));
     const typing = typingRow(c);
     if (typing) log.append(typing);
+    // An answer still on its way: its place in line, "Thinking…" or "Reading…" stay visible.
+    if (state.waitingRow && state.answering === c) log.append(state.waitingRow);
     if (c.kind === 'ai' && !c.team && ['offline', 'disabled'].includes(state.status) && F.ai) showOffline();
     // Only new messages animate in; a full redraw (switching conversations) appears at once.
     for (const child of log.children) child.classList.add('still');
@@ -1207,6 +1213,8 @@
       const response = await post({ ...payload(c, true), compact: true }, signal);
       if (!streaming(response)) problem = (await response.json().catch(() => ({}))).error || { code: 'compact_failed' };
       else await events(response, (name, data) => {
+        if (name === 'queued' && look.showQueuePosition) row.querySelector('.wait-text').innerHTML = `${escape(t.compacting)} <span class="queue-pos">${t.queue(data.position)}</span> · ${t.wait(data.estimatedWaitSeconds || 10)}`;
+        else if (name === 'started') row.querySelector('.wait-text').textContent = t.compacting;
         if (name === 'progress') show(3 + 27 * data.processed / data.total);
         else if (name === 'delta') { text += data.text; show(30 + 67 * text.length / 2400); }
         else if (name === 'error') problem = data;
@@ -1272,7 +1280,12 @@
       if (problem) {
         state.busy = false; state.controller = null; updateComposer(); persist(true);
         if (problem.code === 'cancelled' || controller.signal.aborted) return;
-        if (problem.code === 'consent_required') { await consentLost(); return; }
+        if (problem.code === 'consent_required') {
+          const last = c.messages.at(-1);
+          if (last?.role === 'user') { c.messages.pop(); input.value = last.content || ''; state.pending = (last.files || []).filter(f => !f.gone); autosize(); persist(true); if (c.id === state.activeId) renderLog(); }
+          await consentLost();
+          return;
+        }
         showError(problem.code === 'context_full' ? 'compact_failed' : problem.code || 'compact_failed', problem.message, () => send('', true));
         return;
       }
@@ -1282,13 +1295,24 @@
     waiting.className = 'waiting';
     waiting.innerHTML = `<span class="dots"><i></i><i></i><i></i></span><span class="wait-text"></span>`;
     log.append(waiting); scrollDown(true);
+    state.waitingRow = waiting;
     const waitText = waiting.querySelector('.wait-text');
-    let answer = null, bubble = null, answerText = '', frame = 0;
+    let answer = null, bubble = null, answerText = '', frame = 0, again = false;
+    // Try again resends the question, without the part of the answer that broke off.
+    const retry = () => { if (answer && c.messages.at(-1) === answer) { c.messages.pop(); if (c.id === state.activeId) renderLog(); } send('', true); };
     const lookups = [];
-    const paint = () => { frame = 0; if (bubble) { bubble.innerHTML = markdown(stripMark(answerText, true)) || '<p></p>'; scrollDown(); } };
+    // The log may have been redrawn meanwhile: write into the bubble that is on screen.
+    const visible = () => {
+      if (bubble && !bubble.isConnected && answer && c.id === state.activeId) {
+        const shown = log.querySelector(`.msg.bot[data-at="${answer.at}"] .bubble`);
+        if (shown) { bubble = shown; bubble.classList.add('streaming'); }
+      }
+      return bubble;
+    };
+    const paint = () => { frame = 0; if (visible()) { bubble.innerHTML = markdown(stripMark(answerText, true)) || '<p></p>'; scrollDown(); } };
     let ended = false;
     const finish = () => {
-      if (ended) return; ended = true; state.busy = false; state.controller = null; state.answering = null; waiting.remove(); bubble?.classList.remove('streaming');
+      if (ended) return; ended = true; state.busy = false; state.controller = null; state.answering = null; state.waitingRow = null; waiting.remove(); visible(); bubble?.classList.remove('streaming');
       if (answer) {
         answer.handoff = answerText.includes(TEAM_MARK); answer.content = answerText;
         if (lookups.length) answer.lookups = lookups;
@@ -1339,7 +1363,7 @@
           waitText.textContent = data.calls?.some(call => call.name === 'read_pages') ? t.readingPages : t.searching;
         } else if (eventName === 'delta') {
           if (!answer) {
-            waiting.remove();
+            waiting.remove(); state.waitingRow = null;
             answer = { role: 'assistant', content: '', at: Date.now() };
             c.messages.push(answer);
             const node = messageNode(answer);
@@ -1354,11 +1378,17 @@
         } else if (eventName === 'error') {
           finish();
           if (answer && !answerText) c.messages.pop();
-          showError(data.code, data.message, ['context_full', 'refused'].includes(data.code) ? null : () => send('', true));
+          // What the assistant looked up made the conversation too long: summarize the earlier messages and ask again, once.
+          if (data.code === 'context_full' && !answerText && !summarizeFirst) {
+            c.context.used = data.promptTokens || c.context.limit; updateMeter();
+            if (needsSummary(c, true)) { again = true; return; }
+          }
+          showError(data.code, data.message, ['context_full', 'refused'].includes(data.code) ? null : retry);
         }
       });
       if (frame) { cancelAnimationFrame(frame); paint(); }
-      if (!answer && !ended) { finish(); showError('model_failed', null, () => send('', true)); return; }
+      if (again) return send('', true, true);
+      if (!answer && !ended) { finish(); showError('model_failed', null, retry); return; }
       finish();
     } catch (error) {
       if (frame) { cancelAnimationFrame(frame); paint(); }
@@ -1366,7 +1396,7 @@
       finish();
       if (stopped) { if (answer && !answerText) c.messages.pop(); return; }
       setStatus('offline');
-      showError('network', null, () => send('', true));
+      showError('network', null, retry);
     }
   }
 
@@ -1423,7 +1453,7 @@
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
     sheet.innerHTML = `<div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="lai-sheet-title">
-      <div class="sheet-head"><div><h2 id="lai-sheet-title">${escape(chat ? chatWith() : contact.title || t.sendEmail)}</h2><p class="sub">${chat ? `<span class="presence ${online ? 'on' : ''}"><i></i>${escape(intro)}</span>` : escape(intro)}</p></div><button type="button" class="tool" data-sheet-close aria-label="${t.close}">${svg('close')}</button></div>
+      <div class="sheet-head"><div><h2 id="lai-sheet-title">${chat ? chatWith() : escape(contact.title || t.sendEmail)}</h2><p class="sub">${chat ? `<span class="presence ${online ? 'on' : ''}"><i></i>${escape(intro)}</span>` : escape(intro)}</p></div><button type="button" class="tool" data-sheet-close aria-label="${t.close}">${svg('close')}</button></div>
       ${F.chat && F.email ? `<div class="tabs" role="group"><button type="button" aria-pressed="${chat}" data-sheet-kind="chat">${svg('chat')}${t.chatTab}</button><button type="button" aria-pressed="${!chat}" data-sheet-kind="email">${svg('mail')}${t.emailTab}</button></div>` : ''}
       <form novalidate>
         ${nameMode !== 'hidden' ? `<label class="field"><span>${label(t.name, nameMode)}</span><input name="name" autocomplete="name" maxlength="100" ${nameMode === 'required' ? 'required' : ''}><span class="err"></span></label>` : ''}
@@ -1836,6 +1866,13 @@
     if (!state.busy) render(); else updateComposer();
   }
   for (const eventName of ['CookiebotOnAccept', 'CookiebotOnDecline', 'CookiebotOnConsentReady', 'CookiebotOnLoad']) window.addEventListener(eventName, cookiebotChanged);
+  // Another tab of this site agreed, withdrew, deleted or wrote: follow it, so this tab never writes back what is gone.
+  window.addEventListener('storage', event => {
+    if (previewStore || preview) return;
+    if (event.key === consentKey) { consent = null; loadConsent(); }
+    if (event.key === storageKey && !state.busy) { load(); syncLoops(); }
+    if (event.key === consentKey || (event.key === storageKey && !state.busy)) { if (state.open) render(); else updateBadge(); }
+  });
   setInterval(() => { if (state.open && !state.busy && !document.hidden) refreshConfig(['offline', 'starting', 'busy'].includes(state.status)); }, 30000);
 
   // ---------- start ----------
