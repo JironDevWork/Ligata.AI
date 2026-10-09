@@ -5,7 +5,7 @@
 >
 > - These sections add the chat to your existing privacy policy. They are a template and **not legal advice**. Have the text reviewed by your data protection adviser before you publish it.
 > - **The backoffice does the work for you:** under *AI Assistant → Privacy* the package fills in this text for your setup (own AI server or Claude API, live chat, email form, reCAPTCHA, periods). Sections that do not apply are left out there, and the values in double curly braces are filled in.
-> - This file shows every variant. HTML comments in the source (for example "if api" to "endif") mark what a section is for: `gpu` = own AI server, `api` = Claude API, `chat` = live chat with the team, `email` = email form, `captcha` = Google reCAPTCHA, `consent` = consent before the first question (default), `cookiebot` = consent through Cookiebot, `history` = the site keeps a history of conversations with the AI for its team, with the visitor's separate consent (off by default), `historyending` = the history was switched off but earlier conversations are not deleted yet.
+> - This file shows every variant. HTML comments in the source (for example "if api" to "endif") mark what a section is for: `gpu` = own AI server, `api` = Claude API, `chat` = live chat with the team, `email` = email form, `captcha` = Google reCAPTCHA, `consent` = consent before the first question (default), `cookiebot` = consent through Cookiebot, `history` = the site keeps a history of conversations with the AI for its team, stated in the chat before the first question, with the right to object (off by default), `historyending` = the history was switched off but earlier conversations are not deleted yet.
 > - Fill in the details in [square brackets] yourself.
 > - The details about Anthropic are based on its public terms (as of October 2026: API data deleted within 30 days, a Data Processing Addendum with the EU Standard Contractual Clauses, no training on API data). Check the current terms at anthropic.com/legal and privacy.claude.com, and note which Anthropic entity your contract is with.
 
@@ -76,34 +76,31 @@ We do not store conversations with the AI assistant on our server. For statistic
 We no longer keep conversations with the AI assistant. Conversations we kept earlier for our team are deleted at the latest at the end of the period that applied to them; until then you can delete them in the chat with "Delete conversation" or "Stop keeping", or by withdrawing your consent. For statistics we only keep anonymous daily counts, for example the number of questions and the answer time, without any link to people or content.
 <!-- endif -->
 <!-- if history -->
-For statistics we only keep anonymous daily counts, for example the number of questions and the answer time, without any link to people or content. Your browser keeps the conversation (see "Storage in your browser"). We only keep conversations on our server if you allow it, as described next.
+For statistics we only keep anonymous daily counts, for example the number of questions and the answer time, without any link to people or content. Your browser keeps the conversation (see "Storage in your browser"). In addition, we keep conversations on our server for our team, as described next.
 
-**Conversation history (optional)**
+**Conversation history**
 
 <!-- if consent -->
-If you agree to it separately in the chat, we keep your conversations with the assistant on our website server
+As we tell you in the chat before your first question, we keep your conversations with the assistant on our website server
 <!-- endif -->
 <!-- if noconsent -->
-Unless you object, we keep your conversations with the assistant on our website server
+As we tell you in the chat, we keep your conversations with the assistant on our website server
 <!-- endif -->
 so that our team can check and improve the assistant's answers and the information on our website. We keep them for {{historyDays}} days after the last message. We keep your questions and the assistant's answers (which may reproduce content of attached files), the names of attached files (not the files themselves), the title and path of the page on which you asked, the language of the chat, the times, whether an answer failed, which pages the assistant looked up and which search terms it used, and, where applicable, the link to a request to our team that you sent from the conversation. We do not keep your IP address or a pseudonymous identifier with it. Only authorised members of our team can read the conversations, in our administration area.
 
-<!-- if consent -->
-The legal basis is your separate consent (Art. 6(1)(a) GDPR), which we ask for in the chat in addition to your consent to the AI assistant. It is optional: without it you can use the assistant in full and we do not keep your conversations. You can withdraw it at any time in the chat under "Conversations" with "Stop keeping"; we then delete the conversations we kept with this consent. Withdrawing your consent to the AI assistant deletes them too.
-<!-- endif -->
-<!-- if noconsent -->
-The legal basis is [please add, for example our legitimate interest in checking and improving our service, Art. 6(1)(f) GDPR]. You can object at any time in the chat under "Conversations" with "Stop keeping"; we then delete the conversations kept so far.
-<!-- endif -->
+The legal basis is our legitimate interest in checking and improving the assistant's answers and the information on our website (Art. 6(1)(f) GDPR). We keep the conversations without your name or IP address and only for the period stated, and only authorised members of our team can read them.<!-- if consent --> If we change the period, we tell you in the chat before your next question and ask you to agree again.<!-- endif -->
+
+**Your right to object:** you can object to this at any time (Art. 21 GDPR; Art. 30(2)(b) FADP), simply in the chat under "Conversations" with "Stop keeping". We then delete the conversations kept so far and keep no further ones; you can go on using the assistant.<!-- if consent --> Withdrawing your consent to the AI assistant deletes them too.<!-- endif -->
 
 As long as a conversation is shown in the chat, you can also delete it on its own with "Delete conversation"; it is then deleted from your device and from our server.
 
-In individual cases, for example to handle a complaint or to clarify legal claims, our team may keep a conversation beyond this period, for as long as that requires and at most one year from that decision. The legal basis is then our legitimate interest in resolving the matter (Art. 6(1)(f) GDPR); you can object to this (Art. 21 GDPR). If you delete the conversation in the chat or withdraw your consent, we delete it even then.
+In individual cases, for example to handle a complaint or to clarify legal claims, our team may keep a conversation beyond this period, for as long as that requires and at most one year from that decision. The legal basis is then our legitimate interest in resolving the matter (Art. 6(1)(f) GDPR); you can object to this (Art. 21 GDPR). If you delete the conversation in the chat, object with "Stop keeping"<!-- if consent --> or withdraw your consent<!-- endif -->, we delete it even then.
 <!-- endif -->
 <!-- if consent -->
 
 **Proof of your consent**
 
-So that we can demonstrate your consent (Art. 7(1) GDPR), we store a consent record on our server: a random identifier, the time, the version of the consent text, the language, the source (chat or cookie settings) and the times of the first question and of a withdrawal<!-- if historyany -->, and whether and when you allowed us to keep your conversations or stopped it<!-- endif -->. It contains neither your IP address nor any conversation content. The legal basis is our obligation to demonstrate consent (Art. 6(1)(c) in conjunction with Art. 7(1) GDPR). Your consent is valid for {{consentDays}} days, after which we ask again. We delete records after {{keepDays}} days, and consents that were not followed by a question after one day.
+So that we can demonstrate your consent (Art. 7(1) GDPR), we store a consent record on our server: a random identifier, the time, the version of the consent text, the language, the source (chat or cookie settings) and the times of the first question and of a withdrawal<!-- if historyany -->, the period of the conversation history the request stated, and whether and when you objected to it<!-- endif -->. It contains neither your IP address nor any conversation content. The legal basis is our obligation to demonstrate consent (Art. 6(1)(c) in conjunction with Art. 7(1) GDPR). Your consent is valid for {{consentDays}} days, after which we ask again. We delete records after {{keepDays}} days, and consents that were not followed by a question after one day.
 <!-- endif -->
 <!-- endif -->
 
@@ -145,7 +142,7 @@ The chat sets no cookies. So that your conversations remain when you move betwee
 - **`ligata-ai:forget:` followed by our domain name:** only if you delete a conversation while our server cannot be reached: its key, so the deletion is sent again. Removed as soon as our server has deleted the conversation.
 <!-- endif -->
 
-This storage is strictly necessary for the chat you expressly want to use (section 25(2) no. 2 TDDDG).<!-- if historyany --> The keys of conversations we keep are only stored if you allowed us to keep your conversations (section 25(1) TDDDG<!-- if noconsent -->, or our legitimate interest where you did not object<!-- endif -->).<!-- endif --> You can delete the data at any time, in the chat with <!-- if history -->"Delete conversation" or <!-- endif -->"Remove from this device" or in your browser settings.
+This storage is strictly necessary for the chat you expressly want to use (section 25(2) no. 2 TDDDG).<!-- if historyany --> This includes the key of a conversation we keep: it is only created when you ask a question, connects your questions to that conversation and lets you delete our copy in the chat. After an objection, no new keys are created.<!-- endif --> You can delete the data at any time, in the chat with <!-- if history -->"Delete conversation" or <!-- endif -->"Remove from this device" or in your browser settings.
 
 ### Your rights
 

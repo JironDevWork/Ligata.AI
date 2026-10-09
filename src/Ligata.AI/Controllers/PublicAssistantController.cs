@@ -107,8 +107,8 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var visitor = guard.Visitor(HttpContext, row.VisitorSecret);
         using var turn = guard.Begin(visitor);
         if (turn == null) { Response.Headers.RetryAfter = "10"; await ChatRelay.Json(HttpContext, 429, "visitor_busy", "Please wait for the current answer before asking the next question."); return; }
-        // While the site keeps a history and the visitor agreed to it, the question and how it was answered are kept once the answer
-        // has ended. Checked again then: a visitor may stop the history or withdraw while the answer runs.
+        // While the site keeps a history and the visitor did not object, the question and how it was answered are kept once the answer
+        // has ended. Checked again then: a visitor may object or withdraw while the answer runs.
         var features = settings.Effective(options.Value.Features);
         bool Keeps() => request.History != null && VisitorConsent.KeepsHistory(consents, request.Consent, settings, options.Value, features, DateTime.UtcNow);
         var outcome = Keeps() ? new ChatOutcome() : null;
@@ -164,13 +164,13 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
             return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, version = current });
         var now = DateTime.UtcNow;
         var row = consents.Create(current, VisitorConsent.Engine(options.Value), VisitorConsent.Source(request.Source), VisitorConsent.Language(request.Language), now,
-            now.AddDays(Math.Clamp(options.Value.Privacy.ConsentDays, 1, 400)), request.History != null && history != "" ? history : null);
+            now.AddDays(Math.Clamp(options.Value.Privacy.ConsentDays, 1, 400)), request.History != null && history != "" ? history : null, objected: history != "" && request.History == null);
         return Ok(new { id = row.Id, version = row.Version, expires = row.ExpiresUtc, history = row.HistoryVersion });
     }
 
     /// <summary>
-    /// The separate, optional consent to the conversation history: given (the current history version) or stopped. Stopping deletes
-    /// every conversation kept with this consent; the assistant keeps working either way.
+    /// The visitor's objection to the conversation history ("Stop keeping", version null) or taking it back ("Keep them", the current
+    /// history version). Objecting deletes every conversation kept with this consent; the assistant keeps working either way.
     /// </summary>
     [HttpPost("consent/history"), RequestSizeLimit(1_000), Consumes("application/json")]
     public IActionResult HistoryConsent([FromBody] HistoryChoice request)

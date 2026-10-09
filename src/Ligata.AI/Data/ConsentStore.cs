@@ -11,11 +11,12 @@ public sealed class ConsentStore(IScopeProvider scopes)
     private static readonly ConcurrentDictionary<Guid, (ConsentRow? Row, DateTime Until)> recent = new();
     private static readonly TimeSpan Remember = TimeSpan.FromMinutes(1);
 
-    /// <param name="history">The history version the visitor also agreed to (the separate checkbox), or null.</param>
-    public ConsentRow Create(string version, string engine, string source, string language, DateTime now, DateTime expires, string? history = null)
+    /// <param name="history">The history period and revision the consent request stated, or null.</param>
+    /// <param name="objected">The site keeps conversations, but this visitor objected earlier: recorded as stopped.</param>
+    public ConsentRow Create(string version, string engine, string source, string language, DateTime now, DateTime expires, string? history = null, bool objected = false)
     {
         var row = new ConsentRow { Id = Guid.NewGuid(), Version = version, Engine = engine, Source = source, Language = language, CreatedUtc = now, ExpiresUtc = expires,
-            HistoryVersion = history, HistoryUtc = history == null ? null : now };
+            HistoryVersion = history, HistoryUtc = history == null ? null : now, HistoryStoppedUtc = history == null && objected ? now : null };
         using var scope = scopes.CreateScope();
         scope.Database.Insert(row);
         scope.Complete();
@@ -43,7 +44,7 @@ public sealed class ConsentStore(IScopeProvider scopes)
         scope.Complete();
     }
 
-    /// <summary>The visitor lets the site keep their conversations (version) or stops it (null). False for an unknown or withdrawn consent.</summary>
+    /// <summary>The visitor objects to keeping their conversations (null) or takes the objection back (version). False for an unknown or withdrawn consent.</summary>
     public bool SetHistory(Guid id, string? version, DateTime now)
     {
         using var scope = scopes.CreateScope();

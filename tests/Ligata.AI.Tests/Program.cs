@@ -334,25 +334,33 @@ Assert(PrivacyPolicy.Country("US", "en") == "the United States" && PrivacyPolicy
 // ---------- history of AI conversations (off by default) ----------
 var historyOn = aiSettings with { Privacy = new() { History = true, HistoryDays = 30 } };
 Assert(!new PrivacySettings().History && new PrivacySettings().HistoryDays == 30, "No history is kept unless the site switches it on.");
-Assert(VisitorConsent.Version(historyOn, gpuSite) == gpuVersion && VisitorConsent.Version(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 60 } }, gpuSite) == gpuVersion, "The history is a consent of its own: the AI consent never depends on it.");
+var historyVersion = VisitorConsent.Version(historyOn, gpuSite);
+Assert(historyVersion == gpuVersion + ".h30" && VisitorConsent.Version(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 60 } }, gpuSite) == gpuVersion + ".h60", "The consent request states the period: switching the history on, or another period, asks every visitor again.");
+ConsentRow Given(string version) => new() { Version = version, ExpiresUtc = DateTime.UtcNow.AddDays(1) };
+Assert(VisitorConsent.Check(Given(historyVersion), gpuVersion, DateTime.UtcNow) == ConsentCheck.Valid && VisitorConsent.Check(Given(gpuVersion), historyVersion, DateTime.UtcNow) == ConsentCheck.Outdated
+    && VisitorConsent.Check(Given(gpuVersion + ".h60"), historyVersion, DateTime.UtcNow) == ConsentCheck.Outdated && !VisitorConsent.Covers(historyVersion, VisitorConsent.Version(aiSettings with { Privacy = new() { ConsentRevision = 2 } }, gpuSite)),
+    "A consent given with the history still covers the assistant once the history is off; never the other way round, another period or another revision.");
 Assert(VisitorConsent.HistoryVersion(aiSettings) == "" && VisitorConsent.HistoryVersion(historyOn) == "30.1" && VisitorConsent.HistoryVersion(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 60 } }) == "60.1"
-    && VisitorConsent.HistoryVersion(historyOn with { Privacy = historyOn.Privacy with { ConsentRevision = 2 } }) == "30.2", "Another period, or asking everyone again, needs a new agreement to the history.");
+    && VisitorConsent.HistoryVersion(historyOn with { Privacy = historyOn.Privacy with { ConsentRevision = 2 } }) == "30.2", "The period and revision the request stated are recorded with the consent.");
 string PublicOf(AssistantSettings s, FeatureOptions? licensed = null) => JsonSerializer.Serialize(s.Public(65536, new { }, 100, s.Effective(licensed ?? new FeatureOptions()), new RecaptchaSettings(), "gpu"), AssistantJson.Options);
 Assert(PublicOf(historyOn).Contains("\"history\":{\"days\":30,\"version\":\"30.1\"}") && PublicOf(aiSettings).Contains("\"history\":null") && PublicOf(historyOn, new FeatureOptions { Assistant = false }).Contains("\"history\":null"), "The widget learns how long conversations may be kept, only with the AI on.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 0 } }), "At least one day.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 366 } }), "At most a year.");
 var historyDe = PrivacyPolicy.Generate("de", historyOn, gpuSite, new RecaptchaSettings());
 var historyEn = PrivacyPolicy.Generate("en", historyOn with { Privacy = historyOn.Privacy with { HistoryDays = 14 } }, gpuSite, new RecaptchaSettings());
-Assert(historyDe.Contains("30 Tage nach der letzten Nachricht") && historyDe.Contains("gesonderte Einwilligung") && historyDe.Contains("Sie ist freiwillig") && historyDe.Contains("„Nicht mehr aufbewahren“") && historyDe.Contains("„Gespräch löschen“")
-    && historyDe.Contains("höchstens ein Jahr") && historyDe.Contains("Suchbegriffen") && historyDe.Contains("§ 25 Abs. 1 TDDDG") && !historyDe.Contains("Gespräche mit dem KI-Assistenten speichern wir nicht"), "The German policy: a separate, voluntary consent, its period, stopping and deleting, keeping for a complaint, what is kept.");
-Assert(historyEn.Contains("for 14 days after the last message") && historyEn.Contains("separate consent") && historyEn.Contains("\"Stop keeping\"") && historyEn.Contains("\"Delete conversation\"") && historyEn.Contains("we find it through that request")
-    && !historyEn.Contains("We do not store conversations with the AI assistant"), "The English policy too, including how a request for access is handled.");
+Assert(historyDe.Contains("30 Tage nach der letzten Nachricht") && historyDe.Contains("berechtigtes Interesse an der Prüfung und Verbesserung der Antworten") && historyDe.Contains("**Ihr Widerspruchsrecht:**") && historyDe.Contains("(Art. 21 DSGVO; Art. 30 Abs. 2 lit. b DSG)")
+    && historyDe.Contains("bitten Sie erneut um Ihre Zustimmung") && historyDe.Contains("„Nicht mehr aufbewahren“") && historyDe.Contains("„Gespräch löschen“") && historyDe.Contains("höchstens ein Jahr") && historyDe.Contains("Suchbegriffen")
+    && !historyDe.Contains("gesonderte Einwilligung") && !historyDe.Contains("freiwillig") && !historyDe.Contains("§ 25 Abs. 1 TDDDG") && !historyDe.Contains("Gespräche mit dem KI-Assistenten speichern wir nicht"),
+    "The German policy: legitimate interest, the period, asked again when it changes, the right to object set apart, deleting, keeping for a complaint, what is kept.");
+Assert(historyEn.Contains("for 14 days after the last message") && historyEn.Contains("Art. 6(1)(f) GDPR). We keep the conversations") && historyEn.Contains("**Your right to object:**") && historyEn.Contains("\"Stop keeping\"") && historyEn.Contains("\"Delete conversation\"")
+    && historyEn.Contains("we find it through that request") && !historyEn.Contains("separate consent") && !historyEn.Contains("optional") && !historyEn.Contains("We do not store conversations with the AI assistant"), "The English policy too, including how a request for access is handled.");
 Assert(policyDe.Contains("Gespräche mit dem KI-Assistenten speichern wir nicht") && !policyDe.Contains("Gespräch löschen") && policyDe.Contains("EDÖB") && policyDe.Contains("Vertreters in der EU"), "Without a history the policy still says that conversations are not stored; Swiss supervisory authority and EU representative.");
 var endingDe = PrivacyPolicy.Generate("de", aiSettings, gpuSite, new RecaptchaSettings(), keptConversations: 3);
 Assert(endingDe.Contains("bewahren wir nicht mehr auf") && !endingDe.Contains("speichern wir nicht auf unserem Server") && endingDe.Contains("„Gespräch löschen“"), "Switched off while conversations are still kept: the text says so until they are gone.");
 Assert(PrivacyPolicy.Generate("de", aiSettings, apiSite, new RecaptchaSettings()).Contains("Art. 16 Abs. 2 lit. d DSG"), "Disclosure to the USA names the Swiss safeguard too.");
 var historyNoConsent = PrivacyPolicy.Generate("en", historyOn, new AssistantOptions { Privacy = new() { RequireConsent = false } }, new RecaptchaSettings());
-Assert(historyNoConsent.Contains("checking and improving our service") && historyNoConsent.Contains("Unless you object") && historyNoConsent.Contains("You can object at any time"), "Without consent the policy leaves the history's legal basis to the operator, with an objection in the chat.");
+Assert(historyNoConsent.Contains("checking and improving the assistant's answers") && historyNoConsent.Contains("As we tell you in the chat, we keep") && historyNoConsent.Contains("you can object to this at any time")
+    && !historyNoConsent.Contains("[please add, for example our legitimate interest in checking") && !historyNoConsent.Contains("agree again"), "Without consent the policy names the same legal basis and the objection in the chat; nobody is asked to agree.");
 Assert(ChatHistory.Hash("k" + new string('x', 31)) is { Length: 64 } && ChatHistory.Hash("short") == null && ChatHistory.Hash("bad key with spaces and more than twenty") == null && ChatHistory.Hash(null) == null && ChatHistory.Hash("k" + new string('x', 31)) != "k" + new string('x', 31), "Only random browser keys are accepted, and only their hash is stored.");
 Assert(!typeof(ChatRow).GetProperties().Concat(typeof(ChatTurnRow).GetProperties()).Any(p => p.Name.Contains("Ip") || p.Name.Contains("Address") || p.Name == "Visitor" || p.Name.Contains("Data")), "The history holds no IP address, visitor id or file contents.");
 
@@ -747,6 +755,13 @@ using (var scope = app.Services.CreateScope())
     Assert(Directory.GetFiles(mailFolder, "*.eml").Length > before && supportStore.RecentEmails(30).All(e => e.State == "sent"), "Queued emails are delivered through the host's SMTP settings.");
 
     // ---------- history of AI conversations ----------
+    // The browser suites share this database; start from an empty history (also without conversations kept for a reason).
+    using (var clean = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+    {
+        clean.Database.Execute("DELETE FROM LigataAIChatTurn");
+        clean.Database.Execute("DELETE FROM LigataAIChat");
+        clean.Complete();
+    }
     var chats = services.GetRequiredService<ChatHistoryStore>();
     var historyService = services.GetRequiredService<ChatHistory>();
     var consentA = Guid.NewGuid();
@@ -816,23 +831,30 @@ using (var scope = app.Services.CreateScope())
     historyService.Record(Asked(keyH, "Antwort lief noch", "h2"), answer, "gpu", 100, 30);
     Assert(chats.Counts().Total == 0, "Deleted means deleted, also for an answer that ends afterwards.");
 
-    // The separate, optional consent to the history.
+    // The history in the consent request: its period is part of the consent version, an objection stops it.
     var historyConsents = services.GetRequiredService<ConsentStore>();
     var historySite = store.Settings().Settings with { Enabled = true, Features = new() { Assistant = true, LiveChat = true, Email = true }, Privacy = new() { History = true, HistoryDays = 30 } };
     var siteOptions = new AssistantOptions();
     var historyFeatures = historySite.Effective(siteOptions.Features);
-    var aiOnlyConsent = historyConsents.Create(VisitorConsent.Version(historySite, siteOptions), "gpu", "chat", "de", DateTime.UtcNow, DateTime.UtcNow.AddDays(365));
+    var withoutHistory = historySite with { Privacy = historySite.Privacy with { History = false } };
+    var longer = historySite with { Privacy = historySite.Privacy with { HistoryDays = 60 } };
     var withHistory = historyConsents.Create(VisitorConsent.Version(historySite, siteOptions), "gpu", "chat", "de", DateTime.UtcNow, DateTime.UtcNow.AddDays(365), VisitorConsent.HistoryVersion(historySite));
+    var objector = historyConsents.Create(VisitorConsent.Version(historySite, siteOptions), "gpu", "chat", "de", DateTime.UtcNow, DateTime.UtcNow.AddDays(365), objected: true);
+    var earlier = historyConsents.Create(VisitorConsent.Version(withoutHistory, siteOptions), "gpu", "chat", "de", DateTime.UtcNow, DateTime.UtcNow.AddDays(365));
     bool Keeps(Guid id, AssistantSettings s, AssistantOptions? o = null) => VisitorConsent.KeepsHistory(historyConsents, id.ToString(), s, o ?? siteOptions, historyFeatures, DateTime.UtcNow);
-    Assert(!Keeps(aiOnlyConsent.Id, historySite) && Keeps(withHistory.Id, historySite), "Only visitors who also ticked the history are kept; the AI works for both.");
-    Assert(!Keeps(withHistory.Id, historySite with { Privacy = historySite.Privacy with { HistoryDays = 60 } }), "A longer period needs a new agreement before new conversations are kept.");
-    Assert(historyConsents.SetHistory(aiOnlyConsent.Id, VisitorConsent.HistoryVersion(historySite), DateTime.UtcNow) && Keeps(aiOnlyConsent.Id, historySite), "Visitors can agree to the history later.");
+    ConsentCheck Asks(Guid id, AssistantSettings s) => VisitorConsent.Check(historyConsents.Find(id), VisitorConsent.Version(s, siteOptions), DateTime.UtcNow);
+    Assert(Keeps(withHistory.Id, historySite) && !Keeps(objector.Id, historySite) && historyConsents.Find(objector.Id) is { HistoryVersion: null, HistoryStoppedUtc: not null } && Asks(objector.Id, historySite) == ConsentCheck.Valid,
+        "Visitors told the period are kept; an earlier objection carries over to a new consent, is recorded, and the assistant still answers.");
+    Assert(!Keeps(earlier.Id, historySite) && Asks(earlier.Id, historySite) == ConsentCheck.Outdated, "A consent given before the history was switched on is asked again: no question is answered and nothing is kept with it.");
+    Assert(!Keeps(withHistory.Id, longer) && Asks(withHistory.Id, longer) == ConsentCheck.Outdated, "Another period is asked again the same way.");
+    Assert(Asks(withHistory.Id, withoutHistory) == ConsentCheck.Valid && !Keeps(withHistory.Id, withoutHistory), "Switching the history off asks nobody again, and nothing more is kept.");
+    Assert(historyConsents.SetHistory(objector.Id, VisitorConsent.HistoryVersion(historySite), DateTime.UtcNow) && Keeps(objector.Id, historySite), "Visitors can take their objection back.");
     historyConsents.SetHistory(withHistory.Id, null, DateTime.UtcNow);
-    Assert(!Keeps(withHistory.Id, historySite) && historyConsents.Find(withHistory.Id)!.HistoryStoppedUtc != null && historyConsents.Find(withHistory.Id)!.WithdrawnUtc == null, "Stopping the history is recorded and leaves the AI consent in place.");
-    historyConsents.Withdraw(aiOnlyConsent.Id, DateTime.UtcNow);
-    Assert(!Keeps(aiOnlyConsent.Id, historySite) && !historyConsents.SetHistory(aiOnlyConsent.Id, VisitorConsent.HistoryVersion(historySite), DateTime.UtcNow), "A withdrawn consent keeps nothing and cannot agree to the history.");
-    Assert(VisitorConsent.KeepsHistory(historyConsents, null, historySite, new AssistantOptions { Privacy = new() { RequireConsent = false } }, historyFeatures, DateTime.UtcNow) && !Keeps(withHistory.Id, historySite with { Privacy = historySite.Privacy with { History = false } }),
-        "Without consent the history is kept unless the visitor objects; switched off, nothing is kept.");
+    Assert(!Keeps(withHistory.Id, historySite) && historyConsents.Find(withHistory.Id)!.HistoryStoppedUtc != null && historyConsents.Find(withHistory.Id)!.WithdrawnUtc == null, "An objection is recorded and leaves the AI consent in place.");
+    historyConsents.Withdraw(objector.Id, DateTime.UtcNow);
+    Assert(!Keeps(objector.Id, historySite) && !historyConsents.SetHistory(objector.Id, VisitorConsent.HistoryVersion(historySite), DateTime.UtcNow), "A withdrawn consent keeps nothing and cannot take an objection back.");
+    Assert(VisitorConsent.KeepsHistory(historyConsents, null, historySite, new AssistantOptions { Privacy = new() { RequireConsent = false } }, historyFeatures, DateTime.UtcNow),
+        "Without consent the history is kept unless the visitor objects.");
 
     // dynamic backoffice manifest
     var manifests = await new AssistantManifestReader(services.GetRequiredService<IOptions<AssistantOptions>>(), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync();

@@ -161,9 +161,10 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
       features: { assistant: f.assistant, liveChat: f.liveChat, email: f.email }, engine: f.assistant ? this.connection?.mode || 'gpu' : null,
       team: f.liveChat || f.email ? { teamName: t.teamName, suggest: t.suggestWhenUnsure && f.assistant, button: t.showTeamButton, nameField: t.nameField, emailField: t.emailField, emailWhenOffline: t.requireEmailWhenOffline, waitingMessage: t.waitingMessage, offlineMessage: t.offlineMessage, privacyNotice: t.privacyNotice, days: t.inactivityDays } : null,
       contact: f.email ? { title: c.title, intro: c.intro, nameField: c.nameField, successMessage: c.successMessage } : null, captcha: null,
-      history: f.assistant && s.privacy?.history ? { days: s.privacy.historyDays } : null,
-      // The consent request as visitors will see it; "Ask all visitors again" changes the version, so the preview asks again too.
-      consent: f.assistant && this.privacy?.consent ? { ...this.privacy.consent, text: s.privacy?.consentText || '', version: this.privacy.consent.version.replace(/^(\w+)\.\d+\./, `$1.${s.privacy?.consentRevision || 1}.`) } : null };
+      history: f.assistant && s.privacy?.history ? { days: s.privacy.historyDays, version: `${s.privacy.historyDays}.${s.privacy.consentRevision || 1}` } : null,
+      // The consent request as visitors will see it; "Ask all visitors again" and another period of the history change the version, so the preview asks again too.
+      consent: f.assistant && this.privacy?.consent ? { ...this.privacy.consent, text: s.privacy?.consentText || '',
+        version: this.privacy.consent.version.replace(/\.h\d+$/, '').replace(/^(\w+)\.\d+\./, `$1.${s.privacy?.consentRevision || 1}.`) + (s.privacy?.history ? `.h${s.privacy.historyDays}` : '') } : null };
     const attr = value => String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     const dark = this.siteTheme === 'dark';
     return `<!doctype html><html lang="${i.language === 'auto' ? 'en' : i.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preview</title>

@@ -290,8 +290,8 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
   aboutCard() {
     const s = this.setup || {};
     return html`<div><h3>About the history</h3><p class="muted" style="font-size:12.5px;line-height:1.5">
-      ${s.enabled ? `Only conversations of visitors who allowed it are kept, and deleted ${number(s.days)} day${s.days === 1 ? '' : 's'} after their last question unless you keep one for a reason.` : 'The history is switched off: these conversations are deleted when their period ends.'}
-      Visitors can delete their conversations in the chat; stopping the history or withdrawing consent deletes them too. No IP addresses and no files are kept.</p></div>`;
+      ${s.enabled ? `Conversations are kept unless the visitor objected, and deleted ${number(s.days)} day${s.days === 1 ? '' : 's'} after their last question unless you keep one for a reason.` : 'The history is switched off: these conversations are deleted when their period ends.'}
+      Visitors can delete their conversations in the chat; objecting (Stop keeping) or withdrawing consent deletes them too. No IP addresses and no files are kept.</p></div>`;
   }
 }
 customElements.define('ligata-ai-history', LigataAIHistory);

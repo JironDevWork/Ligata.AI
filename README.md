@@ -205,7 +205,7 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
   - Closed after N days without messages and deleted M days later.
   - Internal notes are never sent to visitors.
 - **Team members.** They are identified to visitors only as they choose. The Umbraco user key is never exposed, and photos are served only while a team member shows them.
-- **AI conversations** are not stored on the server unless the site keeps a history (off by default) and the visitor allowed it separately. Then: questions, answers, lookups and file names (never files, IP addresses or visitor ids), deleted after the period they were collected under unless kept for a reason (at most a year); visitors stop it, delete single conversations or withdraw consent in the chat, which deletes the server copies. Statistics are anonymous daily counters. PDFs and screenshots are processed in memory.
+- **AI conversations** are not stored on the server unless the site keeps a history (off by default); the consent request then states the period and the right to object. Then: questions, answers, lookups and file names (never files, IP addresses or visitor ids), deleted after the period they were collected under unless kept for a reason (at most a year); visitors object (*Stop keeping*), delete single conversations or withdraw consent in the chat, which deletes the server copies. Statistics are anonymous daily counters. PDFs and screenshots are processed in memory.
 - **Escaping.** All visitor text is escaped in the widget, the backoffice and emails. Email subjects cannot carry line breaks.
 - **Your privacy policy** must mention the chat: copy the text from the Privacy tab (see below).
 
@@ -215,7 +215,7 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
   - The chat asks before the first question, names the recipient and links your privacy policy.
   - The server records each consent (random id, text version, times; no IP, no content) and refuses questions and files without a valid one.
   - Visitors withdraw in the chat; a new recipient or *Ask all visitors again* asks everyone again; consents expire after a year.
-- **Conversation history (optional).** Off by default. When on, visitors decide separately with an unticked, optional box (or later under *Conversations*); the assistant works the same without it. The notice under the input tells those whose conversations are kept, the privacy policy text gains the section, and *Stop keeping*, *Delete conversation* and a withdrawal delete the server copies.
+- **Conversation history.** Off by default. When on, the consent request states how long conversations are kept and, on its own line, that visitors can object (*Stop keeping* under *Conversations*; the assistant works the same afterwards). There is no checkbox: the legal basis is the site's legitimate interest (Art. 6(1)(f) GDPR), because a consent the assistant depended on would not be freely given. Another period asks every visitor again before their next question. The notice under the input states the period, the privacy policy text gains the section, and *Stop keeping*, *Delete conversation* and a withdrawal delete the server copies.
 - **Cookiebot.**
   - The script tag is exempt from automatic blocking (`data-cookieconsent="ignore"`): the chat sets no cookies and asks itself.
   - Declare its local storage entries as *Necessary*.
@@ -237,14 +237,14 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 186 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 187 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 278 checks with the database
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 281 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)
 node privacy.mjs                                                               # consent, withdrawal, Cookiebot, privacy policy text
-node history.mjs                                                               # the optional conversation history
+node history.mjs                                                               # the conversation history: stated in the consent request, objection, a new period asks again
 node concurrency.mjs                                                           # several visitors at once, summaries in line, settings changed mid-answer
 node memory.mjs                                                                # long conversations and summaries (no host needed)
 cd gateway; npm test                                                           # 62 gateway tests

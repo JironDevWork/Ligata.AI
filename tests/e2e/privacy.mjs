@@ -229,6 +229,65 @@ if (cookiebot) {
     await v.context.close();
   });
 
+  await check('Cookiebot with the history: the chat states the period once (Continue) and again when it changes', async () => {
+    const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+    const admin = await context.newPage();
+    admin.on('pageerror', e => errors.push('backoffice: ' + e.message));
+    await admin.goto(base + '/umbraco');
+    await admin.locator('input[type=email], input[name=username]').first().fill(credentials.email);
+    await admin.locator('input[type=password]').first().fill(credentials.password);
+    await admin.keyboard.press('Enter');
+    await admin.waitForURL(/section/, { timeout: 30000 });
+    const dash = admin.locator('ligata-ai-dashboard');
+    async function setHistory(on, days) {
+      await admin.goto(base + '/umbraco/section/ai-assistant/dashboard/settings?tab=privacy');
+      const history = dash.locator('section.card', { has: admin.locator('h2', { hasText: 'Conversation history' }) });
+      await history.waitFor({ timeout: 20000 });
+      if (await history.locator('label.switch input').isChecked() !== on) await history.locator('label.switch input').click();
+      if (on) await history.locator('input[type=number]').fill(String(days));
+      await dash.locator('button', { hasText: 'Save changes' }).click();
+      await dash.locator('.notice.success', { hasText: 'Saved' }).waitFor();
+    }
+    try {
+      await setHistory(true, 10);
+      const v = await visitor();
+      await v.widget.locator('.launcher').click();
+      const card = v.widget.locator('.agree');
+      await card.waitFor();
+      assert(/for 10 days/.test(await card.innerText()) && await card.locator('[data-cookie-settings]').count() === 1, 'the period is stated next to the Cookiebot request');
+      await v.page.evaluate(() => window.__cookiebot(true));
+      await card.locator('[data-agree]', { hasText: 'Continue' }).waitFor();
+      assert(/for 10 days/.test(await card.innerText()) && /object at any time/.test(await card.innerText()), 'Cookiebot covers the AI; the chat still states the period and the objection');
+      assert(!v.requests.some(u => u.includes('/api/ligata-ai/consent')), 'nothing recorded before Continue');
+      await v.page.waitForTimeout(800); // the panel slides in
+      await v.shot('07-cookiebot-history');
+      await card.locator('[data-agree]').click();
+      await card.waitFor({ state: 'hidden' });
+      const recorded = await consentOf(v.page);
+      assert(recorded?.source === 'cookiebot' && recorded.version.endsWith('.h10') && recorded.history?.startsWith('10.'), 'recorded with the period: ' + JSON.stringify(recorded));
+      await v.widget.locator('.composer textarea').fill('What does hosting cost?');
+      await v.widget.locator('.composer textarea').press('Enter');
+      await answered(v);
+      await setHistory(true, 12);
+      await v.page.reload();
+      await v.page.evaluate(() => window.__cookiebot(true));
+      await v.page.evaluate(() => window.LigataAI.open());
+      await card.locator('[data-agree]', { hasText: 'Continue' }).waitFor();
+      assert(/for 12 days/.test(await card.innerText()), 'the new period is stated again: ' + await card.innerText());
+      await v.context.close();
+    } finally {
+      await setHistory(false);
+      // Leave no conversation behind for the other suites.
+      const history = admin.locator('ligata-ai-history');
+      await admin.goto(base + '/umbraco/section/ai-assistant/dashboard/conversations');
+      await history.locator('.bar, h2').first().waitFor({ timeout: 20000 });
+      admin.on('dialog', d => d.accept());
+      if (await history.locator('button', { hasText: 'Delete all' }).isEnabled({ timeout: 2000 }).catch(() => false)) await history.locator('button', { hasText: 'Delete all' }).click();
+      await admin.waitForTimeout(500);
+      await context.close();
+    }
+  });
+
   await check('Cookiebot missing on a page: the chat asks itself', async () => {
     const v = await visitor({ withCookiebot: false });
     await v.widget.locator('.launcher').click();

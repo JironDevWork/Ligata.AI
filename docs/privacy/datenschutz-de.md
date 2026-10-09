@@ -5,7 +5,7 @@
 >
 > - Diese Bausteine ergänzen Ihre bestehende Datenschutzerklärung um den Chat. Sie sind ein Muster und **keine Rechtsberatung**. Lassen Sie den Text vor der Veröffentlichung von Ihrer Datenschutzberatung prüfen.
 > - **Einfacher geht es im Backoffice:** Unter *AI Assistant → Datenschutz* erzeugt das Paket diesen Text passend zu Ihrer Konfiguration (eigener KI-Server oder Claude API, Live-Chat, E-Mail-Formular, reCAPTCHA, Fristen). Abschnitte, die nicht zutreffen, fallen dort weg, und Werte in doppelten geschweiften Klammern werden eingesetzt.
-> - Hier im Repository sehen Sie alle Varianten. HTML-Kommentare im Quelltext (zum Beispiel „if api“ bis „endif“) markieren, wofür ein Abschnitt gilt: `gpu` = eigener KI-Server, `api` = Claude API, `chat` = Live-Chat mit dem Team, `email` = E-Mail-Formular, `captcha` = Google reCAPTCHA, `consent` = Einwilligung vor der ersten Frage (Standard), `cookiebot` = Einwilligung über Cookiebot, `history` = die Website bewahrt Gespräche mit der KI mit der gesonderten Einwilligung der Besucher für ihr Team auf (standardmässig aus), `historyending` = die Aufbewahrung wurde ausgeschaltet, frühere Gespräche sind aber noch nicht gelöscht.
+> - Hier im Repository sehen Sie alle Varianten. HTML-Kommentare im Quelltext (zum Beispiel „if api“ bis „endif“) markieren, wofür ein Abschnitt gilt: `gpu` = eigener KI-Server, `api` = Claude API, `chat` = Live-Chat mit dem Team, `email` = E-Mail-Formular, `captcha` = Google reCAPTCHA, `consent` = Einwilligung vor der ersten Frage (Standard), `cookiebot` = Einwilligung über Cookiebot, `history` = die Website bewahrt Gespräche mit der KI für ihr Team auf, mitgeteilt im Chat vor der ersten Frage, mit Widerspruchsrecht (standardmässig aus), `historyending` = die Aufbewahrung wurde ausgeschaltet, frühere Gespräche sind aber noch nicht gelöscht.
 > - Angaben in [eckigen Klammern] ergänzen Sie selbst.
 > - Der Text ist so formuliert, dass er in Deutschland, Österreich und der Schweiz passt. Für Schweizer Websites, die nur dem DSG unterliegen, können Sie die DSGVO-Artikel durch einen Hinweis auf das DSG ersetzen; die nach Art. 19 DSG nötigen Angaben (Zweck, Empfänger, Empfängerstaaten und Garantien nach Art. 16 DSG) sind enthalten; Ihre Identität und Kontaktangaben ergänzen Sie.
 > - Die Angaben zu Anthropic beruhen auf deren öffentlichen Bedingungen (Stand Oktober 2026: Löschung von API-Daten innerhalb von 30 Tagen, Data Processing Addendum mit EU-Standardvertragsklauseln, kein Training mit API-Daten). Prüfen Sie den aktuellen Stand unter anthropic.com/legal und privacy.claude.com, und halten Sie fest, mit welcher Anthropic-Gesellschaft Ihr Vertrag besteht.
@@ -77,34 +77,31 @@ Gespräche mit dem KI-Assistenten speichern wir nicht auf unserem Server. Für S
 Gespräche mit dem KI-Assistenten bewahren wir nicht mehr auf. Gespräche, die wir früher für unser Team aufbewahrt haben, löschen wir spätestens am Ende der Frist, die für sie galt; bis dahin können Sie sie im Chat mit „Gespräch löschen“ oder „Nicht mehr aufbewahren“ oder durch Widerruf Ihrer Einwilligung löschen. Für Statistiken zählen wir lediglich anonym pro Tag, zum Beispiel die Anzahl Fragen und die Antwortzeit, ohne Bezug zu Personen oder Inhalten.
 <!-- endif -->
 <!-- if history -->
-Für Statistiken zählen wir lediglich anonym pro Tag, zum Beispiel die Anzahl Fragen und die Antwortzeit, ohne Bezug zu Personen oder Inhalten. Den Gesprächsverlauf speichert Ihr Browser (siehe „Speicherung in Ihrem Browser“). Auf unserem Server bewahren wir Gespräche nur auf, wenn Sie es erlauben, wie im Folgenden beschrieben.
+Für Statistiken zählen wir lediglich anonym pro Tag, zum Beispiel die Anzahl Fragen und die Antwortzeit, ohne Bezug zu Personen oder Inhalten. Den Gesprächsverlauf speichert Ihr Browser (siehe „Speicherung in Ihrem Browser“). Zusätzlich bewahren wir Gespräche für unser Team auf unserem Server auf, wie im Folgenden beschrieben.
 
-**Aufbewahrung von Gesprächen (freiwillig)**
+**Aufbewahrung von Gesprächen**
 
 <!-- if consent -->
-Wenn Sie im Chat gesondert einwilligen, bewahren wir Ihre Gespräche mit dem Assistenten auf unserem Website-Server auf,
+Wie wir Ihnen im Chat vor Ihrer ersten Frage mitteilen, bewahren wir Ihre Gespräche mit dem Assistenten auf unserem Website-Server auf,
 <!-- endif -->
 <!-- if noconsent -->
-Sofern Sie nicht widersprechen, bewahren wir Ihre Gespräche mit dem Assistenten auf unserem Website-Server auf,
+Wie wir Ihnen im Chat mitteilen, bewahren wir Ihre Gespräche mit dem Assistenten auf unserem Website-Server auf,
 <!-- endif -->
 damit unser Team die Antworten des Assistenten und die Informationen auf unserer Website prüfen und verbessern kann, und zwar {{historyDays}} Tage nach der letzten Nachricht. Gespeichert werden Ihre Fragen und die Antworten des Assistenten (sie können Inhalte angehängter Dateien wiedergeben), die Namen angehängter Dateien (nicht die Dateien selbst), Titel und Pfad der Seite, auf der Sie gefragt haben, die Sprache des Chats, die Zeitpunkte, ob eine Antwort fehlschlug, welche Seiten der Assistent nachgeschlagen und mit welchen Suchbegriffen er gesucht hat sowie gegebenenfalls die Verknüpfung mit einer Anfrage an unser Team, die Sie aus dem Gespräch gestellt haben. Ihre IP-Adresse oder eine daraus abgeleitete Kennung speichern wir dazu nicht. Lesen können die Gespräche nur berechtigte Mitglieder unseres Teams in unserem Verwaltungsbereich.
 
-<!-- if consent -->
-Rechtsgrundlage ist Ihre gesonderte Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), um die wir Sie im Chat zusätzlich zur Einwilligung in den KI-Assistenten bitten. Sie ist freiwillig: Ohne sie können Sie den Assistenten uneingeschränkt nutzen, und wir bewahren Ihre Gespräche nicht auf. Sie können sie jederzeit im Chat unter „Gespräche“ mit „Nicht mehr aufbewahren“ widerrufen; wir löschen dann die Gespräche, die wir mit dieser Einwilligung aufbewahrt haben. Auch der Widerruf Ihrer Einwilligung in den KI-Assistenten löscht sie.
-<!-- endif -->
-<!-- if noconsent -->
-Rechtsgrundlage ist [bitte ergänzen, zum Beispiel unser berechtigtes Interesse an der Prüfung und Verbesserung unseres Angebots, Art. 6 Abs. 1 lit. f DSGVO]. Sie können jederzeit im Chat unter „Gespräche“ mit „Nicht mehr aufbewahren“ widersprechen; wir löschen dann die bisher aufbewahrten Gespräche.
-<!-- endif -->
+Rechtsgrundlage ist unser berechtigtes Interesse an der Prüfung und Verbesserung der Antworten des Assistenten und der Informationen auf unserer Website (Art. 6 Abs. 1 lit. f DSGVO). Wir bewahren die Gespräche ohne Ihren Namen und ohne IP-Adresse und nur für die genannte Frist auf, und lesen können sie nur berechtigte Mitglieder unseres Teams.<!-- if consent --> Ändern wir die Frist, teilen wir Ihnen das im Chat vor Ihrer nächsten Frage mit und bitten Sie erneut um Ihre Zustimmung.<!-- endif -->
+
+**Ihr Widerspruchsrecht:** Sie können dieser Aufbewahrung jederzeit widersprechen (Art. 21 DSGVO; Art. 30 Abs. 2 lit. b DSG), einfach im Chat unter „Gespräche“ mit „Nicht mehr aufbewahren“. Wir löschen dann die bisher aufbewahrten Gespräche und bewahren keine weiteren auf; den Assistenten können Sie weiter nutzen.<!-- if consent --> Auch der Widerruf Ihrer Einwilligung in den KI-Assistenten löscht sie.<!-- endif -->
 
 Solange ein Gespräch im Chat angezeigt wird, können Sie es dort auch einzeln mit „Gespräch löschen“ löschen; es wird dann auf Ihrem Gerät und auf unserem Server gelöscht.
 
-Im Einzelfall, etwa zur Bearbeitung einer Beschwerde oder zur Klärung von Rechtsansprüchen, kann unser Team ein Gespräch über diese Frist hinaus aufbewahren, solange dies dafür nötig ist und höchstens ein Jahr ab diesem Entscheid. Rechtsgrundlage ist dann unser berechtigtes Interesse an der Klärung des Anliegens (Art. 6 Abs. 1 lit. f DSGVO); Sie können dem widersprechen (Art. 21 DSGVO). Löschen Sie das Gespräch im Chat oder widerrufen Sie Ihre Einwilligung, löschen wir es auch dann.
+Im Einzelfall, etwa zur Bearbeitung einer Beschwerde oder zur Klärung von Rechtsansprüchen, kann unser Team ein Gespräch über diese Frist hinaus aufbewahren, solange dies dafür nötig ist und höchstens ein Jahr ab diesem Entscheid. Rechtsgrundlage ist dann unser berechtigtes Interesse an der Klärung des Anliegens (Art. 6 Abs. 1 lit. f DSGVO); Sie können dem widersprechen (Art. 21 DSGVO). Löschen Sie das Gespräch im Chat, widersprechen Sie mit „Nicht mehr aufbewahren“<!-- if consent --> oder widerrufen Sie Ihre Einwilligung<!-- endif -->, löschen wir es auch dann.
 <!-- endif -->
 <!-- if consent -->
 
 **Nachweis Ihrer Einwilligung**
 
-Damit wir Ihre Einwilligung nachweisen können (Art. 7 Abs. 1 DSGVO), speichern wir auf unserem Server einen Einwilligungsnachweis: eine zufällige Kennung, den Zeitpunkt, die Version des Einwilligungstexts, die Sprache, die Quelle (Chat oder Cookie-Einstellungen) sowie die Zeitpunkte der ersten Frage und eines Widerrufs<!-- if historyany -->, und ob und wann Sie die Aufbewahrung Ihrer Gespräche erlaubt oder beendet haben<!-- endif -->. Ihre IP-Adresse und Gesprächsinhalte gehören nicht dazu. Rechtsgrundlage ist unsere Nachweispflicht (Art. 6 Abs. 1 lit. c in Verbindung mit Art. 7 Abs. 1 DSGVO). Ihre Einwilligung gilt {{consentDays}} Tage, danach fragen wir erneut. Nachweise löschen wir nach {{keepDays}} Tagen; Einwilligungen, nach denen keine Frage gestellt wurde, nach einem Tag.
+Damit wir Ihre Einwilligung nachweisen können (Art. 7 Abs. 1 DSGVO), speichern wir auf unserem Server einen Einwilligungsnachweis: eine zufällige Kennung, den Zeitpunkt, die Version des Einwilligungstexts, die Sprache, die Quelle (Chat oder Cookie-Einstellungen) sowie die Zeitpunkte der ersten Frage und eines Widerrufs<!-- if historyany -->, die im Chat genannte Frist für die Aufbewahrung von Gesprächen sowie ob und wann Sie ihr widersprochen haben<!-- endif -->. Ihre IP-Adresse und Gesprächsinhalte gehören nicht dazu. Rechtsgrundlage ist unsere Nachweispflicht (Art. 6 Abs. 1 lit. c in Verbindung mit Art. 7 Abs. 1 DSGVO). Ihre Einwilligung gilt {{consentDays}} Tage, danach fragen wir erneut. Nachweise löschen wir nach {{keepDays}} Tagen; Einwilligungen, nach denen keine Frage gestellt wurde, nach einem Tag.
 <!-- endif -->
 <!-- endif -->
 
@@ -146,7 +143,7 @@ Der Chat setzt keine Cookies. Damit Ihre Gespräche beim Wechsel zwischen Seiten
 - **`ligata-ai:forget:` und der Name unserer Domain:** nur wenn Sie ein Gespräch löschen, während unser Server nicht erreichbar ist: dessen Schlüssel, damit die Löschung erneut gesendet wird. Wird entfernt, sobald unser Server das Gespräch gelöscht hat.
 <!-- endif -->
 
-Diese Speicherung ist unbedingt erforderlich, damit der Chat funktioniert, den Sie ausdrücklich nutzen möchten (§ 25 Abs. 2 Nr. 2 TDDDG).<!-- if historyany --> Die Schlüssel aufbewahrter Gespräche legen wir nur an, wenn Sie die Aufbewahrung Ihrer Gespräche erlaubt haben (§ 25 Abs. 1 TDDDG<!-- if noconsent -->, bzw. unser berechtigtes Interesse, solange Sie nicht widersprechen<!-- endif -->).<!-- endif --> Sie können die Daten jederzeit löschen, im Chat über <!-- if history -->„Gespräch löschen“ oder <!-- endif -->„Von diesem Gerät entfernen“ oder in den Einstellungen Ihres Browsers.
+Diese Speicherung ist unbedingt erforderlich, damit der Chat funktioniert, den Sie ausdrücklich nutzen möchten (§ 25 Abs. 2 Nr. 2 TDDDG).<!-- if historyany --> Dazu gehört der Schlüssel eines Gesprächs, das wir aufbewahren: Er entsteht erst mit Ihrer Frage, ordnet Ihre Fragen diesem Gespräch zu und ermöglicht es Ihnen, unsere Kopie im Chat zu löschen. Nach einem Widerspruch entstehen keine neuen Schlüssel.<!-- endif --> Sie können die Daten jederzeit löschen, im Chat über <!-- if history -->„Gespräch löschen“ oder <!-- endif -->„Von diesem Gerät entfernen“ oder in den Einstellungen Ihres Browsers.
 
 ### Ihre Rechte
 
