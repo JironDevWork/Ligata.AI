@@ -101,8 +101,10 @@ await check('a visitor gets a streamed answer from Claude with the real prompt s
   assert(reply.includes('Claude mock answer') && reply.includes('hosting'), 'answer: ' + reply);
   assert(/AI by Ligata/.test(await widget.locator('.brand').innerText()) && !/Private/.test(await widget.locator('.brand').innerText()), 'branding without "Private"');
   assert(/Claude/.test(await widget.locator('.privacy-text').innerText()), 'privacy notice names Claude');
-  const meter = await widget.locator('.meter-text').innerText();
-  assert(/\d/.test(meter), 'memory meter: ' + meter);
+  // The memory bar is off by default (Appearance); the tokens are counted either way.
+  const shown = (await (await fetch(base + '/api/ligata-ai/config')).json()).settings.appearance.showContextMeter;
+  if (shown) assert(/\d/.test(await widget.locator('.meter-text').innerText()), 'memory meter shows a value');
+  else assert(await widget.locator('.meter').isHidden(), 'the memory bar is hidden while switched off');
   await page.screenshot({ path: path.join(out, '01-api-answer.png') });
 });
 

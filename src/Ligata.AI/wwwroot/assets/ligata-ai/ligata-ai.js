@@ -11,7 +11,7 @@
   const look = Object.assign({
     theme: 'ligata', colorScheme: 'light', position: 'right', accent: '#2f5bff', accentText: '#ffffff', background: '#ffffff', surface: '#f3f4f8', text: '#15171f', mutedText: '#5d6272',
     userBubble: '#2f5bff', userText: '#ffffff', assistantBubble: '#f3f4f8', assistantText: '#15171f', font: 'inherit', radius: 20, launcherSize: 60, launcherIcon: 'chat', launcherLabel: '',
-    panelWidth: 400, panelHeight: 640, offsetX: 24, offsetY: 24, showContextMeter: true, showQueuePosition: true, showBranding: true, animations: true, sound: true, teaser: '', teaserDelaySeconds: 6, zIndex: 2147483000,
+    panelWidth: 400, panelHeight: 640, offsetX: 24, offsetY: 24, showContextMeter: false, showQueuePosition: true, showBranding: true, animations: true, sound: true, teaser: '', teaserDelaySeconds: 6, zIndex: 2147483000,
   }, settings.appearance || {});
   const limits = Object.assign({ maxImages: 8, maxImageBytes: 5242880, maxPdfBytes: 10485760, maxPdfPages: 80, maxAttachments: 4, maxMessageCharacters: 8000 }, settings.limits || {});
   const preview = script.dataset.preview === 'true';

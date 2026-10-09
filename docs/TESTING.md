@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 187 assertions
+# Package domain and security checks (no database): 188 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -16,7 +16,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
-# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history: 281 assertions in total
+# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history: 284 assertions in total
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 24 checks, needs the host above and a gateway
@@ -65,6 +65,7 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
+- 0.7.3 (9 October 2026): the memory bar is off by default (switched off once on existing sites; *Appearance → Show the memory bar*). Package checks 188 domain and 284 total.
 - 0.7.2 (9 October 2026): the history is stated in the consent request (legitimate interest, right to object) instead of a separate checkbox, and the period is part of the consent version. Package checks 187 domain and 281 total; browser: history 8/8, privacy 7/7 with consent in the chat and 7/7 in Cookiebot mode (with the new history check), AI 24/24, team 16/16, memory 12/12.
 - 0.7.1 (9 October 2026): a review by four reviewers (gateway, server, widget, privacy and security), each finding checked by a second, skeptical agent; 43 findings, none rejected; all fixed except three left as known limits (see [DECISIONS.md](DECISIONS.md#open-points)). The conversation history became a separate, optional consent. Package checks 186 domain and 278 total; gateway 62 tests; benchmark: 6,100 documents index in about 1.1 s (79 MB), the page list in about 30 ms once per snapshot (was 674 ms per request), a search in about 10 ms, the worst replay a crafted request may ask for 185 ms (was tens of seconds). Browser: AI 24/24, API 15/15, history 8/8 (mock gateway, API mode and the real GPU), privacy 7/7, team 16/16, team without AI 5/5, memory 12/12, concurrency 4/4. Real GPU (`model/lookups.jsonl`): test site 13/13; opening hours asked in German and French on the English test site 6/6 (was 2/6: the model guessed "it depends on the location" without looking); greetings and thanks 8/8 without lookups; local copy of the demo with thinking, after upgrading its database to ai-v6 with the installed package: 14/14, follow-ups and no-guessing 8/9 (one thinking_limit, 4/4 on repeating that question).
 - 0.7.0: an optional history of AI conversations for the team (off by default; *Privacy → Conversation history*, 1 to 365 days, default 30). Package checks 181 domain and 263 total: the consent version stays the same without a history and changes when it is switched on or its period changes, validation, the privacy policy sections in both languages (with and without consent), only key hashes stored, asking again after an error replaces the attempt, stopped answers, invalid requests not kept, summaries counted, lookups and file names (never contents), deletion by key, by consent and after the period (kept ones stay), delete all, the per-conversation and storage caps, the link to a team request, the backoffice page in the manifest only with the AI. Browser: history 7/7 with the mock gateway and 7/7 in API mode; regression AI 24/24, API 15/15, privacy 7/7, team 16/16, team without AI 5/5, memory 7/7.

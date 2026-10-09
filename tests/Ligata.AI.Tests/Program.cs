@@ -89,6 +89,7 @@ Assert(true, "Defaults are valid.");
 var linkRules = PromptBuilder.Guardrails(defaults, false);
 Assert(linkRules.Contains("[Contact](/contact/)") && linkRules.Contains("Never put a domain in front of it") && !linkRules.Contains("https://example.com"), "Page links stay site-relative: no full-url example a model could glue to an email domain.");
 Assert(defaults.Appearance.Position == "right", "The bubble sits bottom right by default, clear of consent banners bottom left.");
+Assert(!defaults.Appearance.ShowContextMeter, "The memory bar is off by default; long conversations are counted and summarized either way.");
 AssistantValidation.Settings(defaults);
 Assert(defaults.Behaviour.ContextLimit == 131072, "Conversations may use up to 128k by default; the AI server caps it to its own limit per conversation.");
 Assert(ChatRelay.MaxTokens(defaults.Behaviour) == 1024 && ChatRelay.MaxTokens(defaults.Behaviour with { Thinking = true }) == 1024 + ChatRelay.ThinkingRoom && ChatRelay.ThinkingRoom >= 4096, "GPU mode gives thinking its own room on top of the answer limit.");
@@ -639,6 +640,17 @@ using (var scope = app.Services.CreateScope())
     keyValues.SetValue("Ligata.AI.LivePages", "0");
     await services.GetRequiredService<AssistantInstaller>().InstallAsync();
     Assert(store.Find(offCopy.Id) == null && store.Find(onCopy.Id) == null && store.Settings().Settings.Knowledge.ExcludedPages.SequenceEqual([contactKey]) && keyValues.GetValue("Ligata.AI.LivePages") == "1", "Imported page copies are replaced by live pages.");
+    store.Save(beforeLive, store.Settings().Version);
+
+    // 0.7.3: the memory bar is off by default; it is switched off once on existing sites, and switching it on again stays.
+    var meterOn = store.Settings().Settings with { Appearance = beforeLive.Appearance with { ShowContextMeter = true } };
+    store.Save(meterOn, store.Settings().Version);
+    keyValues.SetValue("Ligata.AI.MeterOff", "0");
+    await services.GetRequiredService<AssistantInstaller>().InstallAsync();
+    Assert(!store.Settings().Settings.Appearance.ShowContextMeter && keyValues.GetValue("Ligata.AI.MeterOff") == "1", "The memory bar is switched off once on existing sites.");
+    store.Save(meterOn, store.Settings().Version);
+    await services.GetRequiredService<AssistantInstaller>().InstallAsync();
+    Assert(store.Settings().Settings.Appearance.ShowContextMeter, "An editor who switches the memory bar on again keeps it on.");
     store.Save(beforeLive, store.Settings().Version);
 
     store.Count(s => s.Questions++);

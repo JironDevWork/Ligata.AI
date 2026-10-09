@@ -11,7 +11,7 @@ namespace Ligata.AI.Rendering;
 
 public static class AssistantMarkup
 {
-    public const string Version = "0.7.2";
+    public const string Version = "0.7.3";
     private const string RenderedKey = "Ligata.AI.Rendered";
 
     /// <summary>

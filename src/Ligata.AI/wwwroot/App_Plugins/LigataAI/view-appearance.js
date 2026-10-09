@@ -1,6 +1,6 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon } from './ui.js?v=0.7.2';
-import { themes, colorFields, contrast, readablePairs } from './themes.js?v=0.7.2';
+import { icon } from './ui.js?v=0.7.3';
+import { themes, colorFields, contrast, readablePairs } from './themes.js?v=0.7.3';
 
 export const appearanceView = {
   /** Warns (without blocking) when a colour pair is hard to read; shown even while the colour list is collapsed. */
@@ -54,7 +54,7 @@ export const appearanceView = {
             ${this.select('appearance.font', 'Font', [['inherit', 'Same as the website'], ['system', 'System UI'], ['rounded', 'Rounded'], ['serif', 'Serif'], ['mono', 'Monospace']])}
           </div>
           <div class="section">
-            ${this.toggle('appearance.showContextMeter', 'Show the memory meter', 'A slim bar showing how much of the conversation memory is used.')}
+            ${this.toggle('appearance.showContextMeter', 'Show the memory bar', 'Off by default. A slim bar above the input (“Memory”, in German “Gedächtnis”) showing how full the conversation memory is. Long conversations are counted and summarized either way.')}
             ${this.api() ? nothing : this.toggle('appearance.showQueuePosition', 'Show queue position', 'When the shared AI is busy, visitors see their place in line and the expected wait.')}
             ${this.toggle('appearance.animations', 'Animations', 'Visitors who prefer reduced motion never see animations.')}
             ${this.licensedFeatures().liveChat ? this.toggle('appearance.sound', 'Chime when the team replies', 'A soft sound when a team member answers while the chat is closed or the tab is in the background.') : nothing}

@@ -44,7 +44,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
   - **Appearance**:
     - six themes and ten editable colours, light/dark/automatic mode, position; every preset passes WCAG AA, and a live check flags colour pairs that are hard to read;
     - bubble icon, size and label, teaser, window size, corners, font;
-    - memory bar, queue position, animations, a chime for team replies and branding.
+    - memory bar (off by default), queue position, animations, a chime for team replies and branding.
     - A **live preview** uses unsaved settings, answers real AI questions and simulates team requests.
   - **Behaviour**:
     - name, avatar, greeting, suggested questions, language;
@@ -75,7 +75,7 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
   - **looked up on the website**: the assistant searches the site's pages and documents while it answers (*Searching the website…*) and links to the page in the visitor's language;
   - suggested questions;
   - screenshot and PDF attachments;
-  - a **memory bar** that shows how full the assistant’s memory is, in percent rather than tokens (the backoffice preview also shows the tokens);
+  - a **memory bar** (off by default, *Appearance*) that shows how full the assistant’s memory is, in percent rather than tokens (the backoffice preview also shows the tokens); long conversations are counted and summarized either way;
   - **long conversations keep going**: before a question would no longer fit, the earlier messages are summarized automatically (with a progress bar) and the conversation continues with the summary and the latest exchange. The visitor still sees every message;
   - their **place in line** while the shared GPU is busy, and *Reading…* while a long conversation or document is read (GPU mode).
 - **Talk to a person**: when the AI cannot answer, a card offers *Chat with our team* or *Send us an email*; without live chat and the email form, it offers the contact email and contact page from the settings. A person icon in the header does the same at any time.
@@ -90,8 +90,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.7.2.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.7.2 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.7.3.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.7.3 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -237,9 +237,9 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 187 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 188 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 281 checks with the database
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 284 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)

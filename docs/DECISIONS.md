@@ -2,7 +2,7 @@
 
 The reasoning behind Ligata.AI, so it survives the conversations it was worked out in. Each entry names the decision, why it was taken, and what was tried or rejected on the way. Details and measurements live in the linked documents; this file is the map.
 
-Versions: 0.1 (7 Oct 2026) to 0.7.2 (9 Oct 2026). Newest topics last within each section.
+Versions: 0.1 (7 Oct 2026) to 0.7.3 (9 Oct 2026). Newest topics last within each section.
 
 ## Shape of the product
 
@@ -86,6 +86,7 @@ The request: see what visitors ask the AI, not only the chats handed to the team
 - **Vanilla JS in a Shadow DOM, no framework**, so it works on any site, including static exports, without CSS clashes. Bottom right by default (consent banners sit bottom left).
 - **Live preview with unsaved settings** in the backoffice answers real questions.
 - **Icons from Tabler, one stroke width; every theme passes WCAG AA** for message text.
+- **The memory bar is off by default (0.7.3).** Most visitors do not need to know how full the memory is: long conversations are summarized automatically. Editors switch it on under *Appearance* (*Show the memory bar*). The tokens are counted and conversations summarized either way. It was on before 0.7.3, and a saved "on" cannot be told apart from the old default, so it is switched off once on existing sites (key `Ligata.AI.MeterOff`); switching it on again stays.
 
 ## Testing
 

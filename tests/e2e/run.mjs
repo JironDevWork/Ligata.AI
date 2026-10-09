@@ -154,6 +154,8 @@ await check('appearance: theme, position and live preview', async () => {
   await dash().locator('.swatch', { hasText: 'Ocean' }).click();
   await dash().locator('.segmented button', { hasText: 'Bottom right' }).click();
   await dash().locator('label.control', { hasText: 'Label next to the bubble' }).locator('input').fill('Questions? ' + run.slice(-3));
+  // The memory bar is off by default; the website shows it once it is switched on here.
+  await dash().locator('label.switch', { hasText: 'Show the memory bar' }).locator('input').check();
   await page.waitForTimeout(1200);
   const frame = page.frameLocator('ligata-ai-dashboard iframe');
   await frame.locator('#ligata-ai').waitFor({ state: 'attached', timeout: 15000 });

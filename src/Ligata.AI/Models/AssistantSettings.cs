@@ -241,7 +241,8 @@ public sealed record AssistantAppearance
     public int PanelHeight { get; init; } = 640;
     public int OffsetX { get; init; } = 24;
     public int OffsetY { get; init; } = 24;
-    public bool ShowContextMeter { get; init; } = true;
+    /// <summary>The memory bar under the input (0.7.3: off by default). Counting and summarizing long conversations happen either way.</summary>
+    public bool ShowContextMeter { get; init; }
     public bool ShowQueuePosition { get; init; } = true;
     public bool ShowBranding { get; init; } = true;
     public bool Animations { get; init; } = true;

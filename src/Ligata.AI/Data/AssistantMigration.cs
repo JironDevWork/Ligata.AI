@@ -95,6 +95,7 @@ public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreSco
         var result = await new Upgrader(plan).ExecuteAsync(executor, scopes, keys);
         if (!result.Successful) throw new InvalidOperationException("Ligata AI migration failed. Inspect the Umbraco migration log.");
         LivePages();
+        MeterOff();
         await GrantSectionAsync();
     }
 
@@ -116,6 +117,25 @@ public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreSco
             logger.LogInformation("Ligata AI: {Count} imported page copies replaced by live pages ({Off} left out).", pages.Count, off.Count);
         }
         keys.SetValue("Ligata.AI.LivePages", "1");
+    }
+
+    /// <summary>
+    /// 0.7.3: the memory bar is off by default. It was on before, so a saved "on" cannot be told apart from the old
+    /// default: switch it off once on existing sites; editors switch it on again under Appearance.
+    /// </summary>
+    private void MeterOff()
+    {
+        if (keys.GetValue("Ligata.AI.MeterOff") == "1") return;
+        var store = new AssistantStore(database);
+        var (settings, version) = store.Settings();
+        if (settings.Appearance.ShowContextMeter)
+        {
+            // Never block the start over a display setting: try again on the next start.
+            try { store.Save(settings with { Appearance = settings.Appearance with { ShowContextMeter = false } }, version); }
+            catch (Exception e) { logger.LogWarning(e, "Ligata AI: could not switch the memory bar off; switch it off under Appearance."); return; }
+            logger.LogInformation("Ligata AI: the memory bar is now off by default and was switched off; switch it on under Appearance.");
+        }
+        keys.SetValue("Ligata.AI.MeterOff", "1");
     }
 
     /// <summary>
