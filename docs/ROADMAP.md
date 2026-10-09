@@ -2,7 +2,7 @@
 
 What comes after 0.8. Nothing here is built yet. Each item is planned with the owner before work starts.
 
-## 1. Backoffice content assistant (proposed, waiting for approval)
+## 1. Backoffice content assistant (planned and decided, not started)
 
 **The request.** A chat agent inside Umbraco, like the assistant on the website but for editors. A bubble at the bottom right of the Content section. You ask "where is the page with our opening hours?" or "change the phone number on the contact page", and it finds the page, opens it, shows what it is doing and makes the change. It is a tool-using agent, not a text generator, and it only does content management.
 
@@ -28,7 +28,7 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
   - *Find*: search pages and drafts (the existing BM25 index plus drafts), walk the tree (children, ancestors), read a page with all its properties and blocks per language, and read a document type's fields.
   - *Navigate*: open a page in the editor (the backoffice route for the document), or point at a property ("the phone number is in *Footer → Contact block*").
   - *Change*: propose edits to text, rich text and simple properties, including inside Block List and Block Grid by path. Each edit appears as a card with before and after. The editor clicks **Apply**, and the change is saved as a draft under the editor's name (Umbraco's audit log records it).
-  - *Publish*: only on an explicit, separate confirmation, and only if a setting allows it (off by default).
+  - *Publish*: off by default (changes are saved as drafts). A setting in the backoffice lets it publish by itself.
   - Never: delete, move or unpublish content, change document types, settings, users or media. It always works through the editor's own permissions.
 - **Shows its work.** Every step is a line in the chat ("Searched for *phone*", "Opened *Contact*", "Read *Footer*"), as the website widget shows *Searching the website…*.
 - **Safety.**
@@ -38,8 +38,7 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
   - A daily cap per user.
   - What was sent to the AI is never kept beyond the session.
 - **Engines.**
-  - Claude Haiku 5.5 is the recommended engine for this. Multi-step editing with many tools is where a stronger model matters.
-  - The GPU works too, marked as experimental until it is measured, like the lookups were in 0.6.
+  - Both engines from the start; the fixed task set measures them. Multi-step editing with many tools is where a stronger model matters, so Claude is expected to do better at edits. The GPU keeps unpublished drafts in Switzerland.
   - The effort setting is its own (default Medium for editing, Low for questions).
 - **Privacy.** Editors' prompts and draft content go to the chosen engine. Unlike visitors, editors need no consent popup, but the privacy notes for staff and the record of processing need a line. Anthropic's addendum or the GPU operator's agreement covers it.
 - **Licensing.** A new feature flag, `LigataAI:Features:ContentAssistant`, works like the others: the configuration licenses it, editors switch it off.
@@ -50,12 +49,14 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
 2. **Propose and apply.** Text and rich text edits, also in blocks and per language, with before/after cards and *Apply*, saved as drafts. Then *Publish* on confirmation, when allowed.
 3. **Bigger jobs.** "Update the phone number everywhere": one approval card listing every page. Translations between the site's languages, choosing existing media, SEO fields.
 
-### Open questions for the owner
+### Decisions (owner, 9 October 2026)
 
-1. Inside Ligata.AI as a separate module (recommended: it reuses the engines, keys and tool loop), or a new repository and package?
-2. May it publish after a confirmation, or only save drafts?
-3. Which user groups get it (all editors, or administrators first)?
-4. Claude only at first, or the GPU from the start?
+1. **Inside Ligata.AI**, as a separate module next to the website assistant. It reuses the engines, keys and tool loop.
+2. **Drafts only by default.** A setting in the backoffice lets it publish by itself.
+3. **Administrators first.** Other groups follow once it has proven itself.
+4. **Both engines from the start.** About 20 fixed editor tasks run on the GPU and on Claude: finding pages, pointing at properties, proposing edits in blocks and per language. Their results decide whether the GPU is good enough for edits or stays for questions only.
+
+Work starts when the owner gives the go.
 
 ## 2. The website assistant takes visitors to the right place (future)
 
