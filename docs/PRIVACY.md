@@ -150,3 +150,5 @@ Under the revised DSG alone:
 - the duty to inform (Art. 19 DSG) is met by naming the recipients and their countries, which the text does.
 
 The consent request does no harm either way.
+
+What the generated text covers for Switzerland: the purpose, the recipients and their countries (Art. 19 DSG), the safeguard for disclosure to the USA in API mode (the Standard Contractual Clauses in the version adapted to Swiss law, Art. 16 Abs. 2 lit. d DSG) and the Federal Data Protection and Information Commissioner (EDÖB) for complaints. Add your identity and contact details. If your site targets EU visitors and you have no establishment in the EU, check whether you need an EU representative (Art. 27 GDPR); the text has a placeholder for it.

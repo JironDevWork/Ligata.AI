@@ -90,8 +90,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.7.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.7.0 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.7.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.7.1 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -237,13 +237,17 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 114 domain/security checks
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # + 50 database checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 186 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 278 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)
 node privacy.mjs                                                               # consent, withdrawal, Cookiebot, privacy policy text
-cd gateway; npm test                                                           # 33 gateway tests
+node history.mjs                                                               # the optional conversation history
+node concurrency.mjs                                                           # several visitors at once, summaries in line, settings changed mid-answer
+node memory.mjs                                                                # long conversations and summaries (no host needed)
+cd gateway; npm test                                                           # 62 gateway tests
 ```
 
-See [docs/TESTING.md](docs/TESTING.md).
+See [docs/TESTING.md](docs/TESTING.md). Why things are built the way they are, and what is still open: [docs/DECISIONS.md](docs/DECISIONS.md).

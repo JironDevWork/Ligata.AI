@@ -1,18 +1,18 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest, bearer } from './api.js?v=0.7.0';
-import { styles } from './styles.js?v=0.7.0';
-import { icon, controls } from './ui.js?v=0.7.0';
-import { themes, colorFields } from './themes.js?v=0.7.0';
-import { overviewView } from './view-overview.js?v=0.7.0';
-import { appearanceView } from './view-appearance.js?v=0.7.0';
-import { behaviourView } from './view-behaviour.js?v=0.7.0';
-import { knowledgeView } from './view-knowledge.js?v=0.7.0';
-import { connectionView } from './view-connection.js?v=0.7.0';
-import { insightsView } from './view-insights.js?v=0.7.0';
-import { teamView } from './view-team.js?v=0.7.0';
-import { privacyView } from './view-privacy.js?v=0.7.0';
+import { aiRequest, bearer } from './api.js?v=0.7.1';
+import { styles } from './styles.js?v=0.7.1';
+import { icon, controls } from './ui.js?v=0.7.1';
+import { themes, colorFields } from './themes.js?v=0.7.1';
+import { overviewView } from './view-overview.js?v=0.7.1';
+import { appearanceView } from './view-appearance.js?v=0.7.1';
+import { behaviourView } from './view-behaviour.js?v=0.7.1';
+import { knowledgeView } from './view-knowledge.js?v=0.7.1';
+import { connectionView } from './view-connection.js?v=0.7.1';
+import { insightsView } from './view-insights.js?v=0.7.1';
+import { teamView } from './view-team.js?v=0.7.1';
+import { privacyView } from './view-privacy.js?v=0.7.1';
 
 // A tab only appears when its feature is licensed for this installation (LigataAI:Features).
 const tabs = [
@@ -172,7 +172,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
       .hero{padding:72px 32px 24px;max-width:760px}.hero h1{font-size:40px;line-height:1.1;letter-spacing:-1px;margin:0 0 16px}.hero p{font-size:18px;line-height:1.6;opacity:.7;margin:0}
       .lines{padding:24px 32px;display:grid;gap:12px;max-width:760px}.lines i{display:block;height:10px;border-radius:10px;background:${dark ? '#22252d' : '#e6e6e1'}}.lines i:nth-child(3n){width:70%}</style></head>
       <body><div class="nav"><div class="logo"></div><span></span><span></span><span></span></div><div class="hero"><h1>${attr(b.siteName || 'Your website')}</h1><p>This is a preview page. The assistant below uses your current settings, including changes you have not saved yet.</p></div><div class="lines">${'<i></i>'.repeat(9)}</div>
-      <script src="/assets/ligata-ai/ligata-ai.js?v=0.7.0&p=${Date.now()}" data-ligata-ai data-preview="true" data-open="true" data-api="/umbraco/management/api/v1/ligata-ai" data-settings="${attr(JSON.stringify(publicSettings))}"></script></body></html>`;
+      <script src="/assets/ligata-ai/ligata-ai.js?v=0.7.1&p=${Date.now()}" data-ligata-ai data-preview="true" data-open="true" data-api="/umbraco/management/api/v1/ligata-ai" data-settings="${attr(JSON.stringify(publicSettings))}"></script></body></html>`;
   }
   previewPane() {
     return html`<aside class="preview">
