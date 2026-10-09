@@ -267,6 +267,23 @@ public sealed partial class ContentTools
     {
         if (raw == null || ContentFields.String(raw) is null or "" or "[]") return "";
         if (kind == FieldKinds.RichText) return ContentFields.Plain(ContentFields.RichMarkup(raw));
+        // Pickers, links and choices by name, as people know them (the model reads the JSON with keys instead).
+        switch (kind)
+        {
+            case FieldKinds.Boolean: return ContentFields.String(raw) is "1" or "true" or "True" ? "Yes" : "No";
+            case FieldKinds.Choice or FieldKinds.Checkboxes or FieldKinds.Tags: return string.Join(", ", List(raw));
+            case FieldKinds.Page or FieldKinds.Pages:
+                return string.Join(", ", (ContentFields.String(raw) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(ContentFields.Udi).Where(k => k != null).Select(k => NameOf(k!.Value)));
+            case FieldKinds.Media:
+                return string.Join(", ", (ContentFields.Node(raw) as JsonArray ?? []).OfType<JsonObject>().Select(m => Guid.TryParse(m["mediaKey"]?.ToString(), out var k) ? NameOf(k) : null).Where(n => n != null));
+            case FieldKinds.Links:
+                return string.Join("; ", (ContentFields.Node(raw) as JsonArray ?? []).OfType<JsonObject>().Select(l =>
+                {
+                    var target = ContentFields.Udi(l["udi"]?.ToString());
+                    var to = target is { } key ? NameOf(key) : l["url"]?.ToString();
+                    return string.IsNullOrEmpty(to) ? l["name"]?.ToString() : $"{l["name"]} → {to}";
+                }));
+        }
         var shown = Display(kind, editor, raw, config, 4000);
         return kind is FieldKinds.Text or FieldKinds.TextArea or FieldKinds.Markdown or FieldKinds.Email or FieldKinds.Radio or FieldKinds.Date && shown.StartsWith('"')
             ? JsonSerializer.Deserialize<string>(shown.Split(" … (")[0]) ?? shown : shown;

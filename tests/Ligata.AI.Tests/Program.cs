@@ -495,6 +495,8 @@ Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "
     Assert(ContentFields.Plain("<p>One &amp; two</p><ul><li>a</li><li>b</li></ul>") == "One & two\na\nb", "Rich text reads as plain text for before/after cards.");
     var udiKey = Guid.NewGuid();
     Assert(ContentFields.Udi(ContentFields.DocumentUdi(udiKey)) == udiKey && ContentFields.Udi(udiKey.ToString()) == udiKey && ContentFields.Udi("nope") == null && ContentFields.ShortId(udiKey) == udiKey.ToString("N")[..8], "Keys and UDIs are read both ways.");
+    Assert(ContentFields.Node(System.Text.Json.Nodes.JsonValue.Create("[{\"name\":\"Kontakt\"}]")) is System.Text.Json.Nodes.JsonArray { Count: 1 } && ContentFields.RichMarkup(System.Text.Json.Nodes.JsonValue.Create("{\"markup\":\"<p>a</p>\",\"blocks\":null}")) == "<p>a</p>"
+        && ContentFields.Node(System.Text.Json.Nodes.JsonValue.Create("plain")) == null, "JSON values stored as strings inside blocks (links, media, rich text) are read as JSON.");
     Assert(FieldKinds.Of("Umbraco.TextBox") == "text" && FieldKinds.Of("Umbraco.RichText") == "richtext" && FieldKinds.Of("Umbraco.BlockGrid") == "blocks" && FieldKinds.Of("Umbraco.ColorPicker") == "other", "Property editors map to what the assistant can do with them.");
     // A Block Grid value as Umbraco 17 stores it (block-level variance: one invariant property, values per language).
     var (heroKey, textKey, innerKey) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
@@ -1059,6 +1061,9 @@ using (var scope = app.Services.CreateScope())
         var rootKey = fixtureRoot.Key.ToString();
         Assert((await tools.SearchAsync(ctx, "Redaktion", null, null, 5)).Contains(rootKey) && (await tools.SearchAsync(ctx, "editor fixture", "de-CH", "editorArticle", 5)).Contains("“Redaktion”"),
             "Pages are found by their name in any language, and listed in the language asked for.");
+        var byText = await tools.SearchAsync(ctx, "kitchens wardrobes", null, null, 5);
+        Assert(byText.Contains(rootKey) && byText.Contains("Kitchens and wardrobes") && (await tools.SearchAsync(ctx, "044 000", "de-CH", null, 5)).Contains("Rufen Sie uns an") && (await tools.SearchAsync(ctx, "Introduction", null, null, 5)).Contains(rootKey),
+            "Drafts are searched by their text, inside blocks too, by numbers and by field labels, with a snippet: " + byText);
         Assert((await tools.ChildrenAsync(ctx, rootKey, "en-US", 0)).Contains("“Team”") && (await tools.ChildrenAsync(ctx, rootKey, "en-US", 0)).Contains("draft"), "The tree below a page is listed with each page's status.");
         var cardKeys = BlockValue.Parse(fixtureRoot.GetValue("cards"), "Umbraco.BlockList")!.Items().Select(i => BlockValue.Key(i.Item)).ToList();
         var cardId = ContentFields.ShortId(cardKeys[0]);

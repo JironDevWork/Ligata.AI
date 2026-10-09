@@ -1,8 +1,8 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Examine;
 using Ligata.AI.Models;
 using Microsoft.Extensions.Logging;
 using Umbraco.Cms.Core;
@@ -50,7 +50,7 @@ public sealed class Proposal
 /// returns text for the model; changes are planned first (shown for approval with before and after) and then committed.
 /// </summary>
 public sealed partial class ContentTools(IContentService contents, IMediaService media, IEntityService entities, ILanguageService languages, IUserService users,
-    ContentSchema schema, EditorAccess access, IUmbracoContextFactory contexts, IExamineManager examine, ILogger<ContentTools> logger)
+    ContentSchema schema, EditorAccess access, IUmbracoContextFactory contexts, ILogger<ContentTools> logger)
 {
     public const int MaxResults = 25, ListPage = 60;
 
@@ -138,78 +138,121 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
     }
 
     // ---------- search_content ----------
+    /// <summary>
+    /// The searchable draft text of every page, per language ("" for pages that do not vary): the name, then "Label: text" lines,
+    /// also from the fields inside blocks (so "Telefon" finds the block field labelled Telefon). Kept in memory and rebuilt for a
+    /// page when its update date changes, so a search reads only what changed since the last one.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, (DateTime Updated, Dictionary<string, (string Text, string Folded)> Cultures)> drafts = new();
+    public const int MaxScanned = 5000;
+
+    private async Task<Dictionary<string, (string Text, string Folded)>> TextOfAsync(IContent page)
+    {
+        var type = schema.Type(page.ContentType.Key);
+        var cultures = page.ContentType.VariesByCulture() ? page.AvailableCultures.ToList() : [""];
+        var result = new Dictionary<string, (string, string)>();
+        foreach (var culture in cultures)
+        {
+            var c = culture == "" ? null : culture;
+            var text = new StringBuilder(Name(page, c)).Append('\n');
+            if (type != null)
+                foreach (var p in ContentSchema.Properties(type))
+                    await LinesAsync(text, p.Name ?? p.Alias, p.PropertyEditorAlias, p.DataTypeKey, page.GetValue(p.Alias, p.VariesByCulture() ? c : null), c, 0);
+            var all = text.ToString();
+            result[culture] = (all, Fold(all));
+        }
+        return result;
+    }
+
+    private async Task LinesAsync(StringBuilder text, string label, string editor, Guid dataType, object? raw, string? culture, int depth)
+    {
+        if (raw == null || depth > 6) return;
+        var (dataEditor, _) = await schema.DataTypeAsync(dataType);
+        editor = dataEditor.Length > 0 ? dataEditor : editor;
+        if (FieldKinds.Of(editor) == FieldKinds.Blocks)
+        {
+            var blocks = BlockValue.Parse(raw, editor);
+            if (blocks == null) return;
+            foreach (var data in blocks.Content.OfType<JsonObject>())
+            {
+                if (culture != null && !blocks.Exposed(BlockValue.Key(data), culture)) continue;
+                var element = Guid.TryParse(data["contentTypeKey"]?.ToString(), out var key) ? schema.Type(key) : null;
+                if (element == null) continue;
+                foreach (var p in ContentSchema.Properties(element))
+                    await LinesAsync(text, p.Name ?? p.Alias, p.PropertyEditorAlias, p.DataTypeKey, BlockValue.Entry(data, p.Alias, p.VariesByCulture() ? culture : null)?["value"], culture, depth + 1);
+            }
+            return;
+        }
+        var words = Words(raw).Trim();
+        if (words.Length > 0) text.Append(label).Append(": ").Append(words.Length > 4000 ? words[..4000] : words).Append('\n');
+    }
+
+    private static string Fold(string text) => Ligata.AI.Services.KnowledgeSnapshot.Fold(text);
+
+    private static int Count(string text, string term)
+    {
+        var n = 0;
+        for (var at = text.IndexOf(term, StringComparison.Ordinal); at >= 0 && n < 5; at = text.IndexOf(term, at + term.Length, StringComparison.Ordinal)) n++;
+        return n;
+    }
+
     public async Task<string> SearchAsync(ToolContext context, string query, string? culture, string? type, int limit)
     {
         query = (query ?? "").Trim();
         if (query.Length == 0) return "Error: give a few words to search for.";
         limit = Math.Clamp(limit <= 0 ? 10 : limit, 1, MaxResults);
-        var terms = Ligata.AI.Services.KnowledgeSnapshot.Terms(query).Where(t => t.Length > 1).Distinct().ToList();
-        if (terms.Count == 0) terms = [query.ToLowerInvariant()];
-        var scores = new Dictionary<int, double>();
-
-        // Names (every language): the strongest signal.
-        foreach (var entity in entities.GetAll(UmbracoObjectTypes.Document))
+        var terms = Ligata.AI.Services.KnowledgeSnapshot.Terms(query).Distinct().ToList();
+        if (terms.Count == 0) terms = [Fold(query)];
+        var phrase = Fold(query);
+        var pages = entities.GetAll(UmbracoObjectTypes.Document).OfType<IDocumentEntitySlim>().Where(e => !e.Trashed && access.InScope(context.Settings, e.Path)).Take(MaxScanned).ToList();
+        if (!string.IsNullOrWhiteSpace(type)) pages = pages.Where(e => string.Equals(e.ContentTypeAlias, type.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        var stale = pages.Where(e => !drafts.TryGetValue(e.Id, out var known) || known.Updated != e.UpdateDate).Select(e => e.Id).ToList();
+        foreach (var batch in stale.Chunk(100))
+            foreach (var page in contents.GetByIds(batch)) drafts[page.Id] = (page.UpdateDate, await TextOfAsync(page));
+        // Ties go to the language asked for, else the open page's, else the site's default language.
+        var preferred = string.IsNullOrWhiteSpace(culture) ? context.OpenCulture ?? await DefaultCultureAsync() : culture.Trim();
+        var scores = new List<(IDocumentEntitySlim Page, double Score, string Culture)>();
+        foreach (var page in pages)
         {
-            if (entity.Trashed) continue;
-            var labels = entity is IDocumentEntitySlim d && d.CultureNames.Count > 0 ? d.CultureNames.Values.Append(entity.Name ?? "") : [entity.Name ?? ""];
-            var folded = labels.Select(l => Ligata.AI.Services.KnowledgeSnapshot.Fold(l)).ToList();
-            var score = 0.0;
-            if (folded.Any(l => l == Ligata.AI.Services.KnowledgeSnapshot.Fold(query))) score += 10;
-            score += terms.Count(t => folded.Any(l => l.Contains(Ligata.AI.Services.KnowledgeSnapshot.Fold(t)))) * 3.0;
-            if (score > 0) scores[entity.Id] = score;
-        }
-        // Content (drafts too): Umbraco's internal index.
-        try
-        {
-            if (examine.TryGetIndex(Constants.UmbracoIndexes.InternalIndexName, out var index))
+            if (!drafts.TryGetValue(page.Id, out var known)) continue;
+            var (bestScore, bestCulture) = (0.0, "");
+            foreach (var (c, (_, folded)) in known.Cultures)
             {
-                var results = index.Searcher.CreateQuery("content").ManagedQuery(query).Execute(Examine.Search.QueryOptions.SkipTake(0, 60));
-                var max = results.Select(r => r.Score).DefaultIfEmpty(1).Max();
-                foreach (var result in results)
-                    if (int.TryParse(result.Id, out var id)) scores[id] = scores.GetValueOrDefault(id) + 1 + 4 * result.Score / Math.Max(max, 0.0001f);
+                var name = folded[..Math.Max(0, folded.IndexOf('\n'))];
+                var score = (name == phrase ? 12 : 0) + terms.Count(name.Contains) * 4.0 + (folded.Contains(phrase) ? 6 : 0)
+                    + terms.Sum(t => Count(folded, t)) + (terms.All(folded.Contains) ? 3 : 0);
+                if (score > 0 && string.Equals(c, preferred, StringComparison.OrdinalIgnoreCase)) score += 0.5;
+                if (score > bestScore) (bestScore, bestCulture) = (score, c);
             }
+            if (bestScore > 0) scores.Add((page, bestScore, bestCulture));
         }
-        catch (Exception e) { logger.LogDebug(e, "Ligata AI: the internal index could not be searched."); }
-
-        var ranked = scores.OrderByDescending(s => s.Value).Select(s => s.Key).Take(200).ToArray();
-        if (ranked.Length == 0) return $"No pages found for “{query}”. Try other words, or browse with list_children.";
-        var found = contents.GetByIds(ranked).Where(c => !c.Trashed && access.InScope(context.Settings, c.Path)).ToList();
-        if (!string.IsNullOrWhiteSpace(type)) found = found.Where(c => string.Equals(c.ContentType.Alias, type.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
-        var readable = await access.ReadableAsync(context.User, found.Select(c => c.Key));
-        var order = ranked.Select((id, i) => (id, i)).ToDictionary(x => x.id, x => x.i);
-        var shown = found.Where(c => readable.Contains(c.Key) && !c.Trashed).OrderBy(c => order[c.Id]).Take(limit).ToList();
+        if (scores.Count == 0) return $"No pages found for “{query}”. Try other words (a name, a phrase from the text, a number), or browse with list_children.";
+        var ranked = scores.OrderByDescending(s => s.Score).Take(100).ToList();
+        var readable = await access.ReadableAsync(context.User, ranked.Select(s => s.Page.Key));
+        var shown = ranked.Where(s => readable.Contains(s.Page.Key)).Take(limit).ToList();
         if (shown.Count == 0) return $"No pages you may see were found for “{query}”.";
         var text = new StringBuilder($"{shown.Count} page{(shown.Count == 1 ? "" : "s")} found for “{query}” (best first):\n");
         var n = 0;
-        foreach (var page in shown)
+        foreach (var (page, _, c) in shown)
         {
-            var (c, _) = await CultureAsync(context, page.ContentType, culture);
-            text.Append($"{++n}. “{Name(page, c)}” — key {page.Key}, type {page.ContentType.Alias}, {Breadcrumb(page.Path, c)}, {Status(page, c)}{(c != null ? $" ({c})" : "")}");
-            if (Snippet(page, terms, c) is { } snippet) text.Append($"\n   “…{snippet}…”");
+            // Named in the language asked for (else the preferred one) when the page has it; the snippet comes from where the words matched.
+            var language = preferred != null && page.CultureNames.ContainsKey(preferred) ? preferred : c.Length > 0 ? c : null;
+            text.Append($"{++n}. “{Name(page, language)}” — key {page.Key}, type {page.ContentTypeAlias}, {Breadcrumb(page.Path, language)}, {Status(page, language)}{(language != null ? $" ({language})" : "")}");
+            if (drafts.TryGetValue(page.Id, out var known) && known.Cultures.TryGetValue(c, out var body) && Snippet(body.Text, body.Folded, terms, phrase) is { } snippet) text.Append($"\n   “…{snippet}…”");
             text.Append('\n');
         }
         return text.ToString().TrimEnd();
     }
 
-    /// <summary>Text around the first match of a search term in the page's fields (any language; the chosen one first).</summary>
-    private static string? Snippet(IContent page, List<string> terms, string? culture)
+    /// <summary>The line around the first match (the phrase first, else any term), without the page name line.</summary>
+    private static string? Snippet(string text, string folded, List<string> terms, string phrase)
     {
-        var folded = terms.Select(Ligata.AI.Services.KnowledgeSnapshot.Fold).ToList();
-        foreach (var property in page.Properties.OrderByDescending(p => p.Values.Any(v => v.Culture == culture)))
-            foreach (var value in property.Values.OrderByDescending(v => v.Culture == culture))
-            {
-                var text = Words(value.EditedValue);
-                if (text.Length == 0) continue;
-                var lower = Ligata.AI.Services.KnowledgeSnapshot.Fold(text);
-                foreach (var term in folded)
-                {
-                    var at = lower.IndexOf(term, StringComparison.Ordinal);
-                    if (at < 0) continue;
-                    var start = Math.Max(0, at - 70);
-                    return text.Substring(start, Math.Min(170, text.Length - start)).Replace('\n', ' ').Trim();
-                }
-            }
-        return null;
+        var body = folded.IndexOf('\n') + 1;
+        var at = folded.IndexOf(phrase, body, StringComparison.Ordinal);
+        if (at < 0) at = terms.Select(t => folded.IndexOf(t, body, StringComparison.Ordinal)).Where(i => i >= 0).DefaultIfEmpty(-1).Min();
+        if (at < 0 || at >= text.Length) return null;
+        var start = Math.Max(body, at - 70);
+        return text.Substring(start, Math.Min(170, text.Length - start)).Replace('\n', ' ').Trim();
     }
 
     /// <summary>The words of a stored value: rich text without tags, the texts inside block and picker JSON.</summary>
@@ -224,7 +267,7 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
             {
                 case JsonObject o: foreach (var p in o) Walk(p.Value, p.Key); break;
                 case JsonArray a: foreach (var i in a) Walk(i, key); break;
-                case JsonValue v when v.TryGetValue<string>(out var s) && key is not ("editorAlias" or "alias" or "culture" or "segment" or "key" or "contentKey" or "settingsKey" or "contentTypeKey" or "udi" or "mediaKey"):
+                case JsonValue v when v.TryGetValue<string>(out var s) && key is not ("editorAlias" or "alias" or "culture" or "segment" or "key" or "contentKey" or "settingsKey" or "contentTypeKey" or "udi" or "mediaKey" or "target" or "queryString"):
                     var inner = ContentFields.Node(s);
                     if (inner != null) Walk(inner, key);
                     else if (!Guid.TryParse(s, out _) && !s.StartsWith("umb://")) words.Append(ContentFields.Plain(s)).Append(' ');
@@ -324,7 +367,8 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
         var isProtected = context.Settings.Scope.ProtectedFields.Contains(alias, StringComparer.OrdinalIgnoreCase);
         if (mandatory) notes.Add("required");
         if (isProtected || readOnly) notes.Add("read-only for the assistant");
-        if (kind is FieldKinds.Text or FieldKinds.TextArea && ContentSchema.Number(config, "maxChars") is { } max) notes.Add($"max {max} characters");
+        // Only limits that matter for normal text (Umbraco's textstring allows 250 by default).
+        if (kind is FieldKinds.Text or FieldKinds.TextArea && ContentSchema.Number(config, "maxChars") is { } max && max < 250) notes.Add($"max {max} characters");
         var full = only is { Count: > 0 } && only.Any(o => o.Equals(path, StringComparison.OrdinalIgnoreCase) || path.StartsWith(o + "/", StringComparison.OrdinalIgnoreCase));
         var annotation = notes.Count > 0 ? ", " + string.Join(", ", notes) : "";
         if (kind == FieldKinds.Blocks)
@@ -397,7 +441,7 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
     public string Display(string kind, string editor, object? raw, JsonObject config, int max = ContentFields.ValuePreview)
     {
         string? text = ContentFields.String(raw);
-        if (string.IsNullOrEmpty(text) || text is "[]" or "null") return "(empty)";
+        if (string.IsNullOrEmpty(text) || text is "[]" or "null") return kind == FieldKinds.Boolean ? "false" : "(empty)";
         switch (kind)
         {
             case FieldKinds.Text or FieldKinds.TextArea or FieldKinds.Markdown or FieldKinds.Email or FieldKinds.Radio or FieldKinds.Date:

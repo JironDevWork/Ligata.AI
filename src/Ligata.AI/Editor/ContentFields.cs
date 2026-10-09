@@ -191,7 +191,10 @@ public static partial class ContentFields
         switch (raw)
         {
             case null: return null;
+            // Inside blocks, JSON values (links, media, rich text, nested blocks) are often stored as strings.
+            case JsonValue text when text.TryGetValue<string>(out var inner): return Node(inner);
             case JsonNode node: return node.DeepClone();
+            case JsonElement { ValueKind: JsonValueKind.String } textElement: return Node(textElement.GetString());
             case JsonElement element: return JsonNode.Parse(element.GetRawText());
             case string text:
                 var trimmed = text.TrimStart();
@@ -211,6 +214,7 @@ public static partial class ContentFields
         JsonNode n => n.ToJsonString(),
         JsonElement { ValueKind: JsonValueKind.String } e => e.GetString(),
         JsonElement e => e.GetRawText(),
+        DateTime d => d.TimeOfDay == TimeSpan.Zero ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : d.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
         IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
         _ => raw.ToString(),
     };
