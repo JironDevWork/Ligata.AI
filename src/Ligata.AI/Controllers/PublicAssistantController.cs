@@ -189,6 +189,7 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
             return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, history = VisitorConsent.HistoryVersion(settings) });
         if (VisitorConsent.Check(consents.Find(id), VisitorConsent.Version(settings, options.Value), now) != ConsentCheck.Valid || !consents.SetHistory(id, current, now))
             return StatusCode(403, Error("consent_required", "Please agree to the processing of your messages before using the assistant."));
+        ChatHistoryStore.Resume(id);
         return Ok(new { history = current });
     }
 

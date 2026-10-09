@@ -23,6 +23,7 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
     private static readonly object Gate = new();
     // Conversations the visitor deleted: an answer still running when they did must not bring them back (kept longer than any answer).
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> deleted = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTime> withdrawn = new();
     private static readonly TimeSpan Remember = TimeSpan.FromHours(2);
 
     /// <summary>
@@ -34,7 +35,7 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
     {
         lock (Gate)
         {
-            if (deleted.ContainsKey(chat.KeyHash)) return null;
+            if (deleted.ContainsKey(chat.KeyHash) || (chat.ConsentId is { } consent && withdrawn.ContainsKey(consent))) return null;
             using var scope = scopes.CreateScope();
             var db = scope.Database;
             var row = db.FirstOrDefault<ChatRow>("WHERE KeyHash=@0", chat.KeyHash);
@@ -163,9 +164,14 @@ public sealed class ChatHistoryStore(IScopeProvider scopes)
     /// <summary>The visitor withdrew this consent, or stopped the history: everything kept with it goes.</summary>
     public int DeleteByConsent(Guid consentId)
     {
+        withdrawn[consentId] = DateTime.UtcNow;
+        if (withdrawn.Count > 1000) foreach (var old in withdrawn.Where(w => DateTime.UtcNow - w.Value > Remember).Select(w => w.Key).ToList()) withdrawn.TryRemove(old, out _);
         using (var scope = scopes.CreateScope(autoComplete: true)) Forget(scope.Database.Fetch<string>("SELECT KeyHash FROM LigataAIChat WHERE ConsentId=@0", consentId));
         return Remove("WHERE ConsentId=@0", consentId);
     }
+
+    /// <summary>The visitor let the site keep their conversations again after stopping it: new questions may be kept.</summary>
+    public static void Resume(Guid consentId) => withdrawn.TryRemove(consentId, out _);
 
     private static void Forget(IEnumerable<string> keyHashes)
     {

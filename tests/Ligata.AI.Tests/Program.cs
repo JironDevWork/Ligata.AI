@@ -71,6 +71,12 @@ if (args.Contains("--bench"))
     Assert(pagesPart.Length / 3.6 <= PromptBuilder.SiteMapTokens + 200 && pagesPart.Contains("more pages") && pagesPart.Split('\n').Count(l => l.StartsWith("## ")) == 3 && pagesPart.Contains("/fr/section-0/page-"), "The page list stays within its budget, keeps every language and says that there are more pages.");
     clock.Restart();
     Assert(ReferenceEquals(PromptBuilder.SiteMap(big), map) && clock.ElapsedMilliseconds < 5, "The page list is built once per snapshot.");
+    var worst = new ChatRequest([.. Enumerable.Range(0, 59).SelectMany(i => new ChatMessage[] { new("user", "q", null), new("assistant", "a", null, [.. Enumerable.Range(0, 3).Select(r => Enumerable.Range(0, 6).Select(c => new ChatLookup(Lookups.Search, JsonSerializer.SerializeToElement(new { query = $"qzx{i}{r}{c} vbnm{i} plok{r} wert{c} asdfg{i}{c} zxcvb{r}" }))).ToList())]) }), new("user", "last", null)], "H", "/");
+    clock.Restart();
+    ChatRelay.Messages(worst, new AssistantSettings(), "S", new Lookups(big));
+    var worstMs = clock.ElapsedMilliseconds;
+    Console.WriteLine($"Worst replay a request may ask for (59 answers x 18 nonsense searches): {worstMs} ms.");
+    Assert(worstMs < 5000, "A crafted request costs seconds at most, not minutes.");
     Console.WriteLine($"Benchmark checks passed: {assertions} assertions.");
     return;
 }
@@ -232,6 +238,12 @@ Assert(new KnowledgeSettings().Includes(Guid.NewGuid(), "/a/") && !new Knowledge
     "Every page is used unless it or its section is left out.");
 Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Knowledge = new() { ExcludedPaths = ["shop"] } }), "Left-out sections are paths.");
 
+// A crafted request with very many earlier lookups costs a bounded amount: later ones get a fixed note, the same every time.
+var heavy = new ChatRequest([.. Enumerable.Range(0, 59).SelectMany(i => new ChatMessage[] { new("user", "q" + i, null), new("assistant", "a" + i, null, [[new ChatLookup(Lookups.Search, JsonSerializer.SerializeToElement(new { query = "nothing " + i })), new ChatLookup(Lookups.Search, JsonSerializer.SerializeToElement(new { query = "else " + i }))]]) }), new("user", "last", null)], "H", "/");
+var heavyMessages = JsonSerializer.Serialize(ChatRelay.Messages(heavy, defaults, "S", lookups), AssistantJson.Options);
+var heavyNotes = heavyMessages.Split(JsonSerializer.Serialize(ChatRelay.NotRepeated, AssistantJson.Options)[1..^1]).Length - 1;
+Assert(heavyNotes == 59 * 2 - ChatRelay.MaxReplayedCalls && heavyMessages == JsonSerializer.Serialize(ChatRelay.Messages(heavy, defaults, "S", lookups), AssistantJson.Options), "At most " + ChatRelay.MaxReplayedCalls + " earlier lookups are repeated per request, the same way every time: " + heavyNotes);
+
 // A conversation with earlier lookups: the browser keeps the calls, the server repeats them.
 var looked = new ChatMessage("assistant", "Rufen Sie an: +41 44 000 00 00.", null, [[Call(Lookups.Search, """{"query":"Telefon"}""")]]);
 var history = new ChatRequest([new("user", "Telefon?", null), looked, new("user", "Und die E-Mail?", null)], "Home", "/");
@@ -360,6 +372,13 @@ using (var guard = new RequestGuard(Options.Create(new AssistantOptions { Allowe
     context.Request.Headers.Origin = "https://www.example.test"; Assert(guard.Origin(context, true) && context.Response.Headers.AccessControlAllowOrigin == "https://www.example.test", "Allowed origin gets CORS.");
     var forwarded = new DefaultHttpContext(); forwarded.Connection.RemoteIpAddress = System.Net.IPAddress.Loopback; forwarded.Request.Headers["CF-Connecting-IP"] = "198.51.100.4";
     Assert(guard.Address(forwarded)!.ToString() == "127.0.0.1", "Cloudflare header is ignored unless trusted.");
+}
+using (var guard = new RequestGuard(Options.Create(new AssistantOptions { MessagesPerTenMinutes = 2 })))
+{
+    HttpContext From(string ip) { var c = new DefaultHttpContext(); c.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip); return c; }
+    var flood = From("203.0.113.66");
+    var allowed = Enumerable.Range(0, 1500).Count(_ => guard.Allow(flood, "ask"));
+    Assert(allowed == 2 && guard.Allow(From("198.51.100.7"), "ask"), "One address over its limit does not use up the site-wide limit for everyone else.");
 }
 static bool Dispose(IDisposable value) { value.Dispose(); return true; }
 

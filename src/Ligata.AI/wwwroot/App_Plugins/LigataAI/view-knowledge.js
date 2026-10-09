@@ -136,6 +136,7 @@ export const knowledgeView = {
           ${i?.languages?.length > 1 ? html`<span class="pill info">${icon('globe')}${i.languages.join(' · ')}</span>` : nothing}
           <small class="muted grow">searchable right now (saved settings)${i?.languages?.length > 1 ? ', every language on its own' : ''}${i?.textTokens ? ` · about ${compact(i.textTokens)} tokens of text, read only when a question needs it` : ''}</small>
         </div>
+        ${i?.truncated ? html`<div class="notice warning section">${icon('warn')}<div>This website has more pages than the assistant reads (the first ${number(i.maxPages)}, closest to the top). Leave out sections it does not need, such as archives, so it reads the pages that matter.</div></div>` : nothing}
         ${i?.siteMap ? html`<details class="section"><summary>What the assistant gets with every question</summary><pre class="code">${i.siteMap}</pre><small class="muted">The list of pages, without their text: the assistant searches and reads the text when a question needs it.</small></details>` : nothing}
         <form class="row section" @submit=${e => { e.preventDefault(); this.run(() => this.loadIndex(this.searchQuery || '')); }}>
           <label class="control grow" style="margin:0"><span class="sr">Test a search</span><input type="search" placeholder="Test a search, e.g. opening hours" .value=${this.searchQuery || ''} @input=${e => { this.searchQuery = e.target.value; }}></label>

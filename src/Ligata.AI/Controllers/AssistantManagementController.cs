@@ -195,7 +195,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         try { AssistantValidation.Settings(settings); } catch (AssistantValidationException) { settings = store.Settings().Settings; }
         var (stable, context, lookups) = await relay.PromptAsync(settings, settings.Effective(options.Value.Features), "A page title of typical length here", "/a/typical/page/path/", token);
         // The knowledge that is always known is shown on its own; tools are declared next to the instructions.
-        var pinned = PromptBuilder.Knowledge(store.EnabledKnowledge().Where(k => k.Pinned && k.Kind != "page"));
+        var pinned = PromptBuilder.Knowledge(store.PinnedKnowledge());
         var instructions = stable.Replace(pinned, "") + context + (lookups != null ? JsonSerializer.Serialize(Lookups.Tools) : "");
         var (tokens, estimated) = await Count(instructions, token);
         return Ok(new { instructionTokens = tokens + 16, estimated, lookupTokens = lookups != null ? Lookups.Tokens : 0, lookups = lookups != null });
@@ -207,7 +207,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         var snapshot = await index.SnapshotAsync(store.Settings().Settings.Knowledge, token);
         var hits = string.IsNullOrWhiteSpace(q) ? [] : snapshot.Search(q.Length > 200 ? q[..200] : q, 8).Select(h => new { h.Document.Title, h.Document.Url, h.Document.Kind, text = h.Text.Length > 400 ? h.Text[..400] + "…" : h.Text, score = Math.Round(h.Score, 2) });
-        return Ok(new { pages = snapshot.Pages, documents = snapshot.Documents.Count - snapshot.Pages, passages = snapshot.Passages, languages = snapshot.Cultures, siteMap = PromptBuilder.SiteMap(snapshot).Trim(), textTokens = (int)(snapshot.Documents.Sum(d => (long)d.Text.Length) / 3.6), hits });
+        return Ok(new { truncated = snapshot.Truncated, maxPages = ContentKnowledge.MaxPages, pages = snapshot.Pages, documents = snapshot.Documents.Count - snapshot.Pages, passages = snapshot.Passages, languages = snapshot.Cultures, siteMap = PromptBuilder.SiteMap(snapshot).Trim(), textTokens = (int)(snapshot.Documents.Sum(d => (long)d.Text.Length) / 3.6), hits });
     }
 
     private async Task<(int Tokens, bool Estimated)> Count(string text, CancellationToken token)

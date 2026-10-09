@@ -78,6 +78,8 @@ public sealed class HistoryConsentMigration(IMigrationContext context) : AsyncMi
             if (!ColumnExists("LigataAIConsent", column)) AddColumn<ConsentRow>("LigataAIConsent", column);
         foreach (var column in new[] { "ExpiresUtc", "KeptUntil", "KeptReason", "KeptBy" })
             if (!ColumnExists("LigataAIChat", column)) AddColumn<ChatRow>("LigataAIChat", column);
+        // Conversations kept before keeping had an end: 90 days from now, so none disappears without notice.
+        Database.Execute("UPDATE LigataAIChat SET KeptUntil=@0 WHERE Kept=@1 AND KeptUntil IS NULL", DateTime.UtcNow.AddDays(90), true);
         return Task.CompletedTask;
     }
 }

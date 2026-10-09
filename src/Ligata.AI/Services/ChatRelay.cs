@@ -66,15 +66,31 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             throw new ChatValidationException("invalid_messages", "Invalid conversation.");
     }
 
+    /// <summary>
+    /// Earlier lookups one request repeats at most. Later ones get a fixed note instead, the same with every question, so the
+    /// prompt stays the same and the GPU cache holds. Long conversations are summarized long before this; it caps what one
+    /// crafted request can cost the server.
+    /// </summary>
+    public const int MaxReplayedCalls = 60;
+    public const string NotRepeated = "(This earlier lookup is not repeated: the conversation looked up a lot. Look it up again if you need it.)";
+    public sealed class ReplayBudget { public int Left { get; set; } = MaxReplayedCalls; }
+
     /// <summary>The earlier answer's lookups, looked up again: the same calls on the same content give the same results.</summary>
-    public static IEnumerable<(string Id, ChatLookup Call, string Result)[]> Replay(ChatMessage message, int index, Lookups? lookups)
+    public static IEnumerable<(string Id, ChatLookup Call, string Result)[]> Replay(ChatMessage message, int index, Lookups? lookups, ReplayBudget? budget = null)
     {
         if (lookups == null || message.Lookups is not { Count: > 0 } rounds || (message.Content ?? "").Replace(PromptBuilder.TeamMarker, "").Trim().Length == 0) yield break;
         var answer = lookups.Begin();
         for (var r = 0; r < rounds.Count; r++)
         {
-            var results = answer.Round(rounds[r]);
-            yield return rounds[r].Select((call, i) => ($"l{index}r{r}c{i}", call, results[i])).ToArray();
+            var round = rounds[r];
+            List<string> results;
+            if (budget is { Left: <= 0 }) results = round.Select(_ => NotRepeated).ToList();
+            else
+            {
+                results = answer.Round(round);
+                if (budget != null) budget.Left -= r < Lookups.MaxRounds ? Math.Min(round.Count, Lookups.MaxCalls) : 0;
+            }
+            yield return round.Select((call, i) => ($"l{index}r{r}c{i}", call, results[i])).ToArray();
         }
     }
 
@@ -85,6 +101,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         if (!request.Compact && messages[^1].Role != "user") throw new ChatValidationException("invalid_messages", "The last message must be a question.");
         if (request.Summary is { Length: > MaxSummaryCharacters }) throw new ChatValidationException("message_too_long", "The summary of this conversation is too long. Start a new chat.", 413);
         var images = 0;
+        var budget = new ReplayBudget();
         var result = new List<object> { new { role = "system", content = system } };
         if (!string.IsNullOrWhiteSpace(request.Summary)) result.Add(new { role = "user", content = SummaryMessage(request.Summary) });
         for (var index = 0; index < messages.Count; index++)
@@ -95,7 +112,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             var limit = message.Role == "user" ? MaxUserCharacters : MaxAssistantCharacters;
             if (content.Length > limit) throw new ChatValidationException("message_too_long", $"Messages can be at most {limit:N0} characters.", 413);
             CheckLookups(message);
-            foreach (var round in Replay(message, index, lookups))
+            foreach (var round in Replay(message, index, lookups, budget))
             {
                 result.Add(new { role = "assistant", content = "", toolCalls = round.Select(c => new { id = c.Id, name = c.Call.Name, arguments = c.Call.Arguments }) });
                 foreach (var call in round) result.Add(new { role = "tool", toolCallId = call.Id, content = call.Result });
@@ -145,7 +162,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         var team = PromptBuilder.Handoff(settings, features);
         var snapshot = await index.SnapshotAsync(settings.Knowledge, token);
         var lookups = options.Value.UsesApi || await gateway.SupportsToolsAsync(token) ? new Lookups(snapshot, team, snapshot.CultureOf(pagePath)) : null;
-        var pinned = store.EnabledKnowledge().Where(k => k.Pinned && k.Kind != "page").ToList();
+        var pinned = store.PinnedKnowledge();
         var stable = lookups != null
             ? PromptBuilder.Guardrails(settings, team, lookups: true) + PromptBuilder.Knowledge(pinned) + PromptBuilder.SiteMap(snapshot)
             : PromptBuilder.Guardrails(settings, team) + PromptBuilder.Knowledge(pinned) + PromptBuilder.Everything(snapshot, Math.Max(0, settings.Behaviour.KnowledgeBudget - pinned.Sum(k => k.Tokens)));
@@ -184,7 +201,13 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         }
         var last = request.Messages[^1];
         if (counting) store.Count(s => { s.Questions++; if (request.Messages.Count(m => m.Role == "user") == 1) s.Conversations++; s.Attachments += last.Attachments?.Count ?? 0; });
-        if (api) { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, counting, lookups, outcome); return; }
+        if (api)
+        {
+            // Stopping while waiting for one of the site's Claude places (or while tokens are counted) ends like any other stop.
+            try { await claude.ChatAsync(http, request, settings, stable, context.TrimStart(), visitor, counting, lookups, outcome); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            return;
+        }
         var b = settings.Behaviour;
         var body = new
         {
@@ -316,8 +339,10 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             }
             else
             {
-                if (outcome != null && root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String) outcome.Error = code.GetString();
-                if (counting) store.Count(s => s.Failed++);
+                var code = root.TryGetProperty("code", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+                if (outcome != null && code != null) outcome.Error = code;
+                // A line that waited too long is busy, not a failure (the stream was already open for the queue position).
+                if (counting) store.Count(s => { if (code is "queue_timeout" or "queue_full" or "site_busy") s.Busy++; else if (code is "model_unavailable" or "model_loading" or "gateway_unavailable") s.Offline++; else s.Failed++; });
             }
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException) { }

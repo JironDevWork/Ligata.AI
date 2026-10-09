@@ -198,6 +198,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     public static List<MessageParam> Messages(ChatRequest request, Lookups? lookups = null)
     {
         var messages = new List<MessageParam>();
+        var budget = new ChatRelay.ReplayBudget();
         if (!string.IsNullOrWhiteSpace(request.Summary)) messages.Add(new() { Role = Role.User, Content = ChatRelay.SummaryMessage(request.Summary) });
         for (var index = 0; index < request.Messages.Count; index++)
         {
@@ -207,7 +208,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             {
                 // Answers that were stopped before any text arrived carry nothing the model can use (nor do their lookups).
                 if (text.Replace(PromptBuilder.TeamMarker, "").Trim().Length == 0) continue;
-                foreach (var round in ChatRelay.Replay(message, index, lookups))
+                foreach (var round in ChatRelay.Replay(message, index, lookups, budget))
                 {
                     messages.Add(new() { Role = Role.Assistant, Content = round.Select(c => (ContentBlockParam)new ToolUseBlockParam { ID = c.Id, Name = c.Call.Name, Input = Input(c.Call.Arguments) }).ToList() });
                     messages.Add(new() { Role = Role.User, Content = round.Select(c => (ContentBlockParam)new ToolResultBlockParam { ToolUseID = c.Id, Content = c.Result }).ToList() });
@@ -271,7 +272,8 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
 
         // Reject conversations that cannot fit before paying for them. Exact counting only near the limit.
         var images = request.Messages.Sum(m => m.Attachments?.Count(a => a.Type == "image") ?? 0);
-        var replayed = request.Messages.Select((m, i) => ChatRelay.Replay(m, i, lookups).Sum(round => round.Sum(c => c.Result.Length + 80))).Sum();
+        var budget = new ChatRelay.ReplayBudget();
+        var replayed = request.Messages.Select((m, i) => ChatRelay.Replay(m, i, lookups, budget).Sum(round => round.Sum(c => c.Result.Length + 80))).Sum();
         var characters = stable.Length + context.Length + replayed + request.Messages.Sum(m => (m.Content?.Length ?? 0) + (m.Attachments?.Sum(a => a.Text?.Length ?? 0) ?? 0));
         var estimate = (int)(characters / 3.2) + images * 1600 + 64 + (tools != null ? 500 : 0);
         if (estimate + Math.Min(b.MaxAnswerTokens, 256) > limit * 0.85)

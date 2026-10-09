@@ -52,9 +52,7 @@ public sealed class ChatHistory(ChatHistoryStore store, ILogger<ChatHistory> log
         {
             if (request.Compact) { if (outcome.Done) store.Summarized(hash); return; }
             var question = request.Messages[^1];
-            var files = question.Attachments is { Count: > 0 } attached
-                ? JsonSerializer.Serialize(attached.Take(4).Select(a => new { type = a.Type == "image" ? "image" : "document", name = Clip(a.Name, 120) is { Length: > 0 } name ? name : a.Type == "image" ? "image" : "document.pdf" }), AssistantJson.Options)
-                : null;
+            var files = Files(question.Attachments);
             var answer = outcome.Answer.ToString();
             var page = Clip(request.PagePath, 300);
             store.Record(
@@ -68,6 +66,22 @@ public sealed class ChatHistory(ChatHistoryStore store, ILogger<ChatHistory> log
         {
             logger.LogWarning("Ligata AI could not keep a conversation in the history ({Type}).", e.GetType().Name);
         }
+    }
+
+    // Names in any script stay readable (and short): the JSON is only ever parsed, never placed into HTML as it is.
+    private static readonly JsonSerializerOptions Readable = new(AssistantJson.Options) { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    /// <summary>The names of attached files as JSON, as many as fit the column (1,000 characters).</summary>
+    private static string? Files(List<ChatAttachment>? attached)
+    {
+        if (attached is not { Count: > 0 }) return null;
+        var files = attached.Take(4).Select(a => new { type = a.Type == "image" ? "image" : "document", name = Clip(a.Name, 120) is { Length: > 0 } name ? name : a.Type == "image" ? "image" : "document.pdf" }).ToList();
+        for (var count = files.Count; count > 0; count--)
+        {
+            var json = JsonSerializer.Serialize(files.Take(count), Readable);
+            if (json.Length <= 1000) return json;
+        }
+        return null;
     }
 
     /// <summary>The lookups as JSON, as many rounds as fit the column.</summary>

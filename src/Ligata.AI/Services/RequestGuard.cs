@@ -12,6 +12,8 @@ namespace Ligata.AI.Services;
 public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposable
 {
     private readonly MemoryCache limits = new(new MemoryCacheOptions { SizeLimit = 20000 });
+    // Site-wide counters, outside the size-limited cache so a flood of addresses cannot reset them.
+    private readonly Dictionary<string, (int Count, DateTime Until)> global = new();
     private readonly ConcurrentDictionary<string, byte> inFlight = new();
     private readonly object gate = new();
 
@@ -64,7 +66,7 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
             "consent" => (Math.Clamp(options.Value.MessagesPerTenMinutes * 2, 10, 1000), TimeSpan.FromMinutes(10)),
             _ => (Math.Clamp(options.Value.ReadsPerTenMinutes, 10, 100000), TimeSpan.FromMinutes(10)),
         };
-        var global = kind switch { "read" => 5000, "poll" => 30000, "typing" => 10000, "avatar" => 5000, "consent" => 300, _ => 1000 };
+        var site = kind switch { "read" => 5000, "poll" => 30000, "typing" => 10000, "avatar" => 5000, "consent" => 300, _ => 1000 };
         lock (gate)
         {
             bool Take(string bucket, int max, TimeSpan window)
@@ -72,7 +74,12 @@ public sealed class RequestGuard(IOptions<AssistantOptions> options) : IDisposab
                 if (!limits.TryGetValue<Counter>(bucket, out var count)) limits.Set(bucket, count = new Counter(), new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = window, Size = 1 });
                 return ++count!.Value <= max;
             }
-            return Take("global:" + kind, global, TimeSpan.FromMinutes(1)) && Take(key, maximum, period);
+            // The address first: requests it is refused do not count against everyone else.
+            if (!Take(key, maximum, period)) return false;
+            var now = DateTime.UtcNow;
+            var (count, until) = this.global.TryGetValue(kind, out var current) && current.Until > now ? current : (0, now.AddMinutes(1));
+            this.global[kind] = (count + 1, until);
+            return count + 1 <= site;
         }
     }
 

@@ -94,6 +94,13 @@ public sealed class AssistantStore(IScopeProvider scopes)
         return scope.Database.Fetch<KnowledgeRow>("WHERE Enabled=@0 ORDER BY SortOrder, Id", true);
     }
 
+    /// <summary>The enabled items marked "always known", with their text, in the stable order (read with every question).</summary>
+    public List<KnowledgeRow> PinnedKnowledge()
+    {
+        using var scope = scopes.CreateScope(autoComplete: true);
+        return scope.Database.Fetch<KnowledgeRow>("WHERE Enabled=@0 AND Pinned=@1 AND Kind<>@2 ORDER BY SortOrder, Id", true, true, "page");
+    }
+
     /// <summary>Every item with its whole text.</summary>
     public List<KnowledgeRow> KnowledgeRows()
     {

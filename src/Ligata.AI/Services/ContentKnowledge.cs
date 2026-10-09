@@ -24,7 +24,11 @@ public sealed record LivePage(Guid Key, string Culture, string Name, string Url,
 /// <summary>Reads published website pages as plain text: the assistant looks them up while answering.</summary>
 public sealed class ContentKnowledge(IUmbracoContextFactory contexts, IDocumentNavigationQueryService navigation, IVariationContextAccessor variation)
 {
-    public const int MaxPages = 2000;
+    /// <summary>Web pages read at most (each language counts once per page), and content nodes walked at most (folders, settings, data).</summary>
+    public const int MaxPages = 2000, MaxNodes = 20_000;
+
+    /// <summary>The last walk stopped at MaxPages or MaxNodes: there are pages the assistant does not know.</summary>
+    public bool Truncated { get; private set; }
 
     /// <summary>Published pages in tree order (each page before its subpages).</summary>
     public async Task<List<SitePage>> PagesAsync()
@@ -35,21 +39,44 @@ public sealed class ContentKnowledge(IUmbracoContextFactory contexts, IDocumentN
         return (await PublishedAsync()).Select(p => new SitePage(p.Key, p.Name ?? "", Url(p), p.Level, p.ContentType.Alias, WebPage(p))).ToList();
     }
 
+    /// <summary>
+    /// Published nodes in tree order (each page before its subpages). On a website with more than MaxPages pages, the pages
+    /// closest to the top win (level by level), so a deep archive never crowds out the contact page or a second language.
+    /// Nodes without a template (folders, settings, data) are walked but do not count as pages.
+    /// </summary>
     private async Task<List<IPublishedContent>> PublishedAsync()
     {
         using var reference = contexts.EnsureUmbracoContext();
         var cache = reference.UmbracoContext.Content;
         var pages = new List<IPublishedContent>();
+        Truncated = false;
         if (cache == null || !navigation.TryGetRootKeys(out var roots)) return pages;
+        var top = new List<IPublishedContent>();
+        foreach (var key in roots)
+            if (await cache.GetByIdAsync(key) is { } root) top.Add(root);
+        // Level by level: which nodes are read.
+        var chosen = new HashSet<Guid>();
+        var queue = new Queue<IPublishedContent>(top);
+        int web = 0, walked = 0;
+        while (queue.Count > 0)
+        {
+            var page = queue.Dequeue();
+            if (Cultures(page).Count == 0) continue;
+            if (walked >= MaxNodes || (WebPage(page) && web >= MaxPages)) { Truncated = true; break; }
+            walked++;
+            if (WebPage(page)) web++;
+            chosen.Add(page.Key);
+            // "*": children in every language, not only in the default one.
+            foreach (var child in page.Children("*").OrderBy(c => c.SortOrder)) queue.Enqueue(child);
+        }
+        // Tree order for the page list.
         void Walk(IPublishedContent page)
         {
-            if (pages.Count >= MaxPages || Cultures(page).Count == 0) return;
+            if (!chosen.Contains(page.Key)) return;
             pages.Add(page);
-            // "*": children in every language, not only in the default one.
             foreach (var child in page.Children("*").OrderBy(c => c.SortOrder)) Walk(child);
         }
-        foreach (var key in roots)
-            if (await cache.GetByIdAsync(key) is { } root) Walk(root);
+        foreach (var root in top) Walk(root);
         return pages;
     }
 

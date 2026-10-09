@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Ligata.AI.Data;
 using Ligata.AI.Models;
+using Microsoft.Extensions.Logging;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Cms.Core.Notifications;
 
@@ -35,6 +36,10 @@ public sealed class KnowledgeSnapshot
     /// <summary>The languages of a multilingual website (empty when pages do not vary by culture).</summary>
     public IReadOnlyList<string> Cultures { get; }
     public int Passages => sections.Count;
+    /// <summary>Results of lookups, by what was asked: earlier lookups are repeated with every question of a conversation.</summary>
+    internal System.Collections.Concurrent.ConcurrentDictionary<string, string> Results { get; } = new(StringComparer.Ordinal);
+    /// <summary>The website has more pages than are read (see ContentKnowledge.MaxPages): the rest cannot be looked up.</summary>
+    public bool Truncated { get; init; }
     /// <summary>The page list for the prompt, built once per snapshot and budget (see PromptBuilder.SiteMap).</summary>
     internal System.Collections.Concurrent.ConcurrentDictionary<int, string> SiteMaps { get; } = new();
 
@@ -192,18 +197,26 @@ public sealed class KnowledgeSnapshot
         return hits;
     }
 
+    /// <summary>
+    /// The forms of a word on the website: the word itself, longer words it starts (prefix), shorter words it starts with (stem of
+    /// a compound) and, for longer words, words that contain it. At most 200. The prefix and stem forms come from the sorted
+    /// vocabulary without scanning it, so nonsense queries stay cheap on big websites.
+    /// </summary>
     private IEnumerable<(string Form, double Weight)> Forms(string term)
     {
         if (postings.ContainsKey(term)) yield return (term, 1);
         if (term.Length < 3 || term.All(char.IsDigit)) yield break;
         var found = 0;
+        var start = Array.BinarySearch(vocabulary, term, StringComparer.Ordinal);
+        for (var i = start < 0 ? ~start : start; i < vocabulary.Length && found < 200 && vocabulary[i].StartsWith(term, StringComparison.Ordinal); i++)
+            if (vocabulary[i] != term) { found++; yield return (vocabulary[i], 0.8); }
+        for (var length = term.Length - 1; length >= 4 && found < 200; length--)
+            if (postings.ContainsKey(term[..length])) { found++; yield return (term[..length], 0.7); }
+        if (term.Length < 5) yield break;
         foreach (var word in vocabulary)
         {
-            if (word == term || found >= 200) continue;
-            var weight = word.StartsWith(term, StringComparison.Ordinal) ? 0.8
-                : word.Length >= 4 && term.StartsWith(word, StringComparison.Ordinal) ? 0.7
-                : term.Length >= 5 && word.Contains(term, StringComparison.Ordinal) ? 0.5 : 0;
-            if (weight > 0) { found++; yield return (word, weight); }
+            if (found >= 200) yield break;
+            if (word.Length > term.Length && !word.StartsWith(term, StringComparison.Ordinal) && word.Contains(term, StringComparison.Ordinal)) { found++; yield return (word, 0.5); }
         }
     }
 
@@ -308,14 +321,22 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
             if (index >= MaxCalls) return $"Too many lookups at once; use at most {MaxCalls}.";
             var text = call.Name switch
             {
-                Search => SearchText(Text(call.Arguments, "query")),
-                Read => ReadText(List(call.Arguments, "pages")),
+                Search => Remember("s" + culture + "\u0001" + Text(call.Arguments, "query"), () => SearchText(Text(call.Arguments, "query"))),
+                Read => Remember("r" + culture + "\u0001" + string.Join("\u0001", List(call.Arguments, "pages")), () => ReadText(List(call.Arguments, "pages"))),
                 _ => $"There is no tool called {call.Name}. Use {Search} or {Read}.",
             };
             var room = Characters - used;
             if (text.Length > room) text = text[..room].TrimEnd() + "\n[shortened]";
             used += text.Length;
             return team && call.Name is Search or Read ? text + TeamReminder : text;
+        }
+
+        /// <summary>The same lookup on the same snapshot gives the same text: kept, so repeating a conversation's lookups costs nothing.</summary>
+        private string Remember(string key, Func<string> lookup)
+        {
+            if (snapshot.Results.TryGetValue(key, out var known)) return known;
+            if (snapshot.Results.Count > 5000) snapshot.Results.Clear();
+            return snapshot.Results[key] = lookup();
         }
 
         private static string Text(JsonElement arguments, string name) =>
@@ -368,14 +389,15 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
 }
 
 /// <summary>
-/// Keeps the snapshot of what the assistant can look up. It is rebuilt when pages are published or unpublished, knowledge
-/// items or the left-out pages change, and every 15 minutes; pages that did not change keep their text.
+/// Keeps the snapshot of what the assistant can look up. It is rebuilt when pages are published or unpublished (on any server)
+/// and when knowledge items or the left-out pages change; pages that did not change keep their text. Snapshots for settings an
+/// editor has not saved yet (the budget meter, the test chat) are kept apart, so visitors never lose theirs to a preview.
 /// </summary>
-public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore store)
+public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore store, ILogger<KnowledgeIndex> logger)
 {
     private sealed record Cache(string Key, KnowledgeSnapshot Snapshot, IReadOnlyDictionary<string, LivePage> Pages);
     private static readonly SemaphoreSlim Gate = new(1, 1);
-    private static volatile Cache? cache;
+    private static volatile Cache? cache, preview;
     private static int contentVersion;
 
     /// <summary>The latest snapshot, if one was built (for estimates that must not wait).</summary>
@@ -385,16 +407,26 @@ public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore stor
 
     public async Task<KnowledgeSnapshot> SnapshotAsync(KnowledgeSettings settings, CancellationToken token = default)
     {
-        var key = string.Join('|', Volatile.Read(ref contentVersion), AssistantStore.KnowledgeVersion, DateTime.UtcNow.Ticks / TimeSpan.FromMinutes(15).Ticks, JsonSerializer.Serialize(settings, AssistantJson.Options));
-        if (cache is { } hit && hit.Key == key) return hit.Snapshot;
+        var json = JsonSerializer.Serialize(settings, AssistantJson.Options);
+        string Key() => string.Join('|', Volatile.Read(ref contentVersion), AssistantStore.KnowledgeVersion, json);
+        var saved = json == JsonSerializer.Serialize(store.Settings().Settings.Knowledge, AssistantJson.Options);
+        if ((saved ? cache : preview) is { } hit && hit.Key == Key()) return hit.Snapshot;
         await Gate.WaitAsync(token);
         try
         {
-            if (cache is { } again && again.Key == key) return again.Snapshot;
-            var pages = await content.LivePagesAsync(settings.Includes, cache?.Pages ?? new Dictionary<string, LivePage>());
+            // Read the versions now: a change while waiting is part of what this build reads.
+            var key = Key();
+            if ((saved ? cache : preview) is { } again && again.Key == key) return again.Snapshot;
+            var pages = await content.LivePagesAsync(settings.Includes, (saved ? cache : preview ?? cache)?.Pages ?? new Dictionary<string, LivePage>());
             var items = store.KnowledgeRows().Where(k => k.Enabled && !k.Pinned && k.Kind != "page");
-            var snapshot = new KnowledgeSnapshot([.. pages.Select(p => new KnowledgeDocument("page", p.Name, p.Url, p.Level, p.Text, p.Culture, p.Key.ToString("N"))), .. items.Select(i => new KnowledgeDocument(i.Kind, i.Title, "", 0, i.Text))]);
-            cache = new Cache(key, snapshot, pages.ToDictionary(p => p.Id));
+            var snapshot = new KnowledgeSnapshot([.. pages.Select(p => new KnowledgeDocument("page", p.Name, p.Url, p.Level, p.Text, p.Culture, p.Key.ToString("N"))), .. items.Select(i => new KnowledgeDocument(i.Kind, i.Title, "", 0, i.Text))])
+            {
+                Truncated = content.Truncated,
+            };
+            if (content.Truncated && saved && cache?.Snapshot.Truncated != true)
+                logger.LogWarning("Ligata AI reads only the first {Max} pages of this website (and {Nodes} content nodes); the assistant cannot look up the rest. Leave out sections it does not need under Knowledge.", ContentKnowledge.MaxPages, ContentKnowledge.MaxNodes);
+            var built = new Cache(key, snapshot, pages.ToDictionary(p => p.Id));
+            if (saved) cache = built; else preview = built;
             return snapshot;
         }
         finally { Gate.Release(); }
