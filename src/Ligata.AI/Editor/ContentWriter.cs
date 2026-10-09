@@ -83,7 +83,11 @@ public sealed partial class ContentTools
     /// <summary>A block by the start of its key (8 hex digits are shown; more are accepted).</summary>
     private static (Guid Block, string? Error) FindBlock(BlockValue? blocks, string reference)
     {
-        var wanted = reference.Replace("-", "").ToLowerInvariant();
+        // The model sometimes passes the block's whole path ("modules/d9bfce27/items/e33f90e5"): its last segment is the block.
+        var last = reference.Trim().TrimEnd('/');
+        last = last[(last.LastIndexOf('/') + 1)..];
+        if (last.EndsWith(":settings", StringComparison.OrdinalIgnoreCase)) last = last[..^9];
+        var wanted = last.Replace("-", "").ToLowerInvariant();
         if (blocks == null || wanted.Length < 4) return (Guid.Empty, $"No block {reference}.");
         var matches = blocks.Items().Select(x => BlockValue.Key(x.Item)).Where(k => k.ToString("N").StartsWith(wanted)).Distinct().ToList();
         return matches.Count switch

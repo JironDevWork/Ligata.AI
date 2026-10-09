@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 373 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 374 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -95,6 +95,14 @@ cd tests/e2e && node editor.mjs          # 23 checks, screenshots in .runtime/e2
 
 13 messages, 38 steps, 7 changes: 247k prompt tokens (214k cached) and 10k output tokens, about $0.01.
 
+**Live again, against the final code** (19 requests, 59 in all), one task per mode:
+- **Manual:** the contact page's opening hours inside the contact block, approved, saved as a draft and checked.
+- **Auto, risky:** removing the "Reparatur & Pflege" card asked first ("Auto mode asks before risky changes … in every language"), was declined with a note, and the card stayed. The model first named the block by its whole path; this is accepted since.
+- **Auto, safe:** a sentence added to a teaser text ran on its own.
+- **Bypass:** the Impressum introduction was set without asking.
+
+The activity log, read back through its API, listed all four with the person, time, request, before and after, and *manual*, *manual / declined* with the note, *auto*, and *bypass*. Undo then put the three changes back.
+
 ### Privacy: consent, withdrawal, Cookiebot (browser)
 
 `tests/e2e/privacy.mjs` runs against the host above with any AI engine (mock gateway or mock Anthropic API). It reads the consent mode from the public config, so the same file covers both modes:
@@ -127,7 +135,7 @@ Results (8 October 2026, version 0.4.0):
 
   A live-chat-only host now sets `Features:ContentAssistant=false` too, so its section is still called *Support*.
 
-  Browser: editor 23/23, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 227 domain and 373 total.
+  Browser: editor 23/23, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 227 domain and 374 total.
 
   A review against the goal added three things:
   - Auto mode asks before risky changes (clearing a field, removing most of a text or a block, changing what all languages share);

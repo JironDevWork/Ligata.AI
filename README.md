@@ -250,7 +250,7 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 ```powershell
 dotnet run --project tests/Ligata.AI.Tests -c Release                         # 227 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 373 checks with the database
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 374 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)

@@ -1118,6 +1118,9 @@ using (var scope = app.Services.CreateScope())
         Assert(plainEdit.Risks.Count == 0 && blockAddition.Risks.Count == 0 && clearing.Risks.SequenceEqual(["clears Introduction"]) && sharedEdit.Risks.SequenceEqual(["changes Featured in every language"])
             && blockRemoval.Risks.Single().StartsWith("removes the “Card” block in every language"),
             "Risky changes are recognised (clearing a field, changing what all languages share, removing a block), ordinary ones are not: " + string.Join(" | ", clearing.Risks.Concat(sharedEdit.Risks).Concat(blockRemoval.Risks)));
+        Assert((await tools.PlanBlocksAsync(ctx, rootKey, "en-US", "cards", "remove", $"cards/{cardId}", null, null, null)).Error == null
+            && (await tools.PlanBlocksAsync(ctx, rootKey, "en-US", "cards", "move", cardId, null, $"after:cards/{ContentFields.ShortId(cardKeys[1])}", null)).Error == null,
+            "A block may be named by its short key or by its whole path (as the model sometimes writes it).");
         Assert(EditorAgent.Decide("auto", everything, plainEdit, 0).Decision == "auto" && EditorAgent.Decide("auto", everything, blockRemoval, 0).Decision == "ask" && EditorAgent.Decide("auto", everything, sharedEdit, 0).Decision == "ask",
             "In Auto mode the ordinary draft runs on its own and the risky ones ask.");
         var richText = await tools.PlanUpdateAsync(ctx, rootKey, "en-US", null, [new("body", J("\"<p>New <em>body</em><script>steal()</script></p>\"")), new("featured", J("true"))]);

@@ -200,14 +200,15 @@ Conversations are kept for the set period (30 days by default), and the activity
   - Block Grid parsing (areas, values per language, expose), JSON values stored as strings;
   - the instructions;
   - the conversation sent back with thinking signatures and one cache breakpoint.
-- **Database checks.** 43 database checks (373 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
+- **Database checks.** 44 database checks (374 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
   - modes by group;
   - search by name, text, numbers and labels; tree, read, describe;
   - planning versus saving, drafts versus live, edits inside blocks per language;
+  - a block named by its short key or by its whole path;
   - refusals: unknown path, unchanged value, protected field, read-only type, outside the scope, language, invalid value;
   - risks recognised on real plans (clearing a field, a field all languages share, removing a block) and not on ordinary edits;
   - rich text sanitizing; block add, move and remove (expose, nothing left behind); create, publish (and Umbraco's refusal), sort, recycle bin;
   - Undo and its conflict, deletion restored;
   - activity filters, usage, conversations and retention, settings conflicts, the manifest by licence.
 - **Browser suite.** `tests/e2e/editor.mjs` has 23 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode (including Auto asking before a risky block removal), blocks, Undo, and the activity log, which records for each change who steered it, when, what they asked, before and after, and by hand, Auto or Bypass. It also covers settings, the effort from the configuration and from the chat, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
-- **Live.** 40 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, through a budget proxy. The results are in [TESTING.md](TESTING.md#content-assistant-09).
+- **Live.** 59 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, through a budget proxy: 40 while building and 19 against the final code. The final 19 covered one task per mode, then the activity log read back and Undo. The results are in [TESTING.md](TESTING.md#content-assistant-09).
