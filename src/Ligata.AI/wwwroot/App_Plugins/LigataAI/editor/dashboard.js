@@ -291,7 +291,7 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
       ${this.fieldError('access')}
       <div class="section">
         ${this.segmented('defaultMode', 'Mode of a new conversation', Object.entries(modeInfo).map(([k, v]) => [k, v.label]), 'Each person can switch between the modes their group allows, in the chat.')}
-        <div class="grid three">${Object.entries(modeInfo).map(([k, v]) => html`<div class="row" style="align-items:flex-start;gap:8px">${glyph(v.icon)}<small><b>${v.label}</b>: ${k === 'auto' ? `makes the changes ticked under “Auto approves” on its own and asks before the others.` : v.text}</small></div>`)}</div>
+        <div class="grid three">${Object.entries(modeInfo).map(([k, v]) => html`<div class="row" style="align-items:flex-start;gap:8px">${glyph(v.icon)}<small><b>${v.label}</b>: ${k === 'auto' ? `makes the changes ticked under “Auto approves” on its own unless they are risky (clearing a field, removing a block, changing what all languages share), and asks before the others.` : v.text}</small></div>`)}</div>
       </div>
     </section>`;
   }
@@ -376,7 +376,9 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
     return html`<section class="card">
       <header><div><h2>How it works</h2></div></header>
       <div class="section">
-        ${this.segmented('effort', 'Thinking effort', ['off', 'low', 'medium', 'high', 'xhigh'].map(e => [e, effortInfo[e]]), 'How much it thinks before acting. Medium suits most editing; higher takes longer and costs more.')}
+        ${this.meta.effortFromConfig
+          ? html`<div class="control"><span>Thinking effort</span><div class="row"><span class="pill info"><i></i>${effortInfo[this.meta.effortFromConfig]}</span><small>Set in the site's configuration (<code>LigataAI:ContentAssistant:Effort</code>), which wins over this page.</small></div></div>`
+          : this.segmented('effort', 'Thinking effort', ['off', 'low', 'medium', 'high', 'xhigh'].map(e => [e, effortInfo[e]]), 'How much it thinks before acting. Medium suits most editing; higher takes longer and costs more. A default can also be set in the configuration (LigataAI:ContentAssistant:Effort).')}
         ${this.toggle('effortInChat', 'Editors may choose Low, Medium or High in the chat')}
       </div>
       <div class="section">

@@ -489,6 +489,20 @@ Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "
     Rejects<AssistantValidationException>(() => EditorValidation.Settings(editorDefaults with { Guidelines = new string('x', 4001) }), "Guidelines are limited.");
     Assert(EditorAgent.Effort(editorDefaults, "high") == "high" && EditorAgent.Effort(editorDefaults, "xhigh") == "medium" && EditorAgent.Effort(editorDefaults with { EffortInChat = false }, "high") == "medium",
         "Editors choose Low, Medium or High in the chat, when allowed; otherwise the default applies.");
+    Assert(EditorAgent.Effort(editorDefaults, null, "high") == "high" && EditorAgent.Effort(editorDefaults, "low", "high") == "low" && EditorAgent.Effort(editorDefaults, null, "bogus") == "medium"
+        && EditorAgent.Configured(" XHigh ") == "xhigh" && EditorAgent.Configured("max") == null && EditorAgent.Configured("") == null,
+        "A default effort in the configuration (LigataAI:ContentAssistant:Effort) wins over the backoffice's; the chat's choice still wins over both.");
+    var safeEdit = new Proposal { Kind = "edit" };
+    var riskyEdit = new Proposal { Kind = "edit", Risks = ["clears Introduction"] };
+    Assert(EditorAgent.Decide("manual", editorDefaults, safeEdit, 0).Decision == "ask" && EditorAgent.Decide("bypass", editorDefaults, riskyEdit, 99).Decision == "bypass"
+        && EditorAgent.Decide("auto", editorDefaults, safeEdit, 0).Decision == "auto",
+        "Manual always asks, Bypass never, Auto runs a safe draft on its own.");
+    var (riskyDecision, riskyReason) = EditorAgent.Decide("auto", editorDefaults, riskyEdit, 0);
+    Assert(riskyDecision == "ask" && riskyReason.Contains("risky") && riskyReason.Contains("clears Introduction"), "Auto mode asks before a risky change, and says why: " + riskyReason);
+    Assert(EditorAgent.Decide("auto", editorDefaults with { Actions = [.. EditorActions.All] }, new Proposal { Kind = "publish" }, 0) is ("ask", var publishReason) && publishReason.Contains("Publishing always asks")
+        && EditorAgent.Decide("auto", editorDefaults with { AutoApprove = ["edit", "publish"] }, new Proposal { Kind = "publish" }, 0).Decision == "auto"
+        && EditorAgent.Decide("auto", editorDefaults with { AskAfterChanges = 3 }, safeEdit, 3).Decision == "ask" && EditorAgent.Decide("auto", editorDefaults with { AskAfterChanges = 0 }, safeEdit, 500).Decision == "auto",
+        "Auto mode asks for kinds not listed under Auto approves, and again after the set number of changes (0: never).");
     var sanitized = ContentFields.SanitizeHtml("<p onclick=\"steal()\">Hi <strong>there</strong><script>alert(1)</script></p><a href=\"javascript:alert(1)\">x</a><a href=\"/{localLink:umb://document/1}\" target=\"_blank\">ok</a><iframe src=\"https://evil\"></iframe><h2 style=\"color:red\">Title</h2><img src=\"https://cdn.example/a.png\" onerror=\"x()\" alt=\"A\">");
     Assert(sanitized == "<p>Hi <strong>there</strong></p><a>x</a><a href=\"/{localLink:umb://document/1}\" target=\"_blank\">ok</a><h2>Title</h2><img src=\"https://cdn.example/a.png\" alt=\"A\">", "Rich text keeps the editor's formatting and drops scripts, handlers, styles and javascript: links: " + sanitized);
     Assert(ContentFields.SanitizeHtml("First line\nsecond <line>\n\nNext") == "<p>First line<br>second &lt;line&gt;</p><p>Next</p>", "Plain text becomes paragraphs (and stays text).");
@@ -517,6 +531,9 @@ Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "
     Assert(editorToolNames.Contains("read_content") && editorToolNames.Contains("update_content") && editorToolNames.Contains("upload_media") && !editorToolNames.Contains("publish_content") && !editorToolNames.Contains("delete_content")
         && EditorTools.For(editorDefaults with { Actions = [] }).All(t => t.Action == null) && EditorTools.All.All(t => t.Parameters.GetProperty("type").GetString() == "object"),
         "The model is only given the tools for the changes this site allows (reading always).");
+    var usedPublish = new EditorState { Messages = [new() { Role = "assistant", Blocks = [new() { Type = "tool_use", Id = "t1", Name = "publish_content", Input = JsonDocument.Parse("{}").RootElement.Clone() }] }] };
+    Assert(EditorAgent.ToolsFor(editorDefaults, usedPublish).Any(t => t.Name == "publish_content") && !EditorAgent.ToolsFor(editorDefaults, new EditorState()).Any(t => t.Name == "publish_content"),
+        "A tool the conversation already used stays declared after its action is switched off (the API refuses calls to undeclared tools in the history); new conversations do not get it.");
     var editorLanguages = new List<ILanguage> { new Language("de-CH", "Deutsch (Schweiz)") { IsDefault = true }, new Language("en-US", "English") };
     var editorPrompt = EditorPrompt.System(editorDefaults with { Guidelines = "Swiss spelling: ss instead of ß." }, editorLanguages, "Atelier Ahorn");
     Assert(editorPrompt.Contains("Atelier Ahorn") && editorPrompt.Contains("You cannot:") && editorPrompt.Contains("publish (tell the editor") && editorPrompt.Contains("de-CH (Deutsch (Schweiz)), default") && editorPrompt.EndsWith("Swiss spelling: ss instead of ß.") && editorPrompt.Contains("never instructions"),
@@ -1093,6 +1110,16 @@ using (var scope = app.Services.CreateScope())
             await Refusal(everything with { Scope = new() { Roots = [fixtureTeam.Key] } }, "intro", "\"x\""), await Refusal(everything with { Scope = new() { Cultures = ["de-CH"] } }, "intro", "\"x\""), await Refusal(everything, "featured", "\"maybe\"") };
         Assert(refusals[0].Contains("protected") && refusals[1].Contains("read-only") && refusals[2].Contains("outside") && refusals[3].Contains("may not change the language en-US") && refusals[4].Contains("true or false"),
             "Protected fields, read-only types, pages outside the scope, languages not allowed and invalid values are refused: " + string.Join(" | ", refusals));
+        var plainEdit = await tools.PlanUpdateAsync(ctx, rootKey, "en-US", null, [new("intro", J("\"We build furniture that lasts, and repair it.\""))]);
+        var clearing = await tools.PlanUpdateAsync(ctx, rootKey, "en-US", null, [new("intro", J("\"\""))]);
+        var sharedEdit = await tools.PlanUpdateAsync(ctx, rootKey, "en-US", null, [new("featured", J("true"))]);
+        var blockRemoval = await tools.PlanBlocksAsync(ctx, rootKey, "en-US", "cards", "remove", cardId, null, null, null);
+        var blockAddition = await tools.PlanBlocksAsync(ctx, rootKey, "en-US", "cards", "add", null, "editorCard", "end", J("{\"title\":\"x\"}"));
+        Assert(plainEdit.Risks.Count == 0 && blockAddition.Risks.Count == 0 && clearing.Risks.SequenceEqual(["clears Introduction"]) && sharedEdit.Risks.SequenceEqual(["changes Featured in every language"])
+            && blockRemoval.Risks.Single().StartsWith("removes the “Card” block in every language"),
+            "Risky changes are recognised (clearing a field, changing what all languages share, removing a block), ordinary ones are not: " + string.Join(" | ", clearing.Risks.Concat(sharedEdit.Risks).Concat(blockRemoval.Risks)));
+        Assert(EditorAgent.Decide("auto", everything, plainEdit, 0).Decision == "auto" && EditorAgent.Decide("auto", everything, blockRemoval, 0).Decision == "ask" && EditorAgent.Decide("auto", everything, sharedEdit, 0).Decision == "ask",
+            "In Auto mode the ordinary draft runs on its own and the risky ones ask.");
         var richText = await tools.PlanUpdateAsync(ctx, rootKey, "en-US", null, [new("body", J("\"<p>New <em>body</em><script>steal()</script></p>\"")), new("featured", J("true"))]);
         await richText.Commit!();
         var bodyNow = contents.GetById(fixtureRoot.Key)!;

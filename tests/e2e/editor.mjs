@@ -3,7 +3,7 @@
 // strict mock Anthropic API, which plays a scripted assistant ("do: tool {json}; tool {json} then: text"), so no key or money:
 //   node tests/e2e/mock-anthropic.mjs &                                         → :1230
 //   CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 \
-//     LigataAI__ContentAssistant__CompactAtTokens=9000 bash tests/e2e/restart-host.sh --clear-keys
+//     LigataAI__ContentAssistant__CompactAtTokens=9000 LigataAI__ContentAssistant__Effort=low bash tests/e2e/restart-host.sh --clear-keys
 //   cd tests/e2e && node editor.mjs
 // The host seeds a fresh "Editor fixture" (en-US and de-CH, rich text, a Block List of cards) on every start.
 import { chromium } from 'playwright-core';
@@ -104,8 +104,15 @@ await check('the bubble shows for administrators; the panel knows which page is 
   await page.screenshot({ path: path.join(out, '1-welcome.png') });
 });
 
+await check('the default effort from the configuration is used, and shown locked in the settings', async () => {
+  const session = await api('/session'), meta = await api('/settings');
+  assert(session.effort === 'low' && meta.effortFromConfig === 'low', `session ${session.effort}, configured ${meta.effortFromConfig} (run the host with LigataAI__ContentAssistant__Effort=low)`);
+  assert((await panel.locator('.chooser .pill', { hasText: 'effort' }).innerText()).startsWith('Low'), 'the chat starts at Low');
+});
+
 await check('Manual mode: a change waits with before and after; declining leaves the page as it was', async () => {
   await send(script([find, read, 'update_content {"id":"$KEY","culture":"en-US","changes":[{"path":"title","value":"Declined title"}]}'], 'Changed it.'));
+  assert((await mockState()).last.output_config.effort === 'low', 'the configured effort reaches Claude');
   const card = lastCard();
   assert(await card.evaluate(c => c.classList.contains('pending')), 'the change waits');
   const text = await card.innerText();
@@ -169,6 +176,16 @@ await check('Auto mode asks again after the set number of changes for one messag
   await saveSettings(s => ({ ...s, askAfterChanges: 10 }));
 });
 
+await check('Auto mode asks before a risky change: removing a block shared by all languages', async () => {
+  await send(script([find, read, 'edit_blocks {"id":"$KEY","culture":"en-US","path":"cards","operation":"remove","block":"$BLOCK"}'], 'Removed.'));
+  const waiting = await lastCard().innerText();
+  assert(waiting.includes('Needs your approval') && waiting.includes('Auto mode asks before risky changes') && waiting.includes('removes the “Card” block in every language'), 'risky asks: ' + waiting);
+  await lastCard().locator('button', { hasText: 'Decline' }).click();
+  await lastCard().locator('button', { hasText: 'Decline' }).click();
+  await idle();
+  assert(valueOf(await documentOf(fixtureKey), 'cards').contentData.length === 2, 'the block is still there');
+});
+
 await check('Bypass mode: allowed changes run without asking, publishing too', async () => {
   await useMode('bypass');
   await send(script([find, 'update_content {"id":"$KEY","culture":"en-US","changes":[{"path":"intro","value":"Bypass intro."}]}', 'publish_content {"id":"$KEY","cultures":["en-US"]}'], 'Live.'));
@@ -176,6 +193,27 @@ await check('Bypass mode: allowed changes run without asking, publishing too', a
   assert(all.at(-1).includes('Published') && all.at(-1).includes('bypass') && all.at(-2).includes('bypass') && !(await panel.locator('.card.pending').count()), 'nothing asked: ' + all.slice(-2).join(' | '));
   const log = await api('/activity?kind=publish');
   assert(log.items.some(r => r.approval === 'bypass') && log.items.some(r => r.approval === 'manual'), 'both publishes logged with their approval');
+});
+
+await check('the activity log records who steered each change, when, what changed and how it was approved', async () => {
+  const log = (await api('/activity?take=200')).items;
+  const row = (summary, approval, outcome, asked) => log.find(r => r.summary.includes(summary) && r.approval === approval && r.outcome === outcome && (!asked || r.request.includes(asked)));
+  const rows = {
+    declinedByHand: row('Change Title', 'manual', 'declined', 'Declined title'),
+    approvedByHand: row('Change 2 fields', 'manual', 'done', 'Hello from the assistant'),
+    auto: row('Change Introduction', 'auto', 'done', 'Auto intro.'),
+    publishApproved: row('Publish', 'manual', 'done'),
+    riskyDeclined: row('Remove the “Card” block', 'manual', 'declined'),
+    bypass: row('Change Introduction', 'bypass', 'done', 'Bypass intro.'),
+    publishBypass: row('Publish', 'bypass', 'done'),
+  };
+  const missing = Object.entries(rows).filter(([, r]) => !r).map(([k]) => k);
+  assert(missing.length === 0, 'not logged: ' + missing.join(', '));
+  for (const [name, r] of Object.entries(rows))
+    assert(r.userName === 'Fixture Admin' && r.request.startsWith('do:') && Date.now() - new Date(r.created).getTime() < 15 * 60000 && r.documentName === 'Editor fixture' && r.culture === 'en-US' && r.documentKey === fixtureKey, `${name}: ` + JSON.stringify(r));
+  const auto = await api('/activity/' + rows.auto.id);
+  assert(auto.changes[0].label === 'Introduction' && auto.changes[0].afterText === 'Auto intro.' && auto.changes[0].beforeText === 'We build furniture that lasts.' && auto.changes[0].before == null, 'before and after (stored values stay on the server): ' + JSON.stringify(auto.changes));
+  assert((await api('/activity/' + rows.declinedByHand.id)).action.error === 'Keep the welcome', 'the decline note is kept');
 });
 
 await check('Blocks: a card added in English shows in English only, inside the block field', async () => {
@@ -197,6 +235,11 @@ await check('Undo from the chat puts the values back', async () => {
 
 await check('the model is only given the tools this site allows', async () => {
   await saveSettings(s => ({ ...s, actions: ['edit'], autoApprove: ['edit'] }));
+  // A conversation that already published goes on (the tool stays declared, calling it is refused) …
+  await send(script(['publish_content {"id":"' + fixtureKey + '","cultures":["en-US"]}'], 'Tried.'));
+  assert((await panel.locator('.step.failed').last().innerText()).includes('Could not publish') && (await mockState()).last.tools.some(t => t.name === 'publish_content'), 'refused, still declared');
+  // … and a new one is not offered what the site does not allow.
+  await newChat();
   await send('Which tools do you have?');
   const tools = (await mockState()).last.tools.map(t => t.name);
   assert(tools.includes('read_content') && tools.includes('update_content') && !tools.includes('publish_content') && !tools.includes('create_content') && !tools.includes('upload_media'), 'tools: ' + tools);
@@ -260,7 +303,7 @@ await check('settings: groups, modes, actions and limits are saved and validated
   await dash.locator('nav.tabs button', { hasText: 'Settings' }).click();
   await dash.locator('h2', { hasText: 'Who can use it' }).waitFor();
   const text = await dash.locator('.workspace').innerText();
-  assert(text.includes('Administrators') && text.includes('Auto approves') && text.includes('Read-only page and block types') && text.includes('Editorial guidelines'), 'settings page');
+  assert(text.includes('Administrators') && text.includes('Auto approves') && text.includes('Read-only page and block types') && text.includes('Editorial guidelines') && text.includes("Set in the site's configuration"), 'settings page');
   await dash.locator('textarea').first().fill('Swiss spelling: ss instead of ß.');
   await dash.locator('button', { hasText: 'Save changes' }).click();
   await dash.locator('.notice.success', { hasText: 'Saved' }).waitFor({ timeout: 10000 });

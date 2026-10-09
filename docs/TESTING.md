@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 222 assertions
+# Package domain and security checks (no database): 227 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, Undo, activity, usage): 366 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 373 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -53,19 +53,22 @@ The database mode refuses any path outside a `.runtime` folder or not named `ai-
 
 ```bash
 node tests/e2e/mock-anthropic.mjs &
-CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 LigataAI__ContentAssistant__CompactAtTokens=9000 bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e && node editor.mjs          # 20 checks, screenshots in .runtime/e2e/editor
+CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 LigataAI__ContentAssistant__CompactAtTokens=9000 LigataAI__ContentAssistant__Effort=low bash tests/e2e/restart-host.sh --clear-keys
+cd tests/e2e && node editor.mjs          # 23 checks, screenshots in .runtime/e2e/editor
 ```
 
 | Check | What is verified |
 | --- | --- |
 | Bubble | Shown to administrators; knows the open page and its language |
+| Effort from the configuration | `LigataAI:ContentAssistant:Effort=low` is the default in the chat, reaches Claude and shows locked in the settings |
 | Manual | A change waits with before and after; *Decline* with a note leaves the page as it was, and the log keeps the note; *Approve* saves a draft in one language only, with rich text sanitized. The open editor reloads with the new value; the log shows "approved by hand" |
 | Auto | Drafts run on their own; publishing asks (showing what goes live) and publishes after approval; the third change of one message asks when *Ask again after* is 2 |
+| Auto, risky | Removing a block that all languages share asks, with the reason, even though edits are approved automatically; declined, the block stays |
 | Bypass | Changes and publishing run without asking, logged as Bypass |
+| Audit | Each change is in the log with who steered it, when, the request, the page and language, and how it was approved: declined, approved by hand, Auto, a risky one declined, Bypass. Before and after are readable; stored values stay on the server; a decline note is kept |
 | Blocks | A card added at the start, in English only (expose) |
 | Undo | From the chat card: the value from before is back |
-| Settings | The tools offered follow the allowed actions; the instructions say what it cannot do and are cached; guidelines saved; invalid settings refused; usage shown |
+| Settings | The tools offered follow the allowed actions (a conversation that already used a tool switched off later goes on: the tool stays declared and calling it is refused); the instructions say what it cannot do and are cached; guidelines saved; invalid settings refused; usage shown |
 | Effort | *High* chosen in the chat reaches Claude as adaptive thinking at high effort |
 | Navigation | `open_page` takes the editor to the page in the asked language |
 | Media | An attached image reaches Claude and is uploaded after approval, logged |
@@ -124,7 +127,12 @@ Results (8 October 2026, version 0.4.0):
 
   A live-chat-only host now sets `Features:ContentAssistant=false` too, so its section is still called *Support*.
 
-  Browser: editor 20/20, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 222 domain and 366 total.
+  Browser: editor 23/23, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 227 domain and 373 total.
+
+  A review against the goal added three things:
+  - Auto mode asks before risky changes (clearing a field, removing most of a text or a block, changing what all languages share);
+  - `LigataAI:ContentAssistant:Effort` as a configured default;
+  - tools a conversation already used stay declared when switched off later. The strict mock refused such a conversation, as the API would.
 - 0.8.0 (9 October 2026): two engines chosen in the backoffice (a key each for the Ligata GPU and Claude, stored encrypted or set in the configuration; the switch appears only with both), Claude's thinking effort under *Behaviour* (Off to Max; the GPU keeps on/off). New browser suite `engines.mjs` 8/8: only the GPU set up (no switch), a Claude key stored through the backoffice (checked, only a hint comes back, adding it does not switch), the effort setting, switching to Claude (visitors asked again, naming Anthropic; the request carries the chosen effort), Off without thinking, back to the GPU (nothing sent to Anthropic), removing Claude's key while it answers (the GPU takes over). The real API, for the first time (`claude-live.mjs`, five questions): every request with lookups failed because `"tool_choice": null` was sent, which Anthropic refuses and the mock accepted; fixed, the mock now refuses `null` fields, then all five answered (Off 1.0 s, Low 2.1 s, Medium 3.7 s, High 3.5 s, Extra high 6.1 s). Also fixed: the token budget answered 500 while no knowledge was *always known*, and the history suite's clean-up reloaded before its deletion had finished. Browser: engines 8/8, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7; package checks 197 domain and 300 total.
 - 0.7.4 (9 October 2026): a team chat reopened by the team shows on the website at once (the widget followed only open team chats, so the visitor saw it closed until leaving the chat and coming back); the closed chat on screen is now watched, and the server lets that poll wait. The Inbox list also refreshes right after *Reopen*, and its live loop always restarts after leaving the section. Browser: team 17/17 (new: reopen and close again, live on both sides), team without AI 5/5, AI 24/24; package checks 188 domain and 284 total.
 - 0.7.3 (9 October 2026): the memory bar is off by default (switched off once on existing sites; *Appearance → Show the memory bar*). Package checks 188 domain and 284 total.

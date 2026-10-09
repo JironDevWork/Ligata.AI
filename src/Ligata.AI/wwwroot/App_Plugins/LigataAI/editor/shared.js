@@ -177,7 +177,7 @@ export function when(value) {
 
 export const modeInfo = {
   manual: { label: 'Manual', icon: 'hand', text: 'Asks before every change.' },
-  auto: { label: 'Auto', icon: 'bolt', text: 'Makes the allowed drafts on its own; asks before the rest.' },
+  auto: { label: 'Auto', icon: 'bolt', text: 'Makes safe drafts on its own; asks before risky changes and the rest.' },
   bypass: { label: 'Bypass', icon: 'shield', text: 'Makes every allowed change without asking.' },
 };
 export const effortInfo = { off: 'Off', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high' };

@@ -140,7 +140,7 @@ export function startMockAnthropic(port = 1230) {
     if (state.mode === 'overloaded') return fail(response, 529, 'overloaded_error', 'Overloaded');
     if (state.mode === 'ratelimit') return fail(response, 429, 'rate_limit_error', 'Number of request tokens has exceeded your rate limit');
     const problem = invalid(body);
-    if (problem) return fail(response, 400, 'invalid_request_error', problem);
+    if (problem) { state.refused = { problem, tools: (body.tools || []).map(t => t.name), uses: body.messages.map((m, i) => i + ':' + m.role + ':' + (typeof m.content === 'string' ? 'text' : m.content.map(b => b.type + (b.name ? '=' + b.name : '')).join('+'))) }; return fail(response, 400, 'invalid_request_error', problem); }
     if (!body.stream) return fail(response, 400, 'invalid_request_error', 'this mock only streams');
 
     // Prompt caching: everything up to the first cache_control breakpoint is "cached" from the second request on.

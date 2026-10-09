@@ -159,7 +159,7 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
         {
             var run = await StartAsync(http, chat, user, settings, request.Mode, request.Page);
             var state = run.State;
-            state.Effort = Effort(settings, request.Effort);
+            state.Effort = Effort(settings, request.Effort, options.Value.ContentAssistant.Effort);
             await run.Stream.Send("chat", new { id = chat.Id, title = chat.Title, mode = run.Mode, effort = state.Effort });
             // A message while changes wait for approval declines them: the editor moved on.
             if (state.Pending != null) await ResolveAsync(run, [], "The editor did not answer this and wrote a new message instead.");
@@ -226,7 +226,20 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
         foreach (var image in state.Attachments) context.Attachments.Add((image.Name ?? "image", image.MediaType ?? "image/png", image.Data ?? ""));
         var languages = await content.LanguagesAsync();
         var system = EditorPrompt.System(settings, languages, SiteName(languages));
-        return new Run(chat, state, items, context, new EditorStream(http), mode, system, EditorTools.For(settings));
+        return new Run(chat, state, items, context, new EditorStream(http), mode, system, ToolsFor(settings, state));
+    }
+
+    /// <summary>
+    /// The tools declared to the model: those the settings allow, plus any the conversation already used. The API refuses a
+    /// conversation whose earlier tool calls name a tool it does not declare, so an action switched off later stays declared, but
+    /// calling it is refused ("Not allowed") and the instructions say it is not possible.
+    /// </summary>
+    public static List<EditorTool> ToolsFor(EditorSettings settings, EditorState state)
+    {
+        var tools = EditorTools.For(settings);
+        foreach (var name in state.Messages.SelectMany(m => m.Blocks).Where(b => b.Type == "tool_use").Select(b => b.Name).Distinct())
+            if (EditorTools.Find(name ?? "") is { } used && !tools.Contains(used)) tools.Add(used);
+        return tools;
     }
 
     /// <summary>The site's name from the website assistant's settings, else the backoffice host.</summary>
@@ -298,6 +311,7 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
                     {
                         entry.Result = tool == null ? $"Error: unknown tool {entry.Name}." : $"Not allowed: this site does not let the assistant {EditorAccess.Verb(tool.Action!)} pages.";
                         entry.Error = true;
+                        await run.Item(new EditorItem { Id = entry.ItemId = NewId(), Type = "step", At = DateTime.UtcNow, Tool = entry.Name, Text = $"Could not {Verb(entry.Name)}", State = "failed", Detail = tool == null ? "unknown tool" : "not allowed on this site" });
                     }
                     else if (tool.Action == null) await ReadAsync(run, entry);
                     else
@@ -311,7 +325,7 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
                         }
                         else
                         {
-                            var (decision, reason) = Decide(run, proposal.Kind);
+                            var (decision, reason) = Decide(run.Mode, run.Context.Settings, proposal, run.State.AutoChanges);
                             entry.Decision = decision;
                             entry.Proposal = proposal;
                             entry.ItemId = NewId();
@@ -353,16 +367,20 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
         finally { await run.Stream.DisposeAsync(); }
     }
 
-    /// <summary>Whether a change runs at once: Bypass always, Auto for the kinds listed under AutoApprove (until AskAfterChanges), Manual never.</summary>
-    private static (string Decision, string Reason) Decide(Run run, string kind)
+    /// <summary>
+    /// Whether a change runs at once. Bypass: always. Auto: safe changes run, risky ones ask. Safe means the kind is listed under
+    /// AutoApprove and the change has no risk (it clears nothing, removes no block or most of a text, and changes nothing all
+    /// languages share), until AskAfterChanges. Manual: never.
+    /// </summary>
+    public static (string Decision, string Reason) Decide(string mode, EditorSettings settings, Proposal proposal, int autoChanges)
     {
-        var settings = run.Context.Settings;
-        switch (run.Mode)
+        switch (mode)
         {
             case EditorModes.Bypass: return ("bypass", "");
             case EditorModes.Auto:
-                if (!settings.AutoApprove.Contains(kind)) return ("ask", $"{Kind(kind)} always asks in Auto mode.");
-                if (settings.AskAfterChanges > 0 && run.State.AutoChanges >= settings.AskAfterChanges) return ("ask", $"{run.State.AutoChanges} changes were made for this message without asking: this one asks.");
+                if (!settings.AutoApprove.Contains(proposal.Kind)) return ("ask", $"{Kind(proposal.Kind)} always asks in Auto mode.");
+                if (proposal.Risks.Count > 0) return ("ask", $"Auto mode asks before risky changes: this one {string.Join(", ", proposal.Risks)}.");
+                if (settings.AskAfterChanges > 0 && autoChanges >= settings.AskAfterChanges) return ("ask", $"{autoChanges} changes were made for this message without asking: this one asks.");
                 return ("auto", "");
             default: return ("ask", "Manual mode: every change waits for you.");
         }
@@ -630,8 +648,12 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
         return t.Length > 80 ? t[..80].TrimEnd() + "…" : t;
     }
 
-    public static string Effort(EditorSettings settings, string? wanted) =>
-        settings.EffortInChat && wanted != null && EditorValidation.ChatEfforts.Contains(wanted) ? wanted : settings.Effort;
+    /// <summary>The effort for a message: the chat's choice when allowed, else LigataAI:ContentAssistant:Effort when set, else the backoffice default.</summary>
+    public static string Effort(EditorSettings settings, string? wanted, string? configured = null) =>
+        settings.EffortInChat && wanted != null && EditorValidation.ChatEfforts.Contains(wanted) ? wanted : Configured(configured) ?? settings.Effort;
+
+    /// <summary>A valid effort from the host configuration, or null.</summary>
+    public static string? Configured(string? effort) => effort?.Trim().ToLowerInvariant() is { Length: > 0 } e && EditorValidation.Efforts.Contains(e) ? e : null;
 
     private static (string? MediaType, string Data) Image(string? value)
     {

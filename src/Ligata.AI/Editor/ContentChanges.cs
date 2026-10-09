@@ -49,8 +49,15 @@ public sealed partial class ContentTools
             refs.Add(field);
             proposal.Changes.Add(new EditorChange(field.Path, field.Label, field.Steps.Count > 0 ? field.Steps[^1].Culture : field.Culture, before, after,
                 Readable(field.Kind, field.Editor, field.Current, field.Config), Readable(field.Kind, field.Editor, value, field.Config)));
-            if (field.Shared && culture != null) proposal.Notes.Add($"{field.Path} is shared by all languages: the change applies to every language.");
+            if (field.Shared && culture != null)
+            {
+                proposal.Notes.Add($"{field.Path} is shared by all languages: the change applies to every language.");
+                proposal.Risks.Add($"changes {field.Label} in every language");
+            }
             if (field.Mandatory && string.IsNullOrEmpty(after)) proposal.Notes.Add($"{field.Path} is required: the page cannot be published while it is empty.");
+            var (beforeText, afterText) = (proposal.Changes[^1].BeforeText ?? "", proposal.Changes[^1].AfterText ?? "");
+            if (beforeText.Trim().Length > 0 && afterText.Trim().Length == 0) proposal.Risks.Add($"clears {field.Label}");
+            else if (beforeText.Length > 200 && afterText.Length < beforeText.Length / 2) proposal.Risks.Add($"removes most of {field.Label}");
         }
         if (errors.Count > 0) return Proposal.Refused("Nothing was changed. " + string.Join(" ", errors));
         string? newName = null;
@@ -65,6 +72,7 @@ public sealed partial class ContentTools
         if (proposal.Changes.Count == 0) return Proposal.Refused("These values are already set: nothing to change.");
         proposal.Title = proposal.Changes.Count == 1 ? $"Change {proposal.Changes[0].Label} on “{proposal.DocumentName}”{In(culture)}" : $"Change {proposal.Changes.Count} fields on “{proposal.DocumentName}”{In(culture)}";
         proposal.Notes = proposal.Notes.Distinct().ToList();
+        proposal.Risks = proposal.Risks.Distinct().ToList();
         proposal.Commit = async () =>
         {
             if (newName != null) { if (page.ContentType.VariesByCulture()) page.SetCultureName(newName, culture); else page.Name = newName; }
@@ -126,6 +134,7 @@ public sealed partial class ContentTools
         var beforeList = Outline(blocks, culture);
         string title, result;
         var notes = new List<string>();
+        var risks = new List<string>();
         var allowed = ContentSchema.Blocks(field.Config);
         int? limit = ContentSchema.Get(field.Config, "validationLimit") is JsonObject l && l["max"] is JsonValue m && m.TryGetValue<int>(out var max) && max > 0 ? max : null;
         Guid touched;
@@ -195,7 +204,9 @@ public sealed partial class ContentTools
                     if (BlockValue.SettingsKey(gone) is { } s && blocks.SettingsData(s) is { } sd) blocks.Settings.Remove(sd);
                     foreach (var e in blocks.Expose.OfType<JsonObject>().Where(e => BlockValue.Key(e) == k).ToList()) blocks.Expose.Remove(e);
                 }
-                if (field.Shared || field.Culture == null && culture != null) notes.Add("This block field is shared by all languages: the block disappears in every language.");
+                var everywhere = field.Shared || field.Culture == null && culture != null;
+                if (everywhere) notes.Add("This block field is shared by all languages: the block disappears in every language.");
+                risks.Add($"removes the “{name}” block{(everywhere ? " in every language" : "")}");
                 touched = key;
                 title = $"Remove the “{name}” block from {field.Label} on “{Name(page!, culture)}”{In(culture)}";
                 result = $"Removed block {path}/{ContentFields.ShortId(key)} ({name}).";
@@ -226,7 +237,7 @@ public sealed partial class ContentTools
         if (Same(before, after)) return Proposal.Refused("The blocks are already in this order: nothing to change.");
         var proposal = new Proposal
         {
-            Kind = EditorActions.Edit, Title = title, DocumentKey = page!.Key, DocumentName = Name(page, culture), Culture = culture, ParentKey = Parent(page), Notes = notes,
+            Kind = EditorActions.Edit, Title = title, DocumentKey = page!.Key, DocumentName = Name(page, culture), Culture = culture, ParentKey = Parent(page), Notes = notes, Risks = risks,
             Changes = [new EditorChange(field.Path, field.Label, field.Culture, before, after, beforeList, Outline(blocks, culture))],
         };
         // Blocks inside blocks: the top-level property holds the change.

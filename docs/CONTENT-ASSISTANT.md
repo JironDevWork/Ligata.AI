@@ -45,7 +45,7 @@ The modes copy Claude Code's permission modes. Each person chooses in the chat (
 | Mode | What happens to a change |
 | --- | --- |
 | **Manual** | Every change waits for *Approve* or *Decline*. Declining can carry a note ("shorter, calmer"), which the assistant reads. |
-| **Auto** | Changes of the kinds ticked under *Auto approves* run at once. By default these are content edits, new pages and image uploads, all saved as drafts. Everything else asks first, such as publishing or deleting. After *Ask again after N changes* (default 10) for one message, the next change asks again: a safety net against long runs. |
+| **Auto** | Safe changes run at once; risky ones ask. A change is safe when two things hold. First, its kind is ticked under *Auto approves* (by default content edits, new pages and image uploads, all saved as drafts). Second, it carries no risk: it does not clear a field, remove most of a text or remove a block, and it changes nothing that all languages share. Everything else asks first, for example publishing, deleting, or removing a card that every language shows. The card says why. After *Ask again after N changes* (default 10) for one message, the next change asks again: a safety net against long runs. |
 | **Bypass** | Every allowed change runs without asking. Reserve it for groups you trust. |
 
 A mode never widens what is allowed: *What it may do* and the person's own Umbraco permissions still apply.
@@ -76,7 +76,7 @@ All of these are under *AI Assistant → Content assistant → Settings*, on one
 
   All of this applies within each person's own Umbraco start nodes, permissions and languages.
 - **How it works:**
-  - the default thinking effort (Off, Low, Medium, High, Extra high; Medium by default);
+  - the default thinking effort (Off, Low, Medium, High, Extra high; Medium by default). `LigataAI:ContentAssistant:Effort` in the site's configuration wins over it, and the page then shows it locked;
   - whether editors may choose Low, Medium or High in the chat;
   - *Editorial guidelines*, followed whenever it writes ("Swiss spelling: ss instead of ß", "address readers as Sie").
 - **Limits and records:**
@@ -193,19 +193,21 @@ Conversations are kept for the set period (30 days by default), and the activity
 
 ## Tests
 
-- **Domain checks.** 25 checks of the content assistant are among the 222 domain checks (`dotnet run --project tests/Ligata.AI.Tests -c Release`). They cover:
-  - settings validation, effort choice and the tools offered;
+- **Domain checks.** 30 checks of the content assistant are among the 227 domain checks (`dotnet run --project tests/Ligata.AI.Tests -c Release`). They cover:
+  - settings validation, effort choice (also from the configuration) and the tools offered, including tools a conversation already used;
+  - when each mode asks: Manual always, Bypass never, Auto for kinds not approved, for risky changes and after N changes;
   - HTML sanitizing and plain text, UDIs, editor kinds;
   - Block Grid parsing (areas, values per language, expose), JSON values stored as strings;
   - the instructions;
   - the conversation sent back with thinking signatures and one cache breakpoint.
-- **Database checks.** 66 checks are among the 366 database checks, against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
+- **Database checks.** 43 database checks (373 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
   - modes by group;
   - search by name, text, numbers and labels; tree, read, describe;
   - planning versus saving, drafts versus live, edits inside blocks per language;
   - refusals: unknown path, unchanged value, protected field, read-only type, outside the scope, language, invalid value;
+  - risks recognised on real plans (clearing a field, a field all languages share, removing a block) and not on ordinary edits;
   - rich text sanitizing; block add, move and remove (expose, nothing left behind); create, publish (and Umbraco's refusal), sort, recycle bin;
   - Undo and its conflict, deletion restored;
   - activity filters, usage, conversations and retention, settings conflicts, the manifest by licence.
-- **Browser suite.** `tests/e2e/editor.mjs` has 20 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode, blocks, Undo, the activity log, settings, effort, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
+- **Browser suite.** `tests/e2e/editor.mjs` has 23 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode (including Auto asking before a risky block removal), blocks, Undo, and the activity log, which records for each change who steered it, when, what they asked, before and after, and by hand, Auto or Bypass. It also covers settings, the effort from the configuration and from the chat, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
 - **Live.** 40 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, through a budget proxy. The results are in [TESTING.md](TESTING.md#content-assistant-09).

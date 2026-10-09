@@ -66,7 +66,7 @@ public sealed class EditorController(EditorStore store, EditorAgent agent, Edito
         {
             available = reason == null, reason, admin = Admin(user), user = new { name = user.Name },
             modes, mode = EditorAccess.Mode(settings, user, null), actions = settings.Actions, autoApprove = settings.AutoApprove, askAfterChanges = settings.AskAfterChanges,
-            effort = settings.Effort, efforts = settings.EffortInChat ? EditorValidation.ChatEfforts : [], model = ClaudeEngine.DisplayName(model.Model),
+            effort = EditorAgent.Effort(settings, null, options.Value.ContentAssistant.Effort), efforts = settings.EffortInChat ? EditorValidation.ChatEfforts : [], model = ClaudeEngine.DisplayName(model.Model),
             keepDays = settings.Limits.KeepChatsDays,
             messagesLeft = settings.Limits.MessagesPerUser > 0 ? Math.Max(0, settings.Limits.MessagesPerUser - mine) : (int?)null,
             chats = reason == null ? store.Chats(user.Key, 30).Select(c => new { c.Id, c.Title, c.Mode, updated = Utc(c.UpdatedUtc) }) : null,
@@ -143,7 +143,7 @@ public sealed class EditorController(EditorStore store, EditorAgent agent, Edito
         {
             settings, version, defaults = new EditorSettings(), groups = allGroups, types = documentTypes, languages, roots, top,
             claude = new { ready = model.Ready, model = model.Model, modelName = ClaudeEngine.DisplayName(model.Model) }, licensed = true,
-            editorGroups = options.Value.EditorGroups, compactAt = agent.CompactAt(),
+            editorGroups = options.Value.EditorGroups, compactAt = agent.CompactAt(), effortFromConfig = EditorAgent.Configured(options.Value.ContentAssistant.Effort),
         });
     }
 

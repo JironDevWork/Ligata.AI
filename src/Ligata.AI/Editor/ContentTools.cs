@@ -37,6 +37,11 @@ public sealed class Proposal
     public Guid? ParentKey { get; set; }
     public List<EditorChange> Changes { get; set; } = [];
     public List<string> Notes { get; set; } = [];
+    /// <summary>
+    /// What makes this change risky even when its kind may run on its own: it clears a field, removes most of a text or a block,
+    /// or changes what all languages share. In Auto mode a risky change asks first (Bypass does not ask).
+    /// </summary>
+    public List<string> Risks { get; set; } = [];
     /// <summary>Why it cannot be made: returned to the model at once, never shown for approval.</summary>
     public string? Error { get; set; }
     /// <summary>Makes the change, checks it and returns what the model is told.</summary>

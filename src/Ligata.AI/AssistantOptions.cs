@@ -49,6 +49,11 @@ public sealed class ContentAssistantOptions
 {
     /// <summary>A conversation is summarized before it would take more than this many tokens (capped at 80% of LigataAI:Claude:MaxContextTokens).</summary>
     public int CompactAtTokens { get; set; } = 60_000;
+    /// <summary>
+    /// The default thinking effort (off, low, medium, high, xhigh). Set here, it wins over the backoffice setting, which then shows
+    /// it locked; editors may still pick Low, Medium or High in the chat when that is allowed. Empty: the backoffice decides.
+    /// </summary>
+    public string Effort { get; set; } = "";
 }
 
 /// <summary>
