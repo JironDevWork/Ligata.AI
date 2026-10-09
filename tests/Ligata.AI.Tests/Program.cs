@@ -208,6 +208,9 @@ Assert(!Lookups.Valid(Call("x", "{}")) && !Lookups.Valid(Call(Lookups.Search, "[
 
 Assert(lookups.Touches("Wann habt ihr offen?") && lookups.Touches("Was kostet das?") && lookups.Touches("Kontaktformular?") && !lookups.Touches("Schreib mir ein Gedicht über Katzen.") && !lookups.Touches("Write me a poem about the moon"),
     "A question that mentions the website's words must be looked up first (GPU); unrelated requests stay free.");
+var english = new Lookups(new KnowledgeSnapshot([new("page", "Studio", "/", 1, "Our office is open Monday to Friday, 8:00 to 17:00.")]));
+Assert(english.Touches("Wie lauten eure Öffnungszeiten?", []) && english.Touches("Wann seid ihr erreichbar?", []) && !english.Touches("Danke, das hilft mir sehr.", []) && !english.Touches("Write me a poem about cats.", [])
+    && !english.Touches("Wie geht es dir?", []) && !english.Touches("Hallo!", []), "A question in another language than the website is looked up; thanks, small talk and requests without a question stay free.");
 Assert(lookups.Touches("Wann habt ihr offen?", ["Was kostet ein Tisch?", "Ab CHF 2400."]) && !lookups.Touches("Ist die Werkstatt auch offen?", ["Wann habt ihr offen?", "Die Werkstatt ist Montag bis Freitag offen."]), "A follow-up about what the conversation already found is left to the model.");
 Assert(!new Lookups(new KnowledgeSnapshot([new("page", "Kontakt", "/kontakt/", 1, "E-Mail: hallo@ahorn.example. Gute Möbel.")])).Touches("Hallo!") && !new Lookups(new KnowledgeSnapshot([new("page", "Kontakt", "/kontakt/", 1, "Gute Möbel halten lange.")])).Touches("Guten Morgen"), "Greetings never force a lookup, even when the word is on the website.");
 

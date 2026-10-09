@@ -291,14 +291,17 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
     public bool Touches(string question) => snapshot.Mentions(question);
 
     /// <summary>
-    /// The question touches the website with something the conversation does not contain yet. Otherwise (a follow-up about what
-    /// was already found, small talk) the model decides itself whether it needs to look something up.
+    /// The question touches the website with something the conversation does not contain yet: words the website uses, or a
+    /// question with words it does not use (another language, other words for the same thing). Without a lookup the model then
+    /// guessed: asked in German on an English website, it said opening hours differed "by location" and asked which one.
+    /// Otherwise (a follow-up about what was already found, thanks, small talk) the model decides itself.
     /// </summary>
     public bool Touches(string question, IEnumerable<string> conversation)
     {
         var known = conversation.SelectMany(KnowledgeSnapshot.Meaningful).ToHashSet(StringComparer.Ordinal);
         var asked = KnowledgeSnapshot.Meaningful(question).Where(term => !known.Contains(term)).ToList();
-        return asked.Count > 0 && snapshot.Mentions(string.Join(' ', asked));
+        if (asked.Count == 0) return false;
+        return snapshot.Mentions(string.Join(' ', asked)) || (question.Contains('?') && asked.Any(term => term.Length >= 4 && !term.All(char.IsDigit)));
     }
 
     /// <summary>Added to every result when the model may offer the team.</summary>

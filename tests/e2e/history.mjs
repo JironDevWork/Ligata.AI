@@ -112,7 +112,7 @@ await check('visitors who do not tick the optional box use the AI and nothing is
   await v.page.screenshot({ path: path.join(out, '03-consent-with-optional-history.png') });
   await card.locator('[data-agree]').click();
   await card.waitFor({ state: 'hidden' });
-  assert(/not stored/.test(await v.widget.locator('.privacy-text').innerText()), 'the notice under the input still says nothing is stored');
+  assert(/not stored|does not store/.test(await v.widget.locator('.privacy-text').innerText()), 'the notice under the input still says nothing is stored');
   await askAndWait(v, 'Not kept: what do you offer?');
   assert(chats(v).every(b => !b.history), 'no conversation key is sent');
   assert(await listed('Not kept: what do you offer?') === 0, 'nothing in the history');
