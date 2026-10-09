@@ -43,7 +43,7 @@ export const kindLabel = kind => ({ edit: 'Edit', create: 'Create', publish: 'Pu
 export const stepIcon = tool => ({ search_content: 'search', list_children: 'tree', read_content: 'eye', describe_type: 'blocks', search_media: 'photo', open_page: 'open' }[tool] || 'sparkle');
 
 /** The backoffice address of a page (culture or "invariant"). */
-export const documentPath = (key, culture) => `/umbraco/section/content/workspace/document/edit/${key}/${culture || 'invariant'}`;
+export const documentPath = (key, culture) => `/umbraco/section/content/workspace/document/edit/${key}${culture ? '/' + culture : ''}`;
 
 /** The page open in the backoffice, read from the address: { key, culture } or null. */
 export function openDocument(location = window.location) {
@@ -113,7 +113,8 @@ export function markdown(text, onOpen) {
 /** Word-level difference of two texts: [{ op: 'same' | 'del' | 'add', text }]. Falls back to whole texts when they are long. */
 export function diff(before, after) {
   const a = String(before || ''), b = String(after || '');
-  const split = s => s.match(/\s+|[^\s]+/g) || [];
+  // Words, spaces and single punctuation marks: "lasts." → "lasts for generations." changes only the end.
+  const split = s => s.match(/\s+|[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) || [];
   const x = split(a), y = split(b);
   if (x.length * y.length > 400000) return [{ op: 'del', text: a }, { op: 'add', text: b }];
   const n = x.length, m = y.length;

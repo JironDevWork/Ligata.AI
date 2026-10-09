@@ -22,7 +22,9 @@ export class LigataAIEditorPanel extends LitElement {
   constructor() {
     super();
     Object.assign(this, { open: store.get('open', false), expanded: store.get('expanded', false), items: [], busy: false, thinking: false, waiting: false, images: [], view: 'chat', error: '', decisions: {}, noting: null, collapsed: {}, menu: null });
-    this.onKey = e => { if (e.key === 'Escape' && this.open && this.matches(':focus-within') && !this.busy) this.toggle(false); };
+    this.onKey = e => { if (e.key === 'Escape' && this.menu) { this.menu = null; return; } if (e.key === 'Escape' && this.open && this.matches(':focus-within') && !this.busy) this.toggle(false); };
+    // An open menu (mode, effort) closes when clicking anywhere else.
+    this.onPointer = e => { if (this.menu && !e.composedPath().some(n => n.classList?.contains('chooser'))) this.menu = null; };
   }
 
   /** Called by the entry point with the backoffice's contexts. */
@@ -34,9 +36,10 @@ export class LigataAIEditorPanel extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener('keydown', this.onKey);
+    window.addEventListener('pointerdown', this.onPointer, true);
     this.route = setInterval(() => this.watchRoute(), 700);
   }
-  disconnectedCallback() { window.removeEventListener('keydown', this.onKey); clearInterval(this.route); this.controller?.abort(); super.disconnectedCallback(); }
+  disconnectedCallback() { window.removeEventListener('keydown', this.onKey); window.removeEventListener('pointerdown', this.onPointer, true); clearInterval(this.route); this.controller?.abort(); super.disconnectedCallback(); }
 
   request(path, method, body) { return aiRequest(this.auth, '/editor' + path, method, body, { timeout: 30000 }); }
 
@@ -158,7 +161,8 @@ export class LigataAIEditorPanel extends LitElement {
       case 'done': this.thinking = false; if (data.context) this.contextInfo = data.context; break;
       case 'error': this.thinking = false; break;
     }
-    this.scrollDown();
+    // A change that waits for approval is always brought into view.
+    this.scrollDown(name === 'waiting');
   }
 
   /** Tell the backoffice what changed: the open editor reloads the page, the tree its branch. */
@@ -176,12 +180,14 @@ export class LigataAIEditorPanel extends LitElement {
   }
 
   scrollDown(force) {
-    requestAnimationFrame(() => {
-      const log = this.renderRoot.querySelector('.log');
-      if (!log) return;
-      const near = log.scrollHeight - log.scrollTop - log.clientHeight < 140;
-      if (force || near) log.scrollTop = log.scrollHeight;
-    });
+    const log = this.renderRoot.querySelector('.log');
+    // Measured before the new content renders: following the conversation only when the editor was at its end.
+    const near = !log || log.scrollHeight - log.scrollTop - log.clientHeight < 160;
+    if (!force && !near) return;
+    // Again once cards have rendered (they grow while their content arrives).
+    const down = () => { const l = this.renderRoot.querySelector('.log'); if (l) l.scrollTop = l.scrollHeight; };
+    requestAnimationFrame(down);
+    setTimeout(down, 120);
   }
 
   // ---------- approvals ----------

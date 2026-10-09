@@ -1,10 +1,12 @@
 # Roadmap
 
-What comes after 0.8. Nothing here is built yet. Each item is planned with the owner before work starts.
+What comes next. Each item is planned with the owner before work starts.
 
-## 1. Backoffice content assistant (planned and decided, not started)
+## 1. Backoffice content assistant (built in 0.9)
 
-**The request.** A chat agent inside Umbraco, like the assistant on the website but for editors. A bubble at the bottom right of the Content section. You ask "where is the page with our opening hours?" or "change the phone number on the contact page", and it finds the page, opens it, shows what it is doing and makes the change. It is a tool-using agent, not a text generator, and it only does content management.
+**The request.** A chat agent inside Umbraco, like the assistant on the website but for editors. A bubble at the bottom right of the backoffice. You ask "where is the page with our opening hours?" or "change the phone number on the contact page", and it finds the page, opens it, shows what it is doing and makes the change. It is a tool-using agent, not a text generator, and it only does content management.
+
+**Built in 0.9** as decided below, with permission modes like Claude Code's (Manual, Auto, Bypass), an activity log and its own settings and limits. See [CONTENT-ASSISTANT.md](CONTENT-ASSISTANT.md) and the decisions in [DECISIONS.md](DECISIONS.md#the-content-assistant-in-the-backoffice-09).
 
 ### Does it exist already? (research, 9 October 2026)
 
@@ -21,7 +23,18 @@ What comes after 0.8. Nothing here is built yet. Each item is planned with the o
 
 Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval flow are worth learning from (not copying wholesale). Before building, it is worth an hour to install its Copilot with the Anthropic key in a scratch copy of Umbraco.BaselineV2, as a benchmark for how the experience should feel.
 
-### Proposed shape
+### Still open
+
+- **On the GPU.** The module is engine-agnostic: only `EditorModel` speaks Claude's API. About 20 fixed editor tasks will be run on Gemma 4 and on Claude Haiku 5.5 to decide whether the GPU is good enough for edits. The tasks cover finding pages, pointing at fields, editing in blocks and per language, and creating drafts. With the GPU, unpublished drafts would stay in Switzerland.
+- **One approval for many pages.** "Update the phone number everywhere" works today page by page, each with its own card. *Approve all* helps when several wait at once. One card listing every page would be clearer.
+- **More of Umbraco:**
+  - adding blocks into Block Grid areas (reading, changing, moving and removing them already works);
+  - blocks inside rich text;
+  - colour pickers, sliders and the newer date pickers.
+- **Reloading the open page** without the console error Umbraco's Block Grid logs during a workspace reload.
+- **Other groups than administrators** once it has proven itself. This is a settings change, no code.
+
+### The plan before building (9 October 2026)
 
 - **Where.** One floating bubble, mounted once for the whole backoffice (a `backofficeEntryPoint`), shown in the Content section. Its conversation survives moving between pages, because the element stays mounted and the conversation is kept per user for the session. It always knows where the editor is: the open document, its language and its path.
 - **What it can do (tools, all run on the server with the editor's own permissions).**
@@ -55,8 +68,7 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
 2. **Drafts only by default.** A setting in the backoffice lets it publish by itself.
 3. **Administrators first.** Other groups follow once it has proven itself.
 4. **Claude Haiku 5.5 (API) for now.** The module is built engine-agnostic, as the website assistant is. About 20 fixed editor tasks (finding pages, pointing at properties, proposing edits in blocks and per language) are kept as a test set. They are run on the GPU later, to decide whether it is good enough for edits.
-
-Work starts when the owner gives the go.
+5. **(10 October 2026)** Permission modes like Claude Code's, which editors choose per conversation: Manual, Auto and Bypass. There are settings for who may use which mode, what may be done and where, plus a separate usage limit and an activity log.
 
 ## 2. The website assistant takes visitors to the right place (future)
 

@@ -136,6 +136,19 @@ Measures the software provides. Add your organisational ones (access rights, bac
   - Logs contain key ids, token counts and durations, never content.
 - **Secrets.** The gateway key is stored encrypted with ASP.NET Data Protection or read from configuration. The Anthropic key is read from configuration only and never sent to browsers or the backoffice.
 
+## Content assistant (0.9)
+
+The content assistant in the backoffice is for the site's own staff, not for visitors, so no visitor consent is involved.
+
+- **What leaves the site.** Editors' messages and attached images, together with the content the assistant reads to answer them (drafts too), go to Anthropic (USA). Each request carries only a pseudonymous id of the backoffice user (`metadata.user_id`).
+- **Legal basis and records.** The processing serves the operator's work on its own website: its legitimate interest, or the employment relationship. Add it to the record of processing activities ("content editing with an AI assistant; recipient Anthropic; staff messages and website content"). Anthropic's data processing addendum covers the transfer.
+- **Tell your editors.** Say in the staff privacy notes or the internal guidelines that the assistant sends what they write and the content it reads to Anthropic, and that personal data of third parties (customers in a form text, for example) should not be pasted into the chat.
+- **What the site keeps.**
+  - Conversations, per user and visible only to that user, deleted after the set period (30 days by default).
+  - The activity log: who asked, their message (shortened), what changed with values before and after, and how it was approved. It is kept for its own period (365 days by default) and is visible to the editor groups.
+  - Daily usage counters per person: name, number of messages, steps and changes, and tokens. They hold no content.
+- **Limits.** Who may use it and what it may change are set per user group; every change runs with the editor's own Umbraco permissions.
+
 ## Not covered by the package
 
 - Your web server, CDN or reverse proxy logs (for example IIS, Cloudflare): they record IP addresses for every request, including the chat's.

@@ -1,10 +1,11 @@
 # Ligata.AI
 
-A website chat for **Umbraco 17.6 / .NET 10** with three features that work together or on their own:
+A website chat for **Umbraco 17.6 / .NET 10** with three features that work together or on their own, and a content assistant for editors:
 
 - **AI assistant** answered by a self-hosted **Gemma 4 12B** on the Ligata mini PC, or by **Claude Haiku 5.5** through Anthropic's API (no extra server; see [AI engine](#ai-engine-own-gpu-or-claude-api)).
 - **Live chat with your team**: when the AI cannot help, or a visitor asks for a person, the team answers in an **Inbox** inside Umbraco.
 - **Email form**: visitors leave a message that arrives in your mailbox and in the Inbox.
+- **Content assistant** (0.9): a chat in the Umbraco backoffice that finds, reads and changes content with tools. Changes wait for approval or run by permission mode (Manual, Auto, Bypass), are saved as drafts, checked after saving, logged with the person who asked and can be undone. See [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md).
 
 Built for the GDPR (DSGVO): the AI reads nothing before a visitor agrees, every consent is recorded and can be withdrawn, Cookiebot is supported, and the backoffice writes the matching privacy policy text. See [Privacy](#privacy-gdpr--dsgvo).
 
@@ -25,7 +26,8 @@ visitor ──► chat bubble ──► the site's Umbraco (this package) ─┬
 | Model runtime and benchmarks | `model/` | [model/README.md](model/README.md) |
 | Plan and decisions | `docs/` | [docs/PLAN.md](docs/PLAN.md), [docs/SUPPORT.md](docs/SUPPORT.md) (team handoff, live chat, email) |
 | Privacy guide and policy texts | `docs/` | [docs/PRIVACY.md](docs/PRIVACY.md), [docs/privacy/](docs/privacy/) (German and English) |
-| Roadmap | `docs/` | [docs/ROADMAP.md](docs/ROADMAP.md) (a content assistant in the backoffice, the website assistant taking visitors to the right place) |
+| Content assistant (backoffice) | `src/Ligata.AI/Editor` | [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md) |
+| Roadmap | `docs/` | [docs/ROADMAP.md](docs/ROADMAP.md) (the website assistant taking visitors to the right place; the content assistant on the GPU) |
 
 ## What editors get
 
@@ -40,6 +42,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
   - **How I appear** lets each team member choose what visitors see: name and photo from their Umbraco profile, name only, a nickname, or anonymous (team name only).
 - **AI conversations** (0.7, optional): while the site keeps a history (*Settings → Privacy → Conversation history*, off by default), what visitors asked the AI, what it looked up on the website and what it answered, newest first. Views for unanswered questions (errors, or answers that offered the team), conversations handed to the team (with a link to the Inbox) and kept ones; search over questions and answers; *Keep* exempts a conversation from automatic deletion; delete one or all. Same access as the Inbox.
 - **Header badge**: a chat icon in the Umbraco header counts conversations that need a reply, from anywhere in the backoffice.
+- **Content assistant** (0.9): a bubble at the bottom right of the backoffice for the groups you choose (administrators by default). It finds pages by their text (drafts too, inside blocks), reads them with every field, and changes text, rich text, pickers and blocks per language, creates pages and uploads images. Publishing, moving and deleting are possible when allowed. Each change shows as a card with before and after; **Manual** asks every time, **Auto** makes the allowed drafts and asks for the rest, **Bypass** asks never. Its page under *AI Assistant → Content assistant* has the **Activity** log (who asked, what changed, how it was approved, Undo), the **Settings** (who, modes, what it may do, where, effort, house rules, limits) and **Usage**.
 - **Settings**, organised in tabs:
   - **Overview**: getting-started checklist per feature, team inbox numbers, AI server status and the **context budget**.
   - **Appearance**:
@@ -186,12 +189,13 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
     "AgentGroups": ["admin", "editor"],
     "MessagesPerTenMinutes": 20,
     "Support": { "OpenConversationsPerVisitor": 3, "ConversationsPerVisitorPerDay": 6, "EmailsPerVisitorPerHour": 3, "MaxOpenConversations": 500 },
-    "Privacy": { "RequireConsent": true, "ConsentMode": "explicit", "GpuOperator": "Ligata", "GpuOperatorCountry": "CH" }
+    "Privacy": { "RequireConsent": true, "ConsentMode": "explicit", "GpuOperator": "Ligata", "GpuOperatorCountry": "CH" },
+    "ContentAssistant": { "CompactAtTokens": 60000 }
   }
 }
 ```
 
-- **Features** decide what this installation includes, for example when a customer only books live chat. Editors can switch included features off, never on. Without `Assistant` there is no AI, no gateway connection and no Knowledge/Connection tabs; the bubble is a contact point for the team.
+- **Features** decide what this installation includes, for example when a customer only books live chat. Editors can switch included features off, never on. Without `Assistant` there is no AI, no gateway connection and no Knowledge/Connection tabs; the bubble is a contact point for the team. `ContentAssistant` (default `true`) includes the content assistant in the backoffice; it needs the Anthropic key (`LigataAI__Claude__ApiKey` or *Connection*) and is set up under *AI Assistant → Content assistant*. `ContentAssistant:CompactAtTokens` is where its conversations are summarized.
 - **Email** uses the site's normal Umbraco SMTP settings (`Umbraco:CMS:Global:Smtp`, like Ligata.Forms). Emails wait in a queue (5 retries) until SMTP works. Links to the Inbox in team emails use `BackofficeUrl`, an absolute `PublicApiBase` or `Umbraco:CMS:WebRouting:UmbracoApplicationUrl`, never the request's host name.
 - **Spam protection** reuses the Ligata.Forms reCAPTCHA v3 settings (`LigataForms:Recaptcha`: site key, secret, hostnames, minimum score, consent mode explicit/Cookiebot), so nothing is configured twice; `LigataAI:Recaptcha` (same shape) overrides them. The chat uses its own action (`ligata_ai_contact`), so a Forms token cannot be replayed against it.
 - **Pages rendered by this Umbraco** need no configuration: the bubble is added before `</body>` automatically, and same-host requests are accepted.
@@ -214,6 +218,7 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 - **AI conversations** are not stored on the server unless the site keeps a history (off by default); the consent request then states the period and the right to object. Then: questions, answers, lookups and file names (never files, IP addresses or visitor ids), deleted after the period they were collected under unless kept for a reason (at most a year); visitors object (*Stop keeping*), delete single conversations or withdraw consent in the chat, which deletes the server copies. Statistics are anonymous daily counters. PDFs and screenshots are processed in memory.
 - **Escaping.** All visitor text is escaped in the widget, the backoffice and emails. Email subjects cannot carry line breaks.
 - **Your privacy policy** must mention the chat: copy the text from the Privacy tab (see below).
+- **Content assistant.** Every tool runs with the signed-in editor's own Umbraco permissions, inside the scope set in its settings; page text is treated as data, never as instructions; rich text it writes is sanitized; changes are logged and can be undone. Editors' messages and the content it reads go to Anthropic: mention it in your staff privacy notes (see [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md#security)).
 
 ## Privacy (GDPR / DSGVO)
 
@@ -243,9 +248,9 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 188 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 222 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 284 checks with the database
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 366 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)
@@ -253,6 +258,7 @@ node privacy.mjs                                                               #
 node history.mjs                                                               # the conversation history: stated in the consent request, objection, a new period asks again
 node concurrency.mjs                                                           # several visitors at once, summaries in line, settings changed mid-answer
 node memory.mjs                                                                # long conversations and summaries (no host needed)
+node editor.mjs                                                                # the content assistant: modes, approvals, blocks, Undo, activity, settings (mock Anthropic)
 cd gateway; npm test                                                           # 62 gateway tests
 ```
 

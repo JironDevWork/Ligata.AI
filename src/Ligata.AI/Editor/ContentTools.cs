@@ -353,8 +353,12 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
             if (varies && !property.VariesByCulture()) notes.Add("shared by all languages");
             await FieldAsync(context, text, alias, property.Name ?? alias, property.PropertyEditorAlias, property.DataTypeKey, property.Mandatory, raw, culture, notes, 0, only, readOnly);
         }
+        // A very large page would crowd out the conversation: the rest is read field by field.
+        if (text.Length > MaxRead) return text.ToString(0, MaxRead) + $"\n… (the page is long: {text.Length - MaxRead:N0} more characters were left out. Read the fields you need with fields=[path].)";
         return text.ToString().TrimEnd();
     }
+
+    public const int MaxRead = 40_000;
 
     private async Task FieldAsync(ToolContext context, StringBuilder text, string path, string label, string editor, Guid dataTypeKey, bool mandatory, object? raw, string? culture,
         List<string> notes, int depth, IReadOnlyList<string>? only, bool readOnly)
