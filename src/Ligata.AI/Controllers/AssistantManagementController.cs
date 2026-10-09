@@ -25,6 +25,8 @@ public sealed class AssistantEditorFilter(IBackOfficeSecurityAccessor security, 
 
 public sealed record SaveSettingsRequest(AssistantSettings Settings, int Version);
 public sealed record ConnectionRequest(string? GatewayUrl, string? ApiKey, int Version);
+public sealed record ClaudeKeyRequest(string? ApiKey);
+public sealed record EngineRequest(string? Engine, int Version);
 public sealed record KnowledgeRequest(Guid? Id, string Title, string Text);
 public sealed record EnabledRequest(bool Enabled);
 public sealed record OrderRequest(List<Guid> Ids);
@@ -33,29 +35,34 @@ public sealed record BudgetRequest(AssistantSettings Settings);
 [ApiVersion("1.0"), Route("umbraco/management/api/v{version:apiVersion}/ligata-ai")]
 [Authorize(Policy = AuthorizationPolicies.BackOfficeAccess), ServiceFilter(typeof(AssistantEditorFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, ApiKeyVault vault, ContentKnowledge content, KnowledgeIndex index, ChatRelay relay, IOptions<AssistantOptions> options,
+public sealed class AssistantManagementController(AssistantStore store, GatewayClient gateway, AssistantEngine engine, EngineSelector engines, ClaudeGate claudeGate, ApiKeyVault vault, ContentKnowledge content, KnowledgeIndex index, ChatRelay relay, IOptions<AssistantOptions> options,
     IBackOfficeSecurityAccessor security, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IOptions<RecaptchaSettings> captcha, SupportHub hub, SupportMailer mailer, SupportStore supportStore, ConsentStore consents, ChatHistoryStore chats) : ManagementApiControllerBase
 {
     private static object Problem(string message, Dictionary<string, string>? errors = null) => new { message, errors };
 
     private object Connection()
     {
-        var row = store.Row();
-        var (url, key, source) = gateway.Target();
+        var settings = store.Settings().Settings;
+        var (url, _, _) = gateway.Target();
+        var gpu = engines.GatewayKey();
+        var api = engines.ClaudeKey();
         var claude = options.Value.Claude;
+        var mode = engines.For(settings);
         return new
         {
-            // gpu = Ligata AI gateway; api = Claude via Anthropic (configured only in appsettings, the key is never sent here).
-            mode = engine.Mode,
+            // The engine visitors use: gpu = Ligata AI gateway, api = Claude via Anthropic.
+            mode,
+            // Which engines are set up (have a key), the editor's choice ("" = LigataAI:Mode) and that default. Keys never come here, only hints.
+            engines = new { gpu = gpu.Ready, api = api.Ready }, choice = settings.Engine, defaultEngine = engines.Default,
             // What visitors see while the notice under the input is left at its default.
-            defaultPrivacyNotice = engine.UsesApi ? AssistantIdentity.ApiPrivacyNotice : AssistantIdentity.DefaultPrivacyNotice,
-            claude = engine.UsesApi ? new
+            defaultPrivacyNotice = mode == EngineSelector.Api ? AssistantIdentity.ApiPrivacyNotice : AssistantIdentity.DefaultPrivacyNotice,
+            claude = new
             {
-                model = claude.Model, modelName = ClaudeEngine.DisplayName(claude.Model), configured = claude.Configured, effort = claude.Effort,
+                model = claude.Model, modelName = ClaudeEngine.DisplayName(claude.Model), configured = api.Ready, keySource = api.Source, keyHint = api.Source == "none" ? null : api.Hint,
                 claude.MaxContextTokens, claude.MaxConcurrent, claude.QuestionsPerDay, customEndpoint = claude.BaseUrl.Trim() != "",
-            } : null,
-            gatewayUrl = url, gatewayUrlFromConfig = options.Value.GatewayUrl != "", keySource = source,
-            keyHint = source == "configuration" ? ApiKeyVault.Hint(key!) : row.KeyHint, publicApiBase = options.Value.PublicApiBase,
+            },
+            gatewayUrl = url, gatewayUrlFromConfig = options.Value.GatewayUrl != "", keySource = gpu.Source,
+            keyHint = gpu.Source == "none" ? null : gpu.Hint, publicApiBase = options.Value.PublicApiBase,
             allowedOrigins = options.Value.AllowedOrigins, autoInject = options.Value.AutoInject,
         };
     }
@@ -85,6 +92,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         var o = options.Value; var p = o.Privacy; var now = DateTime.UtcNow;
         var features = settings.Effective(o.Features);
+        var mode = engines.For(settings);
         ConsentSummary? summary = null;
         try { summary = consents.Summary(now.AddDays(-30), now); } catch (Exception e) when (e is not OutOfMemoryException) { } // table missing until the migration ran
         HistoryCounts? kept = null;
@@ -94,9 +102,9 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
             required = p.RequireConsent, mode = p.UsesCookiebot ? "cookiebot" : "explicit", category = p.Category,
             consentDays = Math.Clamp(p.ConsentDays, 1, 400), keepDays = Math.Clamp(p.KeepConsentRecordsDays, Math.Clamp(p.ConsentDays, 1, 400), 3650),
             gpuOperator = p.GpuOperator.Trim(), gpuOperatorCountry = p.GpuOperatorCountry.Trim(), cookiebotIgnore = p.CookiebotIgnore,
-            engine = VisitorConsent.Engine(o), version = VisitorConsent.Version(settings, o),
+            engine = mode, version = VisitorConsent.Version(settings, o, mode),
             // What the preview widget needs to show the consent request (null when none is asked).
-            consent = VisitorConsent.Public(settings, o, features),
+            consent = VisitorConsent.Public(settings, o, features, mode),
             summary,
             // Conversations in the history now (also after it was switched off, until their period ends).
             history = new { stored = kept?.Total ?? 0, kept = kept?.Kept ?? 0 },
@@ -116,7 +124,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         settings ??= store.Settings().Settings;
         try { AssistantValidation.Settings(settings); } catch (AssistantValidationException) { settings = store.Settings().Settings; }
-        return Ok(new { language = PrivacyPolicy.Languages.Contains(language) ? language : "en", text = PrivacyPolicy.Generate(language, settings, options.Value, captcha.Value, Kept()) });
+        return Ok(new { language = PrivacyPolicy.Languages.Contains(language) ? language : "en", text = PrivacyPolicy.Generate(language, settings, options.Value, captcha.Value, Kept(), engines.For(settings)) });
     }
 
     /// <summary>Queues a test email to the given (or saved) team addresses and tries to send it at once.</summary>
@@ -148,17 +156,30 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         catch (AssistantConflictException e) { return Conflict(Problem(e.Message)); }
     }
 
+    /// <summary>The engine visitors use, or the one named (gpu or api: the Connection tab tests each engine that is set up).</summary>
     [HttpGet("status")]
-    public async Task<IActionResult> Status(CancellationToken token)
+    public async Task<IActionResult> Status([FromQuery] string? engine, CancellationToken token) => await StatusWithVersion(null, token, engine);
+
+    /// <summary>The engine that answers now, when one does: adding a key never changes who answers (the editor switches under Connection).</summary>
+    private string? Answering()
     {
-        try { return Ok(new { ok = true, status = await engine.StatusAsync(token, verify: true), connection = Connection() }); }
-        catch (GatewayException e) { return Ok(new { ok = false, code = e.Code, message = e.Message, connection = Connection() }); }
+        var current = engines.Current;
+        return engines.Ready(current) ? current : null;
+    }
+
+    /// <summary>After a key was added: keeps the engine that answered before as the choice. The new settings version, or null when nothing changed.</summary>
+    private int? KeepAnswering(string? answering)
+    {
+        var (settings, version) = store.Settings();
+        if (answering == null || engines.For(settings) == answering) return null;
+        try { return store.Save(settings with { Engine = answering }, version); }
+        catch (AssistantConflictException) { return null; }
     }
 
     [HttpPost("connection")]
     public async Task<IActionResult> SaveConnection([FromBody] ConnectionRequest request, CancellationToken token)
     {
-        if (engine.UsesApi) return BadRequest(Problem("This site uses the Claude API (LigataAI:Mode = api). Its key and model are set in the site's configuration."));
+        var answering = Answering();
         var (settings, version) = store.Settings();
         if (request.GatewayUrl != null && request.GatewayUrl.TrimEnd('/') != settings.GatewayUrl)
         {
@@ -171,18 +192,56 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
             var key = request.ApiKey.Trim();
             if (!ApiKeyVault.LooksValid(key)) return BadRequest(Problem("That does not look like a Ligata AI key (lai_…).", new() { ["apiKey"] = "Paste the complete key from the gateway, starting with lai_." }));
             store.SetKey(vault.Protect(key), ApiKeyVault.Hint(key));
+            version = KeepAnswering(answering) ?? version;
         }
-        return await StatusWithVersion(version, token);
+        return await StatusWithVersion(version, token, EngineSelector.Gpu);
     }
 
-    private async Task<IActionResult> StatusWithVersion(int version, CancellationToken token)
+    private async Task<IActionResult> StatusWithVersion(int? version, CancellationToken token, string? named = null)
     {
-        try { return Ok(new { version, ok = true, status = await engine.StatusAsync(token, verify: true), connection = Connection() }); }
-        catch (GatewayException e) { return Ok(new { version, ok = false, code = e.Code, message = e.Message, connection = Connection() }); }
+        var tested = named is EngineSelector.Gpu or EngineSelector.Api ? named : engine.Mode;
+        try { return Ok(new { version, engine = tested, ok = true, status = await engine.StatusAsync(token, verify: true, tested), connection = Connection() }); }
+        catch (GatewayException e) { return Ok(new { version, engine = tested, ok = false, code = e.Code, message = e.Message, connection = Connection() }); }
     }
 
     [HttpDelete("connection/key")]
     public IActionResult ClearKey() { store.SetKey(null, null); return Ok(new { connection = Connection() }); }
+
+    /// <summary>
+    /// Stores an Anthropic API key, encrypted with this server's Data Protection keys, and asks Anthropic whether it works.
+    /// A key in the configuration (LigataAI:Claude:ApiKey) wins and cannot be replaced here.
+    /// </summary>
+    [HttpPost("connection/claude")]
+    public async Task<IActionResult> SaveClaudeKey([FromBody] ClaudeKeyRequest request, CancellationToken token)
+    {
+        if (options.Value.Claude.ApiKey.Trim() != "") return BadRequest(Problem("The Anthropic API key is set in the site's configuration (LigataAI:Claude:ApiKey) and cannot be changed here."));
+        var key = (request.ApiKey ?? "").Trim();
+        if (!ApiKeyVault.LooksLikeClaude(key)) return BadRequest(Problem("That does not look like an Anthropic API key (sk-ant-…).", new() { ["claudeKey"] = "Paste the complete key from the Anthropic Console, starting with sk-ant-." }));
+        var answering = Answering();
+        store.SetClaudeKey(vault.ProtectClaude(key), ApiKeyVault.ClaudeHint(key));
+        claudeGate.Forget();
+        return await StatusWithVersion(KeepAnswering(answering), token, EngineSelector.Api);
+    }
+
+    [HttpDelete("connection/claude-key")]
+    public IActionResult ClearClaudeKey() { store.SetClaudeKey(null, null); claudeGate.Forget(); return Ok(new { connection = Connection() }); }
+
+    /// <summary>
+    /// Chooses the engine visitors use when both are set up. The consent names the recipient, so visitors are asked again
+    /// (and the privacy policy text changes).
+    /// </summary>
+    [HttpPost("engine")]
+    public async Task<IActionResult> ChooseEngine([FromBody] EngineRequest request, CancellationToken token)
+    {
+        if (request.Engine is not (EngineSelector.Gpu or EngineSelector.Api)) return BadRequest(Problem("Choose the Ligata GPU or the Claude API."));
+        if (!engines.Ready(request.Engine)) return BadRequest(Problem(request.Engine == EngineSelector.Api ? "Add an Anthropic API key first." : "Add the key for the Ligata AI gateway first."));
+        var (settings, _) = store.Settings();
+        int version;
+        try { version = store.Save(settings with { Engine = request.Engine }, request.Version); }
+        catch (AssistantValidationException e) { return BadRequest(Problem("Check the settings.", e.Errors)); }
+        catch (AssistantConflictException e) { return Conflict(Problem(e.Message)); }
+        return await StatusWithVersion(version, token);
+    }
 
     /// <summary>
     /// Token cost of the instructions with the given (possibly unsaved) settings: guardrails, the list of pages and the
@@ -196,7 +255,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         var (stable, context, lookups) = await relay.PromptAsync(settings, settings.Effective(options.Value.Features), "A page title of typical length here", "/a/typical/page/path/", token);
         // The knowledge that is always known is shown on its own; tools are declared next to the instructions.
         var pinned = PromptBuilder.Knowledge(store.PinnedKnowledge());
-        var instructions = stable.Replace(pinned, "") + context + (lookups != null ? JsonSerializer.Serialize(Lookups.Tools) : "");
+        var instructions = (pinned.Length > 0 ? stable.Replace(pinned, "") : stable) + context + (lookups != null ? JsonSerializer.Serialize(Lookups.Tools) : "");
         var (tokens, estimated) = await Count(instructions, token);
         return Ok(new { instructionTokens = tokens + 16, estimated, lookupTokens = lookups != null ? Lookups.Tokens : 0, lookups = lookups != null });
     }
@@ -323,7 +382,8 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
     {
         var (settings, version) = store.Settings();
         var features = settings.Effective(options.Value.Features);
-        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, engine, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true, engine.Mode, VisitorConsent.Public(settings, options.Value, features)));
+        var mode = engines.For(settings);
+        return Ok(PublicAssistantController.Build(settings, version, features.Assistant ? await PublicAssistantController.CachedStatus(cache, engine, token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: true, mode, VisitorConsent.Public(settings, options.Value, features, mode)));
     }
 
     [HttpPost("attachments"), RequestSizeLimit(16_000_000)]

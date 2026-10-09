@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact, date } from './ui.js?v=0.7.4';
+import { icon, number, compact, date } from './ui.js?v=0.8.0';
 
 const kinds = { text: ['text', 'Text'], file: ['file', 'File'] };
 

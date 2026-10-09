@@ -266,7 +266,18 @@ Assert(ClaudeEngine.Tools().Count == 2 && Wire(ClaudeEngine.Tools()).Contains("\
 // ---------- API mode (Claude) ----------
 Assert(ClaudeEngine.DisplayName("claude-haiku-5-5") == "Claude Haiku 5.5" && ClaudeEngine.DisplayName("claude-opus-5") == "Claude Opus 5", "Model names are readable.");
 Assert(new AssistantOptions { Mode = " API " }.UsesApi && !new AssistantOptions().UsesApi && !new AssistantOptions { Mode = "gpu" }.UsesApi, "The GPU gateway stays the default; api must be chosen.");
-Assert(!new ClaudeOptions().Configured && new ClaudeOptions().Model == "claude-haiku-5-5" && new ClaudeOptions().MaxContextTokens <= 100_000, "No key by default; Haiku 5.5 within its lower price tier.");
+Assert(new ClaudeOptions().ApiKey == "" && new ClaudeOptions().Model == "claude-haiku-5-5" && new ClaudeOptions().MaxContextTokens <= 100_000, "No key by default; Haiku 5.5 within its lower price tier.");
+// 0.8: how much Claude thinks is chosen under Behaviour; the GPU keeps its on/off switch.
+Assert(defaults.Behaviour.Effort == "low" && defaults.Engine == "" && ClaudeEngine.Level("low") == (Anthropic.Models.Messages.Effort.Low, true, 2_048), "Claude thinks at low effort by default, and the engine follows LigataAI:Mode until an editor chooses.");
+Assert(ClaudeEngine.Level("off") is (_, false, 0) && ClaudeEngine.Level("xhigh").Effort == Anthropic.Models.Messages.Effort.Xhigh && ClaudeEngine.Level("max") is ({ } maxEffort, true, 64_000) && maxEffort == Anthropic.Models.Messages.Effort.Max && ClaudeEngine.Level("unknown").Effort == Anthropic.Models.Messages.Effort.Low,
+    "Off answers without thinking; higher levels get more room for thinking on top of the answer.");
+Assert(AssistantValidation.Efforts.All(e => ClaudeEngine.Level(e).Room >= 0) && ClaudeEngine.Level("medium").Room < ClaudeEngine.Level("high").Room && ClaudeEngine.Level("high").Room < ClaudeEngine.Level("xhigh").Room, "Every level the backoffice offers maps to the API.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Behaviour = defaults.Behaviour with { Effort = "turbo" } }), "Unknown effort levels are refused.");
+Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Engine = "openai" }), "Only the two engines can be chosen.");
+AssistantValidation.Settings(defaults with { Engine = "api", Behaviour = defaults.Behaviour with { Effort = "max" } });
+Assert(ApiKeyVault.LooksLikeClaude("sk-ant-api03-" + new string('a', 80) + "-AA") && !ApiKeyVault.LooksLikeClaude("lai_0123456789ab_" + new string('b', 43)) && !ApiKeyVault.LooksLikeClaude("sk-ant-short") && !ApiKeyVault.LooksLikeClaude("sk-ant-api03-" + new string('a', 40) + " x"),
+    "Only complete Anthropic keys are stored.");
+Assert(ApiKeyVault.ClaudeHint("sk-ant-api03-" + new string('a', 80) + "WXYZ") == "sk-ant-api…WXYZ", "The backoffice sees a hint of the Claude key, never the key.");
 var claudeMessages = ClaudeEngine.Messages(Chat(
     new ChatMessage("user", "Look at this", [new("image", "s.png", "iVBORw0KGgoAAAA", null), new("image", "s.jpg", "/9j/4AAQSkZJRg", null), new("document", "offer.pdf", null, "--- Page 1 ---\nOffer")]),
     new ChatMessage("assistant", "Sorry, I do not know.\n[[team]]", null),
@@ -297,6 +308,10 @@ Assert(new PrivacyOptions() is { GpuOperator: "Ligata", GpuOperatorCountry: "CH"
 Assert(JsonSerializer.Serialize(VisitorConsent.Public(aiSettings, new AssistantOptions(), aiFeatures), AssistantJson.Options).Contains("\"country\":\"CH\"") && PrivacyPolicy.Generate("de", aiSettings, new AssistantOptions(), new RecaptchaSettings()).Contains("Server von Ligata in der Schweiz"), "Visitors and the privacy policy name Switzerland without extra configuration.");
 var gpuVersion = VisitorConsent.Version(aiSettings, gpuSite);
 Assert(gpuVersion.StartsWith("gpu.1.") && VisitorConsent.Version(aiSettings, apiSite).StartsWith("api.1."), "The consent version names the engine and the revision.");
+// 0.8: the engine comes from the backoffice choice and the keys set up, not only from LigataAI:Mode.
+Assert(VisitorConsent.Version(aiSettings, gpuSite, "api") == VisitorConsent.Version(aiSettings, apiSite) && VisitorConsent.Version(aiSettings, apiSite, "gpu") == gpuVersion, "Switching the engine in the backoffice asks every visitor again, naming the new recipient.");
+Assert(JsonSerializer.Serialize(VisitorConsent.Public(aiSettings, gpuSite, aiFeatures, "api"), AssistantJson.Options).Contains("\"kind\":\"anthropic\"") && PrivacyPolicy.Generate("en", aiSettings, gpuSite, new RecaptchaSettings(), engine: "api").Contains("Anthropic")
+    && !PrivacyPolicy.Generate("en", aiSettings, apiSite, new RecaptchaSettings(), engine: "gpu").Contains("Anthropic"), "The consent request and the privacy policy name the engine in use.");
 Assert(VisitorConsent.Version(aiSettings, new AssistantOptions { Privacy = new() { GpuOperator = "Other GmbH", GpuOperatorCountry = "CH" } }) != gpuVersion
     && VisitorConsent.Version(aiSettings, new AssistantOptions { Privacy = new() { GpuOperator = "Ligata", GpuOperatorCountry = "US" } }) != gpuVersion, "Another recipient asks everyone again.");
 Assert(VisitorConsent.Version(aiSettings with { Privacy = new() { ConsentRevision = 2 } }, gpuSite) != gpuVersion, "Editors can ask everyone again.");
@@ -905,7 +920,7 @@ using (var scope = app.Services.CreateScope())
     }
 
     // API mode: the daily ceiling and the local status (no network call for the widget's checks).
-    ClaudeEngine Claude(ClaudeOptions claude) => new(new ClaudeGate(Options.Create(new AssistantOptions { Mode = "api", Claude = claude })), store, Microsoft.Extensions.Logging.Abstractions.NullLogger<ClaudeEngine>.Instance);
+    ClaudeEngine Claude(ClaudeOptions claude) { var o = Options.Create(new AssistantOptions { Mode = "api", Claude = claude }); return new(new ClaudeGate(o), store, new EngineSelector(store, services.GetRequiredService<ApiKeyVault>(), o), Microsoft.Extensions.Logging.Abstractions.NullLogger<ClaudeEngine>.Instance); }
     store.Count(s => s.Questions++);
     Assert(Claude(new() { ApiKey = "sk-ant-x", QuestionsPerDay = 1 }).QuotaReached() && !Claude(new() { ApiKey = "sk-ant-x", QuestionsPerDay = 0 }).QuotaReached() && !Claude(new() { ApiKey = "sk-ant-x", QuestionsPerDay = 1_000_000 }).QuotaReached(), "Daily question ceiling in API mode (0 = unlimited).");
     try { await Claude(new()).StatusAsync(false, CancellationToken.None); Assert(false, "A missing key is reported."); }
@@ -934,6 +949,36 @@ using (var scope = app.Services.CreateScope())
         var stored = scope5.Database.Fetch<string>("SELECT Version FROM LigataAIConsent WHERE Id=@0", given.Id);
         Assert(stored.SequenceEqual([consentVersion]) && !typeof(ConsentRow).GetProperties().Any(x => x.Name.Contains("Ip") || x.Name.Contains("Address") || x.Name.Contains("Visitor") || x.Name.Contains("Text")), "Consent records hold no IP address, visitor id or content.");
         scope5.Database.Execute("DELETE FROM LigataAIConsent"); scope5.Complete();
+    }
+    // 0.8: which engine answers. Each is set up by its key (configuration or the backoffice, encrypted); with both, the editor chooses.
+    {
+        var keys = services.GetRequiredService<ApiKeyVault>();
+        var settingsRow = store.Row();
+        var (keptKey, keptHint, keptClaude, keptClaudeHint) = (settingsRow.ProtectedKey, settingsRow.KeyHint, settingsRow.ProtectedClaudeKey, settingsRow.ClaudeKeyHint);
+        EngineSelector Selector(AssistantOptions o) => new(store, keys, Options.Create(o));
+        var plain = Selector(new AssistantOptions());
+        store.SetKey(null, null); store.SetClaudeKey(null, null);
+        Assert(plain.For(defaults) == "gpu" && Selector(new AssistantOptions { Mode = "api" }).For(defaults) == "api" && !plain.Ready("gpu") && !plain.Ready("api"), "Nothing set up: LigataAI:Mode names the engine (its status explains what is missing).");
+        var claudeKey = "sk-ant-api03-" + new string('c', 90) + "TEST";
+        store.SetClaudeKey(keys.ProtectClaude(claudeKey), ApiKeyVault.ClaudeHint(claudeKey));
+        Assert(plain.ClaudeKey() is { Key: var k, Source: "backoffice", Hint: "sk-ant-api…TEST" } && k == claudeKey && store.Row().ProtectedClaudeKey != claudeKey && !store.Row().ProtectedClaudeKey!.Contains("TEST"), "A Claude key from the backoffice is stored encrypted and read back.");
+        Assert(plain.For(defaults) == "api" && plain.For(defaults with { Engine = "gpu" }) == "api", "Only Claude set up: Claude answers, whatever was chosen.");
+        var gatewayKey = "lai_0123456789ab_" + new string('g', 43);
+        store.SetKey(keys.Protect(gatewayKey), ApiKeyVault.Hint(gatewayKey));
+        Assert(plain.For(defaults) == "gpu" && plain.For(defaults with { Engine = "api" }) == "api" && Selector(new AssistantOptions { Mode = "api" }).For(defaults) == "api" && plain.For(defaults with { Engine = "gpu" }) == "gpu", "Both set up: the editor's choice, else LigataAI:Mode.");
+        store.SetClaudeKey(null, null);
+        Assert(plain.For(defaults with { Engine = "api" }) == "gpu" && plain.ClaudeKey().Source == "none", "Claude's key removed: the GPU answers (and visitors are asked again, naming it).");
+        Assert(Selector(new AssistantOptions { Claude = new() { ApiKey = " " + claudeKey + " " } }).ClaudeKey() is { Key: var fromConfig, Source: "configuration" } && fromConfig == claudeKey, "A key in the configuration wins.");
+        store.SetClaudeKey("not-decryptable", "sk-ant-api…OLD1");
+        Assert(plain.ClaudeKey().Source == "unreadable" && !plain.Ready("api"), "A stored key this server cannot decrypt (after moving servers) is not used.");
+        store.SetKey(keptKey, keptHint); store.SetClaudeKey(keptClaude, keptClaudeHint);
+        // --clear-keys: browser suites that need exactly one engine start without keys stored by earlier runs (and with the default engine).
+        if (args.Contains("--clear-keys"))
+        {
+            store.SetKey(null, null); store.SetClaudeKey(null, null);
+            var (unchosen, unchosenVersion) = store.Settings();
+            if (unchosen.Engine != "") store.Save(unchosen with { Engine = "" }, unchosenVersion);
+        }
     }
     Console.WriteLine($"Database integration checks passed: {assertions} total assertions.");
 }

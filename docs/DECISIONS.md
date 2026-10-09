@@ -2,15 +2,28 @@
 
 The reasoning behind Ligata.AI, so it survives the conversations it was worked out in. Each entry names the decision, why it was taken, and what was tried or rejected on the way. Details and measurements live in the linked documents; this file is the map.
 
-Versions: 0.1 (7 Oct 2026) to 0.7.4 (9 Oct 2026). Newest topics last within each section.
+Versions: 0.1 (7 Oct 2026) to 0.8.0 (9 Oct 2026). Newest topics last within each section.
 
 ## Shape of the product
 
 - **One package per website, one shared GPU.** Every Umbraco site installs the NuGet package and keeps its settings, knowledge, API key and conversations in its own database. One gateway on the Ligata mini PC answers for all sites. Why: sites stay independent (a broken site cannot break another), and an RTX 3060 is enough for many small sites when answers queue fairly. See [PLAN.md](PLAN.md).
 - **Browsers only talk to their own website.** The site calls the gateway (or Anthropic) server to server. Why: no keys in browsers, no CORS on the gateway, and the site can enforce consent, limits and its own privacy rules before anything leaves it.
 - **Feature flags in configuration, switches in the backoffice.** `LigataAI:Features` says what a site is licensed for (AI, live chat, email). Editors can switch licensed features off, never on. Why: the legal setup and licensing must not depend on an editor's click.
-- **Two engines, one event stream.** `LigataAI:Mode` = `gpu` (own gateway) or `api` (Claude through Anthropic). Both produce the same server-sent events, so the widget, the history and the statistics do not care which one answered. Why: some customers want no data leaving Switzerland, others want the stronger model without hosting.
+- **Two engines, one event stream.** The Ligata GPU (own gateway) or Claude through Anthropic. Both produce the same server-sent events, so the widget, the history and the statistics do not care which one answered. Why: some customers want no data leaving Switzerland, others want the stronger model without hosting. Since 0.8 editors switch between them in the backoffice when both are set up (next section); `LigataAI:Mode` is the default.
 - **Everything works without the AI** (live chat and email only, the section is then called *Support*). Why: a site may not license the AI, and an AI outage must never cut visitors off from the team.
+
+## Two engines, chosen in the backoffice (0.8)
+
+The request: use Claude Haiku 5.5 with an API key next to the GPU, switch between the two in Umbraco, set Claude's thinking effort there, and show the switch only when both are set up.
+
+- **An engine is set up when its key is there; the switch appears only with both.** The gateway key and the Anthropic key are each stored encrypted in the backoffice (ASP.NET Data Protection, like the gateway key since 0.1) or set in the configuration, which wins. With one key, that engine answers and the Connection tab shows no switch; the other engine is folded away under *Add another AI engine*, so it can still be added without the configuration. Why: the editor should never be offered an engine that cannot answer, and a site should not need a developer to try Claude. `LigataAI:Mode` became the default for sites with both keys.
+- **The choice is part of the settings, the engine in use is derived.** `settings.Engine` holds the editor's choice; `EngineSelector` returns the chosen engine if its key is there, else the other one if its key is, else `LigataAI:Mode`. Every place that used `LigataAI:Mode` (consent version, privacy policy text, page script, limits, the history's "answered by") now asks the selector, so an unsaved preview, the website and the consent always agree on who answers.
+- **Adding a key never changes who answers; removing one hands over.** When an engine already answers and a key for the other is added, the engine that answered is saved as the choice. Otherwise a choice made long ago (or `Mode = api`) would switch visitors to another recipient without a confirmation. Removing the key of the engine in use hands visitors to the other one, and the confirmation says so.
+- **Switching asks every visitor again.** The consent version starts with the engine and hashes the recipient, so a switch makes every visitor agree again to the new recipient (Anthropic in the USA, or the GPU operator and its country). The editor confirms the switch, is told this, and the privacy policy text under *Privacy* changes with it.
+- **Thinking: on/off for Gemma, effort levels for Claude.** Gemma 4 on llama.cpp thinks or does not, so the GPU keeps *Think before answering*. Claude Haiku 5.5 has adaptive thinking with effort levels; *Behaviour* offers Off, Low (default), Medium, High, Extra high and Max. Off sends `thinking: disabled` at low effort (the API refuses disabled thinking above high, so Off is never combined with a higher level); the others send adaptive thinking with that effort. Thinking shares `max_tokens` with the answer, so it gets room on top: 2k (Low), 8k, 16k, 32k, 64k (Max). Until 0.8 the effort came from `LigataAI:Claude:Effort`, raised one level by *Think before answering*; that setting is gone (only test sites used API mode). With both engines set up, the other engine's thinking setting is folded under *When … answers*.
+- **An empty answer is an error.** At Extra high Claude sometimes writes its whole answer into its thinking and ends without text; the visitor now gets "did not write an answer, please try again" instead of an empty bubble.
+- **The real API found what the mock did not.** The first questions with the real key all failed: every request that could look something up sent `"tool_choice": null`, which Anthropic refuses ("Input should be an object"); the mock accepted it, so API mode had only ever worked in tests. Optional fields are now left out, the mock refuses any `null` field, and `tests/e2e/claude-live.mjs` asks the real API five short questions (one per effort level) when a key is at hand. Anthropic's reason for a refused request is now logged.
+- **Measured with the real API** (test site, October 2026): Off about 1 s, Low about 2 s including a lookup (it did not think), Medium and High 3.5 to 4 s with thinking and two lookups, Extra high about 6 s with four lookups. Prompt caching read 2,495 of about 3,200 prompt tokens on later questions.
 
 ## The model and the GPU
 
@@ -92,7 +105,7 @@ The request: see what visitors ask the AI, not only the chats handed to the team
 ## Testing
 
 - **Disposable fixtures only.** A fixture Umbraco database under `.runtime`, a generated administrator, synthetic pages and questions, an SMTP pickup folder. Nothing touches a production site. See [TESTING.md](TESTING.md).
-- **Mocks that are strict**: the mock Anthropic API checks tool_use/tool_result pairing; the mock llama-server can run three slots, stream slowly and fail on purpose.
+- **Mocks that are strict**: the mock Anthropic API checks tool_use/tool_result pairing and refuses `null` fields (0.8: the real API refused `"tool_choice": null`, the mock did not); the mock llama-server can run three slots, stream slowly and fail on purpose. A mock is only as strict as what was checked against the real service, so `tests/e2e/claude-live.mjs` checks the real API now and then.
 - **Real-GPU checks for model behaviour** (`model/*.mjs`): handoff, lookups, summaries, parallel speed, memory soak. Logic is tested with mocks; behaviour of the model only on the real GPU.
 
 ## The review of 0.7.1

@@ -37,7 +37,7 @@ public sealed class ChatValidationException(string code, string message, int sta
 /// and relays its event stream to the browser: the gateway's stream as is, or Claude's in the same format.
 /// Nothing about the conversation is stored.
 /// </summary>
-public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ClaudeEngine claude, KnowledgeIndex index, IOptions<AssistantOptions> options, ILogger<ChatRelay> logger)
+public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, ClaudeEngine claude, KnowledgeIndex index, EngineSelector engines, IOptions<AssistantOptions> options, ILogger<ChatRelay> logger)
 {
     public const int MaxMessages = 120, MaxUserCharacters = 8000, MaxAssistantCharacters = 24000, MaxDocumentCharacters = 600_000, MaxImageBase64 = 7_400_000, MaxSummaryCharacters = 30_000;
 
@@ -161,7 +161,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     {
         var team = PromptBuilder.Handoff(settings, features);
         var snapshot = await index.SnapshotAsync(settings.Knowledge, token);
-        var lookups = options.Value.UsesApi || await gateway.SupportsToolsAsync(token) ? new Lookups(snapshot, team, snapshot.CultureOf(pagePath)) : null;
+        var lookups = engines.For(settings) == EngineSelector.Api || await gateway.SupportsToolsAsync(token) ? new Lookups(snapshot, team, snapshot.CultureOf(pagePath)) : null;
         var pinned = store.PinnedKnowledge();
         var stable = lookups != null
             ? PromptBuilder.Guardrails(settings, team, lookups: true) + PromptBuilder.Knowledge(pinned) + PromptBuilder.SiteMap(snapshot)
@@ -191,7 +191,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         catch (OperationCanceledException) { return; }
         if (outcome != null) outcome.Reached = true;
 
-        var api = options.Value.UsesApi;
+        var api = engines.For(settings) == EngineSelector.Api;
         if (api && claude.QuotaReached())
         {
             if (counting) store.Count(s => s.Busy++);

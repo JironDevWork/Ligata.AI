@@ -12,6 +12,9 @@ public sealed class SettingsRow
     // API key protected with ASP.NET Data Protection; never returned to the browser.
     [Column("ProtectedKey"), Length(2000), NullSetting(NullSetting = NullSettings.Null)] public string? ProtectedKey { get; set; }
     [Column("KeyHint"), Length(40), NullSetting(NullSetting = NullSettings.Null)] public string? KeyHint { get; set; }
+    // 0.8: the Anthropic API key for Claude, protected the same way.
+    [Column("ProtectedClaudeKey"), Length(2000), NullSetting(NullSetting = NullSettings.Null)] public string? ProtectedClaudeKey { get; set; }
+    [Column("ClaudeKeyHint"), Length(40), NullSetting(NullSetting = NullSettings.Null)] public string? ClaudeKeyHint { get; set; }
     // Random secret used to pseudonymise visitor IPs before they leave this server.
     [Column("VisitorSecret"), Length(100)] public string VisitorSecret { get; set; } = "";
     [Column("UpdatedUtc")] public DateTime UpdatedUtc { get; set; }

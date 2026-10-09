@@ -1,7 +1,26 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact } from './ui.js?v=0.7.4';
+import { number, compact } from './ui.js?v=0.8.0';
+
+const efforts = [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']];
+const effortHelp = {
+  off: 'Answers straight away, without thinking. Fastest and cheapest; fine for simple questions.',
+  low: 'Thinks only when a question needs it. Fast and inexpensive. Recommended for most websites.',
+  medium: 'Thinks more often and longer. Better for questions that combine several pages; answers start a little later.',
+  high: 'Careful answers for complex questions and strict instructions. Noticeably slower and uses more tokens.',
+  xhigh: 'Thinks much longer. Rarely better for website questions: visitors wait longer and every answer costs more.',
+  max: 'As much thinking as Claude can do. Only for very complex questions: the slowest and most expensive.',
+};
 
 export const behaviourView = {
+  /** Gemma on the GPU thinks or does not; Claude has effort levels. With both engines set up, the other engine's setting is one click away. */
+  thinkingControls() {
+    const gpu = this.toggle('behaviour.thinking', 'Think before answering', 'More careful answers for complex questions, but noticeably slower for everyone sharing the GPU.');
+    const claude = this.segmented('behaviour.effort', 'Thinking effort', efforts, effortHelp[this.settings.behaviour.effort] || '');
+    if (!this.bothEngines()) return this.api() ? claude : gpu;
+    return html`${this.api() ? claude : gpu}
+      <details class="other-engine"><summary>${this.api() ? 'When the Ligata GPU answers' : 'When Claude answers'}</summary><div class="section" style="margin-top:6px">${this.api() ? gpu : claude}</div></details>`;
+  },
+
   behaviourView() {
     const b = this.settings.behaviour;
     const maxContext = this.modelContext || 262144;
@@ -34,8 +53,8 @@ export const behaviourView = {
             ${this.toggle('behaviour.stayOnTopic', 'Stay on topic', 'Politely declines requests unrelated to your website (homework, coding, …). Recommended.')}
             ${this.toggle('behaviour.includePageContext', 'Know the current page', 'The assistant is told which page the visitor is on.')}
             ${this.toggle('behaviour.useMarkdown', 'Formatted answers', 'Lists, bold text and links.')}
-            ${this.toggle('behaviour.thinking', 'Think before answering', this.api() ? 'More careful answers for complex questions. Answers start a little later and use more tokens.' : 'More careful answers for complex questions, but noticeably slower for everyone sharing the GPU.')}
           </div>
+          <div class="section">${this.thinkingControls()}</div>
         </section>` : nothing}
 
         ${this.licensedFeatures().assistant ? html`<section class="card">

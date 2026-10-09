@@ -1,18 +1,18 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest, bearer } from './api.js?v=0.7.4';
-import { styles } from './styles.js?v=0.7.4';
-import { icon, controls } from './ui.js?v=0.7.4';
-import { themes, colorFields } from './themes.js?v=0.7.4';
-import { overviewView } from './view-overview.js?v=0.7.4';
-import { appearanceView } from './view-appearance.js?v=0.7.4';
-import { behaviourView } from './view-behaviour.js?v=0.7.4';
-import { knowledgeView } from './view-knowledge.js?v=0.7.4';
-import { connectionView } from './view-connection.js?v=0.7.4';
-import { insightsView } from './view-insights.js?v=0.7.4';
-import { teamView } from './view-team.js?v=0.7.4';
-import { privacyView } from './view-privacy.js?v=0.7.4';
+import { aiRequest, bearer } from './api.js?v=0.8.0';
+import { styles } from './styles.js?v=0.8.0';
+import { icon, controls } from './ui.js?v=0.8.0';
+import { themes, colorFields } from './themes.js?v=0.8.0';
+import { overviewView } from './view-overview.js?v=0.8.0';
+import { appearanceView } from './view-appearance.js?v=0.8.0';
+import { behaviourView } from './view-behaviour.js?v=0.8.0';
+import { knowledgeView } from './view-knowledge.js?v=0.8.0';
+import { connectionView } from './view-connection.js?v=0.8.0';
+import { insightsView } from './view-insights.js?v=0.8.0';
+import { teamView } from './view-team.js?v=0.8.0';
+import { privacyView } from './view-privacy.js?v=0.8.0';
 
 // A tab only appears when its feature is licensed for this installation (LigataAI:Features).
 const tabs = [
@@ -27,14 +27,14 @@ const tabs = [
 ];
 
 class LigataAIDashboard extends UmbElementMixin(LitElement) {
-  static properties = Object.fromEntries(['settings', 'version', 'saved', 'connection', 'knowledge', 'status', 'budget', 'stats', 'tab', 'busy', 'message', 'warning', 'error', 'errors', 'dragOver', 'editing', 'pages', 'pageFilter', 'index', 'searchQuery', 'device', 'siteTheme', 'keyInput', 'urlInput', 'loaded', 'statsDays', 'previewHtml', 'platform', 'inbox', 'privacy', 'policy', 'policyLanguage', 'policyLoading']
+  static properties = Object.fromEntries(['settings', 'version', 'saved', 'connection', 'knowledge', 'status', 'budget', 'stats', 'tab', 'busy', 'message', 'warning', 'error', 'errors', 'dragOver', 'editing', 'pages', 'pageFilter', 'index', 'searchQuery', 'device', 'siteTheme', 'keyInput', 'claudeKeyInput', 'engineStatus', 'urlInput', 'loaded', 'statsDays', 'previewHtml', 'platform', 'inbox', 'privacy', 'policy', 'policyLanguage', 'policyLoading']
     .map(k => [k, { state: true }]));
   static styles = styles;
 
   constructor() {
     super();
     const wanted = new URLSearchParams(location.search).get('tab');
-    Object.assign(this, { tab: tabs.some(t => t.id === wanted) ? wanted : 'overview', busy: false, message: '', warning: '', error: '', errors: {}, knowledge: [], device: 'desktop', siteTheme: 'light', keyInput: '', urlInput: null, loaded: false, statsDays: 30, pageFilter: '', searchQuery: '' });
+    Object.assign(this, { tab: tabs.some(t => t.id === wanted) ? wanted : 'overview', busy: false, message: '', warning: '', error: '', errors: {}, knowledge: [], device: 'desktop', siteTheme: 'light', keyInput: '', claudeKeyInput: '', engineStatus: {}, urlInput: null, loaded: false, statsDays: 30, pageFilter: '', searchQuery: '' });
     this.consumeContext(UMB_AUTH_CONTEXT, auth => { this.auth = auth; this.run(() => this.load()); });
     this.unload = e => { if (this.dirty) { e.preventDefault(); e.returnValue = ''; } };
     // The preview iframe borrows the editor's login and current (unsaved) settings.
@@ -44,8 +44,10 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
   connectedCallback() { super.connectedCallback(); window.addEventListener('beforeunload', this.unload); this.poll = setInterval(() => this.tab === 'overview' && !document.hidden && this.refreshStatus(), 15000); }
   disconnectedCallback() { window.removeEventListener('beforeunload', this.unload); clearInterval(this.poll); super.disconnectedCallback(); }
 
-  /** API mode: Claude via Anthropic, configured in appsettings (no gateway). */
+  /** Claude via Anthropic answers visitors (chosen under Connection, or the only engine set up). */
   api() { return this.connection?.mode === 'api'; }
+  /** Both engines are set up, so the editor can switch between them. */
+  bothEngines() { return !!(this.connection?.engines?.gpu && this.connection?.engines?.api); }
   engineName() { return this.api() ? (this.connection.claude?.modelName || 'Claude') : 'AI gateway'; }
 
   get dirty() { return this.loaded && JSON.stringify(this.settings) !== this.saved; }
@@ -66,7 +68,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
     this.urlInput = data.connection.gatewayUrl;
     this.loaded = true;
     this.schedulePreview(true);
-    if (this.licensedFeatures().assistant) this.refreshStatus();
+    if (this.licensedFeatures().assistant) { if (this.tab === 'connection') this.refreshEngines(); else this.refreshStatus(); }
     this.refreshBudget(); this.refreshInbox();
   }
 
@@ -128,7 +130,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
   async toggleLive(enabled) {
     const e = this.effectiveFeatures();
     if (enabled && !e.assistant && !e.liveChat && !e.email) { this.error = 'Switch on at least one feature under Team & email first.'; this.tab = 'team'; return; }
-    if (enabled && e.assistant && (!this.connection?.keySource || this.connection.keySource === 'none')) { this.error = 'Add the API key under Connection before switching the AI assistant on (or switch the AI off under Team & email).'; this.tab = 'connection'; return; }
+    if (enabled && e.assistant && !this.connection?.engines?.gpu && !this.connection?.engines?.api) { this.error = 'Add a key for the Ligata GPU or Claude under Connection before switching the AI assistant on (or switch the AI off under Team & email).'; this.tab = 'connection'; return; }
     this.set('enabled', enabled);
     await this.run(() => this.save(), enabled ? 'The assistant is live on the website.' : 'The assistant is switched off on the website.');
   }
@@ -173,7 +175,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
       .hero{padding:72px 32px 24px;max-width:760px}.hero h1{font-size:40px;line-height:1.1;letter-spacing:-1px;margin:0 0 16px}.hero p{font-size:18px;line-height:1.6;opacity:.7;margin:0}
       .lines{padding:24px 32px;display:grid;gap:12px;max-width:760px}.lines i{display:block;height:10px;border-radius:10px;background:${dark ? '#22252d' : '#e6e6e1'}}.lines i:nth-child(3n){width:70%}</style></head>
       <body><div class="nav"><div class="logo"></div><span></span><span></span><span></span></div><div class="hero"><h1>${attr(b.siteName || 'Your website')}</h1><p>This is a preview page. The assistant below uses your current settings, including changes you have not saved yet.</p></div><div class="lines">${'<i></i>'.repeat(9)}</div>
-      <script src="/assets/ligata-ai/ligata-ai.js?v=0.7.4&p=${Date.now()}" data-ligata-ai data-preview="true" data-open="true" data-api="/umbraco/management/api/v1/ligata-ai" data-settings="${attr(JSON.stringify(publicSettings))}"></script></body></html>`;
+      <script src="/assets/ligata-ai/ligata-ai.js?v=0.8.0&p=${Date.now()}" data-ligata-ai data-preview="true" data-open="true" data-api="/umbraco/management/api/v1/ligata-ai" data-settings="${attr(JSON.stringify(publicSettings))}"></script></body></html>`;
   }
   previewPane() {
     return html`<aside class="preview">
@@ -204,7 +206,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
       ${this.message ? html`<div class="notice success" role="status">${icon('check')}<div>${this.message}</div><button class="icon-btn" aria-label="Dismiss" @click=${() => this.message = ''}>${icon('close')}</button></div>` : nothing}
       ${this.warning ? html`<div class="notice warning" role="status">${icon('warn')}<div>${this.warning}</div><button class="icon-btn" aria-label="Dismiss" @click=${() => this.warning = ''}>${icon('close')}</button></div>` : nothing}
       ${this.error ? html`<div class="notice error" role="alert">${icon('warn')}<div><strong>Please check</strong><p>${this.error}</p>${Object.keys(this.errors).length ? html`<ul>${Object.values(this.errors).map(v => html`<li>${v}</li>`)}</ul>` : nothing}</div><button class="icon-btn" aria-label="Dismiss" @click=${() => { this.error = ''; }}>${icon('close')}</button></div>` : nothing}
-      <nav class="tabs" aria-label="Assistant settings">${tabs.filter(t => !t.needs || t.needs(this.licensedFeatures())).map(t => html`<button aria-current=${this.tab === t.id ? 'page' : 'false'} @click=${() => { this.tab = t.id; if (t.id === 'insights') this.run(() => this.loadStats()); if (t.id === 'overview' || t.id === 'connection') this.refreshStatus(); if (t.id === 'overview' || t.id === 'team') this.refreshInbox(); if (t.id === 'privacy') { this.refreshPrivacy(); this.loadPolicy(); } if (t.id === 'knowledge') this.loadIndex(); }}>${icon(t.icon)}${t.label}${t.id === 'knowledge' && knowledgeCount ? html`<span class="count">${knowledgeCount}</span>` : nothing}</button>`)}</nav>
+      <nav class="tabs" aria-label="Assistant settings">${tabs.filter(t => !t.needs || t.needs(this.licensedFeatures())).map(t => html`<button aria-current=${this.tab === t.id ? 'page' : 'false'} @click=${() => { this.tab = t.id; if (t.id === 'insights') this.run(() => this.loadStats()); if (t.id === 'overview') this.refreshStatus(); if (t.id === 'connection') this.refreshEngines(); if (t.id === 'overview' || t.id === 'team') this.refreshInbox(); if (t.id === 'privacy') { this.refreshPrivacy(); this.loadPolicy(); } if (t.id === 'knowledge') this.loadIndex(); }}>${icon(t.icon)}${t.label}${t.id === 'knowledge' && knowledgeCount ? html`<span class="count">${knowledgeCount}</span>` : nothing}</button>`)}</nav>
       ${this.tab === 'overview' ? this.overviewView() : this.tab === 'appearance' ? this.appearanceView() : this.tab === 'behaviour' ? this.behaviourView() : this.tab === 'team' ? this.teamView() : this.tab === 'knowledge' ? this.knowledgeView() : this.tab === 'connection' ? this.connectionView() : this.tab === 'privacy' ? this.privacyView() : this.insightsView()}
     </div>`;
   }

@@ -25,6 +25,7 @@ visitor ──► chat bubble ──► the site's Umbraco (this package) ─┬
 | Model runtime and benchmarks | `model/` | [model/README.md](model/README.md) |
 | Plan and decisions | `docs/` | [docs/PLAN.md](docs/PLAN.md), [docs/SUPPORT.md](docs/SUPPORT.md) (team handoff, live chat, email) |
 | Privacy guide and policy texts | `docs/` | [docs/PRIVACY.md](docs/PRIVACY.md), [docs/privacy/](docs/privacy/) (German and English) |
+| Roadmap | `docs/` | [docs/ROADMAP.md](docs/ROADMAP.md) (a content assistant in the backoffice, the website assistant taking visitors to the right place) |
 
 ## What editors get
 
@@ -61,7 +62,7 @@ A new top-level section, **AI Assistant** (or **Support** when the AI is not lic
     - every published page is used automatically, in every language, including pages added later; leave out single pages or whole sections (`/shop/`);
     - upload PDF, Word, text, Markdown, CSV, JSON or HTML, or write text; mark short essentials as *always known*;
     - a test search, and the list of pages the assistant gets with every question.
-  - **Connection**: gateway address and API key (stored encrypted, never sent to browsers), live test. In API mode: the Claude model, whether the key is configured (never any part of it), a connection test and today's usage against the limits.
+  - **Connection**: the keys for the Ligata GPU (gateway address and `lai_…` key) and for Claude (an Anthropic key), each stored encrypted (or set in the configuration) and never sent to browsers; a live test and the status of each engine (Claude: today's usage against the limits). With both set up, **AI engine** chooses which one answers visitors; with one, that one answers and no switch is shown (the other can be added under *Add another AI engine*).
   - **Privacy**: consent status (who receives the data, how long a consent lasts, how many visitors agreed, asked and withdrew), the wording of the consent request, *Ask all visitors again*, the **conversation history** (on/off, days to keep, 1 to 365), the notice under the input and the privacy policy link, what to declare in Cookiebot, and the **privacy policy text** for this site's setup in German or English (copy or download).
   - **Insights**: anonymous daily counters for the AI (questions, answer time, busy/offline, failures) and the team (chat requests, emails, replies, average first response, questions the AI could not answer).
 
@@ -90,8 +91,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.7.4.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.7.4 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.8.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.8.0 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
@@ -101,7 +102,7 @@ Normal `.AddComposers()` discovers everything.
 
 Then, in the backoffice:
 - **For the AI on the Ligata GPU**: **Settings → Connection** → gateway address and the key from `node cli.mjs keys create "Site name"` on the gateway machine. Your pages are used at once; leave out what the assistant should not use, add documents under **Knowledge**.
-- **For the AI through Claude**: set `LigataAI:Mode` to `api` and the key in the site's configuration (below), restart, check **Settings → Connection → Test connection**. Pages are used at once, as with the GPU.
+- **For the AI through Claude**: paste an Anthropic API key under **Settings → Connection** (or set `LigataAI__Claude__ApiKey` in the site's configuration, below). Pages are used at once, as with the GPU. With both engines set up, choose under **Connection → AI engine** which one answers.
 - **For the team**: **Settings → Team & email** → switch on live chat and/or the email form, then add team email addresses.
 - Check the preview, then use **Show on website**.
 
@@ -126,9 +127,15 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 
 ## AI engine: own GPU or Claude API
 
-`LigataAI:Mode` chooses where answers come from. Everything else (settings, knowledge, Inbox, limits, widget) is identical.
+Answers come from the Ligata GPU or from Claude. Everything else (settings, knowledge, Inbox, limits, widget) is identical.
 
-| | `"gpu"` (default) | `"api"` |
+- **An engine is set up when its key is there**: the `lai_…` key for the Ligata AI gateway, an Anthropic key for Claude. Each key is entered under **Settings → Connection** (stored encrypted with the server's Data Protection keys) or set in the configuration (`LigataAI__ApiKey`, `LigataAI__Claude__ApiKey`), which wins.
+- **One engine set up**: it answers, and the backoffice shows no switch.
+- **Both set up**: editors choose under **Connection → AI engine**. `LigataAI:Mode` (`gpu` or `api`) is the default until they do. Adding a key never changes who answers; removing the key of the engine in use hands visitors to the other one.
+- **Switching asks visitors again**: the consent names who answers (Anthropic in the USA, or the GPU operator and its country), so every visitor agrees again, and the text for the privacy policy under **Privacy** changes with the engine.
+- **How much the AI thinks** is set under **Behaviour**: the GPU (Gemma) thinks or does not (*Think before answering*); Claude has an effort level: *Off* (no thinking, fastest), *Low* (default: thinks only when a question needs it), *Medium*, *High*, *Extra high* and *Max* (much slower and more expensive, rarely better for website questions). With both engines set up, the other engine's setting is under *When … answers*.
+
+| | Ligata GPU (`"gpu"`, default) | Claude API (`"api"`) |
 | --- | --- | --- |
 | Model | Gemma 4 12B on the Ligata GPU | Claude Haiku 5.5 (`LigataAI:Claude:Model`) |
 | Needs | the Ligata AI gateway (`gateway/`) and a `lai_…` key | an Anthropic API key, nothing else |
@@ -142,7 +149,6 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
     "Mode": "api",
     "Claude": {
       "Model": "claude-haiku-5-5",
-      "Effort": "low",
       "QuestionsPerDay": 1500,
       "MaxConcurrent": 8,
       "MaxContextTokens": 100000,
@@ -152,7 +158,7 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 }
 ```
 
-- **The key** goes into `LigataAI:Claude:ApiKey`, preferably as the environment variable or secret `LigataAI__Claude__ApiKey`. It is read on the server and sent only to Anthropic, never to browsers and never to the backoffice (not even in part). `ANTHROPIC_*` environment variables are ignored, so nothing else on the server can redirect visitor messages.
+- **The key** goes under **Connection** (stored encrypted) or into `LigataAI:Claude:ApiKey`, preferably as the environment variable or secret `LigataAI__Claude__ApiKey`. It is sent only to Anthropic, never to browsers; the backoffice sees only its first and last characters. `ANTHROPIC_*` environment variables are ignored, so nothing else on the server can redirect visitor messages.
 - **Limits still apply**:
   - the per-IP and per-visitor limits and one question at a time per visitor;
   - `QuestionsPerDay` (site-wide, UTC; 0 = unlimited);
@@ -162,7 +168,7 @@ Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by
 
   Also set a monthly spend limit in the Anthropic Console as the final ceiling.
 - **Cost**: the tools, instructions, always-known knowledge and the list of pages are sent as one cached block (prompt caching), so follow-up questions read them at a tenth of the input price. The date and page come after the cache breakpoint. Lookups run on the website's server; their results count as input tokens.
-- **Thinking**: `Effort` `low` (default) keeps answers fast; Claude thinks only when a question needs it. *Think before answering* in the backoffice raises it one level. Claude Haiku 5.5 takes no temperature, so the *Creativity* slider is hidden in API mode.
+- **Thinking**: the effort level under **Behaviour** (default *Low*: fast, thinks only when a question needs it). Thinking gets room on top of the answer limit (2k tokens at Low up to 64k at Max). Until 0.8 it was `LigataAI:Claude:Effort`, raised one level by *Think before answering*; that setting is gone. Claude Haiku 5.5 takes no temperature, so the *Creativity* slider is hidden for Claude. Measured on the test site with the real API (October 2026): Off about 1 s, Low about 2 s with a lookup, Medium and High 3.5 to 4 s, Extra high about 6 s.
 - **Availability**: the widget's frequent status checks need no network call. A rejected key or unknown model shows as offline (and in the backoffice) until *Test connection* succeeds. Anthropic overload shows as "busy" for 30 s.
 - **Privacy**: the default notice under the input becomes "Answers are generated by Claude, an AI by Anthropic …", and the branding says "AI by Ligata" instead of "Private AI". Each request carries only the pseudonymous visitor id (`metadata.user_id`), so Anthropic can act on abuse by one visitor without blocking the site.
 

@@ -20,9 +20,12 @@ export function startMockAnthropic(port = 1230) {
   /** The checks the real API applies to a Claude Haiku 5.5 request (a subset: what this package could get wrong). */
   function invalid(body) {
     if (body.model !== MOCK_MODEL) return `unknown model ${body.model}`;
+    // Optional fields are left out; null is refused (the real API: "tool_choice: Input should be an object").
+    for (const [field, value] of Object.entries(body)) if (value === null) return `${field}: Input should be ${field === 'tools' ? 'a valid list' : 'an object'}`;
     if (!Number.isInteger(body.max_tokens) || body.max_tokens < 1) return 'max_tokens: required';
     for (const field of ['temperature', 'top_p', 'top_k']) if (field in body) return `${field}: not supported with this model`;
-    if (body.thinking && body.thinking.type !== 'adaptive') return 'thinking.type: budget_tokens is not supported';
+    if (body.thinking && !['adaptive', 'disabled'].includes(body.thinking.type)) return 'thinking.type: budget_tokens is not supported';
+    if (body.thinking?.type === 'disabled' && ['xhigh', 'max'].includes(body.output_config?.effort)) return 'thinking: disabled is not supported with effort xhigh or max';
     if (body.output_config?.effort && !['low', 'medium', 'high', 'xhigh', 'max'].includes(body.output_config.effort)) return 'output_config.effort: invalid';
     if (!Array.isArray(body.messages) || !body.messages.length) return 'messages: at least one message is required';
     if (body.messages.at(-1).role !== 'user') return 'This model does not support assistant message prefill. The conversation must end with a user message.';
@@ -121,8 +124,8 @@ export function startMockAnthropic(port = 1230) {
     send('message_start', { message: { id: 'msg_mock_' + state.requests, type: 'message', role: 'assistant', model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: input, output_tokens: 1, cache_creation_input_tokens: created, cache_read_input_tokens: read } } });
     send('ping', {});
     let index = 0;
-    // Higher effort thinks first (the thinking text is omitted by default, only a signature arrives).
-    if (exhausted || (body.output_config?.effort && body.output_config.effort !== 'low')) {
+    // Higher effort thinks first (the thinking text is omitted by default, only a signature arrives); never with thinking disabled.
+    if (exhausted || (body.thinking?.type !== 'disabled' && body.output_config?.effort && body.output_config.effort !== 'low')) {
       send('content_block_start', { index, content_block: { type: 'thinking', thinking: '', signature: '' } });
       await wait(state.mode === 'slow' ? 1500 : 150);
       send('content_block_delta', { index, delta: { type: 'signature_delta', signature: 'mock-signature' } });

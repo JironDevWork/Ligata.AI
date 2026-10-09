@@ -47,7 +47,8 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var denied = Check("read", false); if (denied != null) return denied;
         var (settings, version) = store.Settings();
         var features = settings.Effective(options.Value.Features);
-        return Ok(Build(settings, version, settings.Enabled && features.Assistant ? await Status(token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: false, engine.Mode, VisitorConsent.Public(settings, options.Value, features)));
+        var mode = engine.For(settings);
+        return Ok(Build(settings, version, settings.Enabled && features.Assistant ? await Status(token) : null, store, features, captcha.Value, hub.OnlineAgents(), ignoreEnabled: false, mode, VisitorConsent.Public(settings, options.Value, features, mode)));
     }
 
     /// <summary>
@@ -89,7 +90,7 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
     private Task<GatewayStatus?> Status(CancellationToken token) => CachedStatus(cache, engine, token);
 
     public static async Task<GatewayStatus?> CachedStatus(IMemoryCache cache, AssistantEngine engine, CancellationToken token) =>
-        await cache.GetOrCreateAsync("Ligata.AI.Status", async entry =>
+        await cache.GetOrCreateAsync("Ligata.AI.Status." + engine.Mode, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5);
             try { return await engine.StatusAsync(token); } catch (GatewayException) { return null; }
@@ -110,11 +111,12 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         // While the site keeps a history and the visitor did not object, the question and how it was answered are kept once the answer
         // has ended. Checked again then: a visitor may object or withdraw while the answer runs.
         var features = settings.Effective(options.Value.Features);
-        bool Keeps() => request.History != null && VisitorConsent.KeepsHistory(consents, request.Consent, settings, options.Value, features, DateTime.UtcNow);
+        var mode = engine.For(settings);
+        bool Keeps() => request.History != null && VisitorConsent.KeepsHistory(consents, request.Consent, settings, options.Value, features, DateTime.UtcNow, mode);
         var outcome = Keeps() ? new ChatOutcome() : null;
         var clock = Stopwatch.StartNew();
         await relay.RunAsync(HttpContext, request, settings, visitor, outcome: outcome);
-        if (outcome != null && Keeps()) history.Record(request, outcome, engine.Mode, clock.ElapsedMilliseconds, settings.Privacy.HistoryDays);
+        if (outcome != null && Keeps()) history.Record(request, outcome, mode, clock.ElapsedMilliseconds, settings.Privacy.HistoryDays);
     }
 
     /// <summary>Converts a visitor's PDF to text. The file is processed in memory and not stored.</summary>
@@ -143,7 +145,7 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
     private (string Code, string Message)? ConsentDenied(AssistantSettings settings, string? id)
     {
         if (!VisitorConsent.Required(options.Value, settings.Effective(options.Value.Features))) return null;
-        return VisitorConsent.Verify(consents, id, settings, options.Value, DateTime.UtcNow) == ConsentCheck.Valid ? null
+        return VisitorConsent.Verify(consents, id, settings, options.Value, DateTime.UtcNow, engine.For(settings)) == ConsentCheck.Valid ? null
             : ("consent_required", "Please agree to the processing of your messages before using the assistant.");
     }
 
@@ -158,12 +160,13 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var (settings, _) = store.Settings();
         var features = settings.Effective(options.Value.Features);
         if (!settings.Enabled || !features.Assistant) return StatusCode(503, Error("disabled", "The assistant is switched off."));
-        var current = VisitorConsent.Version(settings, options.Value);
+        var mode = engine.For(settings);
+        var current = VisitorConsent.Version(settings, options.Value, mode);
         var history = VisitorConsent.HistoryVersion(settings);
         if (request.Version != current || (request.History != null && request.History != history))
             return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, version = current });
         var now = DateTime.UtcNow;
-        var row = consents.Create(current, VisitorConsent.Engine(options.Value), VisitorConsent.Source(request.Source), VisitorConsent.Language(request.Language), now,
+        var row = consents.Create(current, mode, VisitorConsent.Source(request.Source), VisitorConsent.Language(request.Language), now,
             now.AddDays(Math.Clamp(options.Value.Privacy.ConsentDays, 1, 400)), request.History != null && history != "" ? history : null, objected: history != "" && request.History == null);
         return Ok(new { id = row.Id, version = row.Version, expires = row.ExpiresUtc, history = row.HistoryVersion });
     }
@@ -187,7 +190,7 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
         var (settings, _) = store.Settings();
         if (VisitorConsent.HistoryVersion(settings) is not { Length: > 0 } current || request.Version != current)
             return Conflict(new { error = new { code = "consent_outdated", message = "The consent text has changed. Please read it again." }, history = VisitorConsent.HistoryVersion(settings) });
-        if (VisitorConsent.Check(consents.Find(id), VisitorConsent.Version(settings, options.Value), now) != ConsentCheck.Valid || !consents.SetHistory(id, current, now))
+        if (VisitorConsent.Check(consents.Find(id), VisitorConsent.Version(settings, options.Value, engine.For(settings)), now) != ConsentCheck.Valid || !consents.SetHistory(id, current, now))
             return StatusCode(403, Error("consent_required", "Please agree to the processing of your messages before using the assistant."));
         ChatHistoryStore.Resume(id);
         return Ok(new { history = current });

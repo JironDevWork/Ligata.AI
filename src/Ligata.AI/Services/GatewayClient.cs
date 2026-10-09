@@ -20,16 +20,14 @@ public sealed record GatewayStatus(string State, string? Model, int ContextToken
 public sealed record ExtractedDocument(string Text, int Pages, int PagesRead, bool Truncated, int? Tokens);
 
 /// <summary>Server-to-server client for the shared Ligata AI gateway. The API key never leaves this server.</summary>
-public sealed class GatewayClient(HttpClient http, AssistantStore store, ApiKeyVault vault, IOptions<AssistantOptions> options)
+public sealed class GatewayClient(HttpClient http, AssistantStore store, EngineSelector engines, IOptions<AssistantOptions> options)
 {
     public (string Url, string? Key, string KeySource) Target()
     {
-        var row = store.Row();
-        var settings = AssistantJson.Read<AssistantSettings>(row.Json);
+        var settings = AssistantJson.Read<AssistantSettings>(store.Row().Json);
         var url = (options.Value.GatewayUrl is { Length: > 0 } configured ? configured : settings.GatewayUrl).TrimEnd('/');
-        if (options.Value.ApiKey is { Length: > 0 } key) return (url, key, "configuration");
-        var stored = vault.Unprotect(row.ProtectedKey);
-        return (url, stored, stored != null ? "backoffice" : row.ProtectedKey != null ? "unreadable" : "none");
+        var key = engines.GatewayKey();
+        return (url, key.Key, key.Source);
     }
 
     private HttpRequestMessage Request(HttpMethod method, string path, object? body = null)

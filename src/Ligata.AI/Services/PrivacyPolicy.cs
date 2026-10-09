@@ -78,8 +78,9 @@ public static partial class PrivacyPolicy
 
     /// <param name="keptConversations">Conversations still in the history: after it was switched off they stay until their period ends,
     /// and the text must say so instead of "not stored".</param>
-    public static string Generate(string language, AssistantSettings settings, AssistantOptions options, RecaptchaSettings captcha, int keptConversations = 0)
+    public static string Generate(string language, AssistantSettings settings, AssistantOptions options, RecaptchaSettings captcha, int keptConversations = 0, string? engine = null)
     {
+        var api = (engine ?? VisitorConsent.Engine(options)) == "api";
         language = Languages.Contains(language) ? language : "en";
         var features = settings.Effective(options.Features);
         var privacy = options.Privacy;
@@ -87,8 +88,8 @@ public static partial class PrivacyPolicy
         void Flag(string name, bool on) { if (on) flags.Add(name); }
         var gpuCountry = privacy.GpuOperatorCountry.Trim();
         Flag("ai", features.Assistant);
-        Flag("gpu", features.Assistant && !options.UsesApi);
-        Flag("api", features.Assistant && options.UsesApi);
+        Flag("gpu", features.Assistant && !api);
+        Flag("api", features.Assistant && api);
         Flag("consent", VisitorConsent.Required(options, features));
         Flag("noconsent", features.Assistant && !privacy.RequireConsent);
         Flag("cookiebot", VisitorConsent.Required(options, features) && privacy.UsesCookiebot);

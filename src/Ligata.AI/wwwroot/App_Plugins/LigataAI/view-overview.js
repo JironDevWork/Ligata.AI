@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.7.4';
+import { icon, number, compact } from './ui.js?v=0.8.0';
 
 export const overviewView = {
   budgetCard(title = 'Context budget', compactView = false) {
@@ -47,7 +47,7 @@ export const overviewView = {
     const l = this.licensedFeatures(), e = this.effectiveFeatures(), recipients = this.settings.notifications.recipients.filter(x => x.trim()).length;
     const k = this.connection?.claude;
     const aiSteps = !e.assistant ? [] : this.api() ? [
-      { done: !!k?.configured, label: 'Add your Anthropic API key', detail: k?.configured ? 'Set in the site configuration. It never leaves this server except to Anthropic.' : 'Add LigataAI:Claude:ApiKey to appsettings, or the environment variable LigataAI__Claude__ApiKey.', tab: 'connection' },
+      { done: !!k?.configured, label: 'Add your Anthropic API key', detail: k?.configured ? `Key ${k.keyHint || ''} (${k.keySource === 'configuration' ? 'from configuration' : 'stored encrypted'}). It never leaves this server except to Anthropic.` : 'Paste it under Connection, or set LigataAI__Claude__ApiKey in the site configuration.', tab: 'connection' },
       { done: ready, label: 'Claude answers', detail: ready ? `${s.status.model} · up to ${compact(s.status.contextTokens)} tokens per question · reads screenshots` : s?.message || 'Waiting for status…', tab: 'connection' },
       { done: !!this.settings.behaviour.siteName && !!this.settings.behaviour.instructions, label: 'Describe your business', detail: 'Website name and instructions under Behaviour.', tab: 'behaviour' },
       { done: enabledKnowledge > 0, label: 'Add knowledge', detail: enabledKnowledge ? `${enabledKnowledge} source${enabledKnowledge === 1 ? '' : 's'} active` : 'Upload documents or import your website pages.', tab: 'knowledge' },

@@ -1,7 +1,8 @@
 // API mode (LigataAI:Mode = api): Claude through Anthropic, called from the website's own server.
 // Runs against the strict mock Anthropic API, so no key or money is needed:
 //   node mock-anthropic.mjs &
-//   CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash restart-host.sh
+//   CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash restart-host.sh --clear-keys
+// (--clear-keys: no gateway key from earlier runs, so Claude is the only engine set up; engines.mjs tests both.)
 //   node api.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -108,11 +109,11 @@ await check('a visitor gets a streamed answer from Claude with the real prompt s
   await page.screenshot({ path: path.join(out, '01-api-answer.png') });
 });
 
-await check('the request to Anthropic: cached prefix, low effort, no sampling parameters, pseudonymous user', async () => {
+await check('the request to Anthropic: cached prefix, low effort with adaptive thinking, no sampling parameters, pseudonymous user', async () => {
   const { last, errors: rejected } = await mockState();
   assert(rejected.length === 0, 'mock rejected: ' + rejected.join('; '));
   assert(last.model === 'claude-haiku-5-5' && last.stream === true && last.output_config?.effort === 'low', 'model, streaming, effort');
-  assert(!('temperature' in last) && !('top_p' in last) && !('thinking' in last), 'no sampling or thinking budget');
+  assert(!('temperature' in last) && !('top_p' in last) && last.thinking?.type === 'adaptive' && !('budget_tokens' in last.thinking), 'no sampling parameters, adaptive thinking without a budget: ' + JSON.stringify(last.thinking));
   assert(last.system.length === 2 && last.system[0].cache_control?.type === 'ephemeral' && !last.system[1].cache_control, 'breakpoint after the shared prefix');
   assert(last.system[0].text.includes('# Knowledge') || last.system[0].text.includes('You are'), 'guardrails (and knowledge) are in the cached block');
   assert(last.system[1].text.startsWith('# Current situation') && !last.system[0].text.includes('Current situation'), 'date and page come after the breakpoint');
@@ -201,7 +202,7 @@ const dash = admin.locator('ligata-ai-dashboard');
 const dashText = () => dash.locator('.workspace').first().innerText();
 const tab = name => dash.locator('nav.tabs button', { hasText: name }).click();
 
-await check('backoffice: the Connection tab shows Claude, with no key field and no part of the key', async () => {
+await check('backoffice: the Connection tab shows Claude in use, its key from configuration (locked, only a hint), and no engine switch', async () => {
   await admin.goto(base + '/umbraco');
   await admin.locator('input[type=email], input[name=username]').first().fill(credentials.email);
   await admin.locator('input[type=password]').first().fill(credentials.password);
@@ -211,10 +212,12 @@ await check('backoffice: the Connection tab shows Claude, with no key field and 
   await dash.locator('h1').first().waitFor({ timeout: 20000 });
   await tab('Connection');
   await dash.locator('h2', { hasText: 'Claude API' }).waitFor();
-  assert(await dash.locator('input[type=password]').count() === 0 && await dash.locator('input[type=url]').count() === 0, 'no gateway fields');
-  const card = await dash.locator('section.card', { hasText: 'Claude API' }).first().innerText();
-  assert(card.includes('Claude Haiku 5.5') && card.includes('Configured'), 'model and key state: ' + card.replace(/\s+/g, ' ').slice(0, 200));
-  await dash.locator('button', { hasText: 'Test connection' }).click();
+  assert(await dash.locator('.engines').count() === 0, 'only Claude is set up: no engine switch');
+  assert(!(await dash.locator('input[type=url]').isVisible()) && await dash.locator('summary', { hasText: 'Add another AI engine' }).isVisible(), 'the gateway waits, folded, under "Add another AI engine"');
+  assert(await dash.locator('input[name=claudeKey]').first().isDisabled(), 'a key from the configuration cannot be replaced here');
+  const card = await dash.locator('section.card', { hasText: 'Anthropic API key' }).first().innerText();
+  assert(card.includes('Claude Haiku 5.5') && card.includes('Provided by configuration') && card.includes('In use'), 'model and key state: ' + card.replace(/\s+/g, ' ').slice(0, 300));
+  await dash.locator('button', { hasText: 'Test again' }).first().click();
   await dash.locator('.notice.success', { hasText: 'Anthropic accepted' }).waitFor({ timeout: 15000 });
   await dash.locator('dt', { hasText: 'Answers right now' }).waitFor();
   await admin.screenshot({ path: path.join(out, '03-connection.png') });
@@ -229,6 +232,7 @@ await check('backoffice: overview, behaviour and appearance speak Claude, not GP
   await tab('Behaviour');
   const behaviour = await dashText();
   assert(!behaviour.includes('Creativity') && !behaviour.includes('sharing the GPU'), 'no temperature slider in API mode');
+  assert(behaviour.includes('Thinking effort') && behaviour.includes('Extra high') && !behaviour.includes('Think before answering'), 'Claude has effort levels instead of the GPU switch');
   await tab('Privacy');
   await dash.locator('h2', { hasText: 'Privacy notice' }).waitFor();
   const privacy = await dashText();
@@ -271,10 +275,10 @@ await check('a rejected key: the widget goes offline, Test connection explains, 
   const config = await (await fetch(base + '/api/ligata-ai/config')).json();
   assert(config.state === 'offline', 'widget state offline: ' + config.state);
   await tab('Connection');
-  await dash.locator('button', { hasText: 'Test connection' }).click();
-  await dash.locator('.notice.error', { hasText: /rejected/ }).waitFor({ timeout: 15000 });
+  await dash.locator('button', { hasText: 'Test again' }).first().click();
+  await dash.locator('.notice.error', { hasText: /rejected/ }).first().waitFor({ timeout: 15000 });
   await mockMode('ok');
-  await dash.locator('button', { hasText: 'Test connection' }).click();
+  await dash.locator('button', { hasText: 'Test again' }).first().click();
   await dash.locator('.notice.success', { hasText: 'Anthropic accepted' }).waitFor({ timeout: 15000 });
   await new Promise(r => setTimeout(r, 5500));
   assert((await (await fetch(base + '/api/ligata-ai/config')).json()).state === 'ready', 'ready again');

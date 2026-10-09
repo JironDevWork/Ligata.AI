@@ -16,6 +16,7 @@ public static class VisitorConsent
     public const string AnthropicName = "Anthropic";
     public const string AnthropicCountry = "US";
 
+    /// <summary>The engine LigataAI:Mode names. The site's engine comes from EngineSelector (the editor's choice and the keys set up); callers pass it.</summary>
     public static string Engine(AssistantOptions options) => options.UsesApi ? "api" : "gpu";
 
     public static bool Required(AssistantOptions options, FeatureState features) => options.Privacy.RequireConsent && features.Assistant;
@@ -25,9 +26,9 @@ public static class VisitorConsent
     /// keeping conversations or keeps them for another period: the consent request states the period ("…h30"), so every visitor
     /// agrees again to the period that applies now.
     /// </summary>
-    public static string Version(AssistantSettings settings, AssistantOptions options)
+    public static string Version(AssistantSettings settings, AssistantOptions options, string? engine = null)
     {
-        var engine = Engine(options);
+        engine ??= Engine(options);
         var recipient = engine == "api" ? AnthropicName : $"{options.Privacy.GpuOperator.Trim()}|{options.Privacy.GpuOperatorCountry.Trim().ToUpperInvariant()}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(recipient)))[..6].ToLowerInvariant();
         var history = settings.Privacy.History ? $".h{Math.Clamp(settings.Privacy.HistoryDays, 1, 365)}" : "";
@@ -42,14 +43,15 @@ public static class VisitorConsent
         given == current || (given != null && !current.Contains(".h", StringComparison.Ordinal) && given.StartsWith(current + ".h", StringComparison.Ordinal));
 
     /// <summary>What the widget needs to ask (null when no consent is needed).</summary>
-    public static object? Public(AssistantSettings settings, AssistantOptions options, FeatureState features)
+    public static object? Public(AssistantSettings settings, AssistantOptions options, FeatureState features, string? engine = null)
     {
         if (!Required(options, features)) return null;
         var privacy = options.Privacy;
-        var api = options.UsesApi;
+        engine ??= Engine(options);
+        var api = engine == "api";
         return new
         {
-            Version = Version(settings, options),
+            Version = Version(settings, options, engine),
             Mode = privacy.UsesCookiebot ? "cookiebot" : "explicit",
             privacy.Category,
             Days = Math.Clamp(privacy.ConsentDays, 1, 400),
@@ -70,12 +72,12 @@ public static class VisitorConsent
     /// consent given to the current period and not objected to since ("Stop keeping"); without consent, unless the visitor objected
     /// (the browser then sends no key).
     /// </summary>
-    public static bool KeepsHistory(ConsentStore store, string? id, AssistantSettings settings, AssistantOptions options, FeatureState features, DateTime now)
+    public static bool KeepsHistory(ConsentStore store, string? id, AssistantSettings settings, AssistantOptions options, FeatureState features, DateTime now, string? engine = null)
     {
         if (!features.Assistant || !settings.Privacy.History) return false;
         if (!Required(options, features)) return true;
         var row = Guid.TryParse(id, out var key) ? store.Find(key) : null;
-        return Check(row, Version(settings, options), now) == ConsentCheck.Valid && row!.HistoryVersion == HistoryVersion(settings);
+        return Check(row, Version(settings, options, engine), now) == ConsentCheck.Valid && row!.HistoryVersion == HistoryVersion(settings);
     }
 
     public static ConsentCheck Check(ConsentRow? row, string version, DateTime now) =>
@@ -86,12 +88,12 @@ public static class VisitorConsent
         : ConsentCheck.Valid;
 
     /// <summary>Checks the consent id a question or file carries; the first use is recorded.</summary>
-    public static ConsentCheck Verify(ConsentStore store, string? id, AssistantSettings settings, AssistantOptions options, DateTime now)
+    public static ConsentCheck Verify(ConsentStore store, string? id, AssistantSettings settings, AssistantOptions options, DateTime now, string? engine = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return ConsentCheck.Missing;
         if (!Guid.TryParse(id, out var key)) return ConsentCheck.Unknown;
         var row = store.Find(key);
-        var result = Check(row, Version(settings, options), now);
+        var result = Check(row, Version(settings, options, engine), now);
         if (result == ConsentCheck.Valid) store.MarkUsed(row!, now);
         return result;
     }

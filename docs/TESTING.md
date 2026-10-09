@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 188 assertions
+# Package domain and security checks (no database): 197 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -16,7 +16,9 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 
 # Real Umbraco 17 host: unattended install or 0.1 → 0.2 upgrade on SQLite, migrations, section grants, store, knowledge,
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
-# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history: 284 assertions in total
+# limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
+# which engine answers (keys from the configuration or the backoffice, the editor's choice): 300 assertions in total.
+# --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
 # Browser suite in Microsoft Edge (headless): 24 checks, needs the host above and a gateway
@@ -65,6 +67,7 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
+- 0.8.0 (9 October 2026): two engines chosen in the backoffice (a key each for the Ligata GPU and Claude, stored encrypted or set in the configuration; the switch appears only with both), Claude's thinking effort under *Behaviour* (Off to Max; the GPU keeps on/off). New browser suite `engines.mjs` 8/8: only the GPU set up (no switch), a Claude key stored through the backoffice (checked, only a hint comes back, adding it does not switch), the effort setting, switching to Claude (visitors asked again, naming Anthropic; the request carries the chosen effort), Off without thinking, back to the GPU (nothing sent to Anthropic), removing Claude's key while it answers (the GPU takes over). The real API, for the first time (`claude-live.mjs`, five questions): every request with lookups failed because `"tool_choice": null` was sent, which Anthropic refuses and the mock accepted; fixed, the mock now refuses `null` fields, then all five answered (Off 1.0 s, Low 2.1 s, Medium 3.7 s, High 3.5 s, Extra high 6.1 s). Also fixed: the token budget answered 500 while no knowledge was *always known*, and the history suite's clean-up reloaded before its deletion had finished. Browser: engines 8/8, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7; package checks 197 domain and 300 total.
 - 0.7.4 (9 October 2026): a team chat reopened by the team shows on the website at once (the widget followed only open team chats, so the visitor saw it closed until leaving the chat and coming back); the closed chat on screen is now watched, and the server lets that poll wait. The Inbox list also refreshes right after *Reopen*, and its live loop always restarts after leaving the section. Browser: team 17/17 (new: reopen and close again, live on both sides), team without AI 5/5, AI 24/24; package checks 188 domain and 284 total.
 - 0.7.3 (9 October 2026): the memory bar is off by default (switched off once on existing sites; *Appearance → Show the memory bar*). Package checks 188 domain and 284 total.
 - 0.7.2 (9 October 2026): the history is stated in the consent request (legitimate interest, right to object) instead of a separate checkbox, and the period is part of the consent version. Package checks 187 domain and 281 total; browser: history 8/8, privacy 7/7 with consent in the chat and 7/7 in Cookiebot mode (with the new history check), AI 24/24, team 16/16, memory 12/12.
@@ -89,7 +92,8 @@ Results (8 October 2026, version 0.4.0):
 
 No key and no cost: `tests/e2e/mock-anthropic.mjs` stands in for the Anthropic Messages API and is strict where the real API is. It refuses:
 - a wrong key or a missing `anthropic-version` header;
-- sampling parameters or a thinking budget, which Claude Haiku 5.5 rejects;
+- sampling parameters or a thinking budget, which Claude Haiku 5.5 rejects, and disabled thinking at Extra high or Max;
+- any field sent as `null` (the real API refused `"tool_choice": null`; found with the real key in 0.8);
 - prefill or empty text blocks;
 - malformed image or document blocks.
 
@@ -97,8 +101,16 @@ It simulates prompt caching from the first `cache_control` breakpoint, streams l
 
 ```bash
 node tests/e2e/mock-anthropic.mjs &      # :1230
-CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash tests/e2e/restart-host.sh
+CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash tests/e2e/restart-host.sh --clear-keys
 cd tests/e2e && node api.mjs             # 15 checks, screenshots in .runtime/e2e/api
+
+# Both engines (0.8): the gateway key from the configuration, the Claude key stored through the backoffice by the suite
+LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 bash tests/e2e/restart-host.sh --clear-keys
+cd tests/e2e && node engines.mjs         # 8 checks, screenshots in .runtime/e2e/engines
+
+# The real Claude API, now and then (a fraction of a cent; the key from a secret store, never from the repository)
+LigataAI__Mode=api LigataAI__Claude__ApiKey=<key> bash tests/e2e/restart-host.sh --clear-keys
+cd tests/e2e && node claude-live.mjs     # five questions, one per effort level: timings, tokens, lookups, answers
 node support.mjs                         # the team suite also passes in API mode (the mock hands off like the GPU mock)
 ```
 
@@ -106,12 +118,12 @@ node support.mjs                         # the team suite also passes in API mod
 | --- | --- |
 | Config | `engine: "api"`, the Claude privacy notice, Claude's image cost; the key is in no page, config or script |
 | Answer | Streamed through the same widget, "AI by Ligata" branding, memory meter from the real prompt size |
-| Request shape | `claude-haiku-5-5`, streaming, effort `low`, no temperature, cache breakpoint after guardrails and knowledge, date and page after it, pseudonymous `metadata.user_id`, room for thinking in `max_tokens` |
+| Request shape | `claude-haiku-5-5`, streaming, adaptive thinking at effort `low`, no temperature, cache breakpoint after guardrails and knowledge, date and page after it, pseudonymous `metadata.user_id`, room for thinking in `max_tokens` |
 | Caching | A follow-up question reports cached tokens |
 | Handoff | The `[[team]]` marker becomes the team card |
 | Attachments | Screenshot as a JPEG image block; PDF read on the site's server (PdfPig) and sent as a text document block |
 | Failures | Overload shows "busy" with a working retry; a refusal has no retry; a rejected key turns the widget offline, *Test connection* explains it and recovers |
-| Backoffice | Claude card instead of gateway fields, no part of the key anywhere, overview/behaviour/appearance wording, the colour contrast warning, PDF knowledge counted by the token counting endpoint |
+| Backoffice | Claude in use with its key from the configuration (locked, only a hint), no engine switch with one engine, the gateway folded under *Add another AI engine*, Claude's effort levels under Behaviour, no part of the key anywhere, overview/behaviour/appearance wording, the colour contrast warning, PDF knowledge counted by the token counting endpoint |
 
 Results (7 October 2026, version 0.3.0):
 - API suite: 13/13 on the project host, twice in a row, and on the installed-package host (`.nupkg` with the Anthropic SDK and PdfPig, existing 0.2 database).

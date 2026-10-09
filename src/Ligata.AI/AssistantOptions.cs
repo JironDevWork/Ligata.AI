@@ -8,11 +8,12 @@ public sealed class AssistantOptions
     /// <summary>Absolute or root-relative base the widget calls, e.g. https://cms.example.ch/api/ligata-ai.</summary>
     public string PublicApiBase { get; set; } = "/api/ligata-ai";
     /// <summary>
-    /// Where answers come from. gpu = the self-hosted Ligata AI gateway (GatewayUrl/ApiKey);
+    /// Where answers come from by default. gpu = the self-hosted Ligata AI gateway (GatewayUrl/ApiKey);
     /// api = Claude through Anthropic's API, called directly from this server (Claude:ApiKey). No gateway is needed.
+    /// When both keys are set up, editors choose under Connection; when only one is, that one answers.
     /// </summary>
     public string Mode { get; set; } = "gpu";
-    /// <summary>Settings for Mode = api.</summary>
+    /// <summary>Settings for Claude (api).</summary>
     public ClaudeOptions Claude { get; set; } = new();
     public bool UsesApi => string.Equals(Mode?.Trim(), "api", StringComparison.OrdinalIgnoreCase);
     /// <summary>Overrides the gateway URL stored in the backoffice.</summary>
@@ -68,14 +69,15 @@ public sealed class PrivacyOptions
     public string Category => CookiebotCategory?.Trim().ToLowerInvariant() is "preferences" or "statistics" or "marketing" ? CookiebotCategory.Trim().ToLowerInvariant() : "preferences";
 }
 
-/// <summary>Claude through Anthropic's API (LigataAI:Mode = api). The key stays in configuration and is only ever sent to Anthropic.</summary>
+/// <summary>Claude through Anthropic's API. The key is only ever sent to Anthropic. How much Claude thinks is chosen under Behaviour.</summary>
 public sealed class ClaudeOptions
 {
-    /// <summary>Anthropic API key (sk-ant-…). Prefer an environment variable or secret store: LigataAI__Claude__ApiKey.</summary>
+    /// <summary>
+    /// Anthropic API key (sk-ant-…). Prefer an environment variable or secret store: LigataAI__Claude__ApiKey. Without it, editors can
+    /// store a key under Connection (encrypted with the server's Data Protection keys); a key set here wins.
+    /// </summary>
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "claude-haiku-5-5";
-    /// <summary>How much the model thinks before answering: low, medium or high. "Think before answering" in the backoffice raises it one level.</summary>
-    public string Effort { get; set; } = "low";
     /// <summary>Largest prompt per question. Claude Haiku 5.5 costs five times more per token above 100,000 prompt tokens.</summary>
     public int MaxContextTokens { get; set; } = 100_000;
     /// <summary>Answers written at the same time on this site. Further visitors wait up to 15 seconds, then see "busy".</summary>
@@ -85,7 +87,6 @@ public sealed class ClaudeOptions
     public int TimeoutSeconds { get; set; } = 90;
     /// <summary>Only for tests or an approved proxy. Empty = https://api.anthropic.com (environment variables are ignored).</summary>
     public string BaseUrl { get; set; } = "";
-    public bool Configured => ApiKey.Trim().Length > 0;
 }
 
 public sealed class FeatureOptions

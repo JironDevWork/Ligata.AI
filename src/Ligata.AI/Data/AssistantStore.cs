@@ -73,6 +73,18 @@ public sealed class AssistantStore(IScopeProvider scopes)
         }
     }
 
+    public void SetClaudeKey(string? protectedKey, string? hint)
+    {
+        lock (Gate)
+        {
+            Row();
+            using var scope = scopes.CreateScope();
+            scope.Database.Execute("UPDATE LigataAISettings SET ProtectedClaudeKey=@0, ClaudeKeyHint=@1, UpdatedUtc=@2 WHERE Id=1", (object?)protectedKey ?? DBNull.Value, (object?)hint ?? DBNull.Value, DateTime.UtcNow);
+            scope.Complete();
+            cached = null;
+        }
+    }
+
     public List<KnowledgeSummary> Knowledge()
     {
         if (cachedKnowledge is { } hit) return hit;

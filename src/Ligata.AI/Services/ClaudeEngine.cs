@@ -13,24 +13,37 @@ using Microsoft.Extensions.Options;
 
 namespace Ligata.AI.Services;
 
-/// <summary>Process-wide state for API mode: one SDK client, the concurrency gate and the latest health signals.</summary>
+/// <summary>Process-wide state for API mode: the SDK client, the concurrency gate and the latest health signals.</summary>
 public sealed class ClaudeGate(IOptions<AssistantOptions> options) : IDisposable
 {
-    private readonly Lazy<AnthropicClient> client = new(() => new AnthropicClient
-    {
-        // Explicit values only: an ANTHROPIC_* environment variable on the server must never redirect visitor messages.
-        ApiKey = options.Value.Claude.ApiKey.Trim(),
-        BaseUrl = string.IsNullOrWhiteSpace(options.Value.Claude.BaseUrl) ? "https://api.anthropic.com" : options.Value.Claude.BaseUrl.Trim().TrimEnd('/'),
-        Timeout = TimeSpan.FromSeconds(Math.Clamp(options.Value.Claude.TimeoutSeconds, 15, 600)),
-        MaxRetries = 1,
-    });
+    private readonly object sync = new();
+    private (string Key, AnthropicClient Client)? current;
     private readonly SemaphoreSlim slots = new(Math.Clamp(options.Value.Claude.MaxConcurrent, 1, 200));
     private int active;
     private long rejectedUntil, busyUntil;
     private (DateTime At, GatewayException? Error)? verified;
 
     public ClaudeOptions Options => options.Value.Claude;
-    public AnthropicClient Client => client.Value;
+
+    /// <summary>One client per key. A key saved in the backoffice gets a new client and a fresh check; answers still running finish with the old one.</summary>
+    public AnthropicClient Client(string key)
+    {
+        lock (sync)
+        {
+            if (current is { } known && known.Key == key) return known.Client;
+            var replaced = current != null;
+            current = (key, new AnthropicClient
+            {
+                // Explicit values only: an ANTHROPIC_* environment variable on the server must never redirect visitor messages.
+                ApiKey = key,
+                BaseUrl = string.IsNullOrWhiteSpace(Options.BaseUrl) ? "https://api.anthropic.com" : Options.BaseUrl.Trim().TrimEnd('/'),
+                Timeout = TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 15, 600)),
+                MaxRetries = 1,
+            });
+            if (replaced) Forget();
+            return current.Value.Client;
+        }
+    }
     public int Active => Volatile.Read(ref active);
     public bool Rejected => DateTime.UtcNow.Ticks < Interlocked.Read(ref rejectedUntil);
     public bool Busy => DateTime.UtcNow.Ticks < Interlocked.Read(ref busyUntil);
@@ -41,6 +54,8 @@ public sealed class ClaudeGate(IOptions<AssistantOptions> options) : IDisposable
     public void Overloaded() => Interlocked.Exchange(ref busyUntil, DateTime.UtcNow.AddSeconds(30).Ticks);
     public void Healthy() { Interlocked.Exchange(ref rejectedUntil, 0); Interlocked.Exchange(ref busyUntil, 0); }
     public void Remember(GatewayException? error) => verified = (DateTime.UtcNow, error);
+    /// <summary>A new or removed key: what was learned about the old one no longer applies.</summary>
+    public void Forget() { Healthy(); verified = null; }
 
     public async Task<IDisposable?> EnterAsync(TimeSpan wait, CancellationToken token)
     {
@@ -60,18 +75,21 @@ public sealed class ClaudeGate(IOptions<AssistantOptions> options) : IDisposable
         }
     }
 
-    public void Dispose() { slots.Dispose(); if (client.IsValueCreated) client.Value.Dispose(); }
+    public void Dispose() { slots.Dispose(); current?.Client.Dispose(); }
 }
 
 /// <summary>
 /// API mode: answers come from Claude, called directly from this server. Produces the same event stream as the
 /// gateway (started, thinking, delta, done, error), so the widget does not care which engine runs.
 /// </summary>
-public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<ClaudeEngine> logger)
+public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSelector engines, ILogger<ClaudeEngine> logger)
 {
     public const string Engine = "api";
 
     private ClaudeOptions O => gate.Options;
+    private AnthropicClient? client;
+    /// <summary>The key from configuration or the backoffice (decrypted once per request).</summary>
+    private AnthropicClient Client => client ??= gate.Client(RequireKey());
 
     /// <summary>"claude-haiku-5-5" → "Claude Haiku 5.5".</summary>
     public static string DisplayName(string model)
@@ -82,9 +100,12 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         return (string.Join(' ', words) + (version.Length > 0 ? " " + version : "")).Trim();
     }
 
-    private void RequireKey()
+    private string RequireKey()
     {
-        if (!O.Configured) throw new GatewayException("not_configured", "No Anthropic API key is configured. Add LigataAI:Claude:ApiKey to the site's configuration.", 503);
+        var key = engines.ClaudeKey();
+        return key.Key ?? throw new GatewayException("not_configured", key.Source == "unreadable"
+            ? "The stored Anthropic API key can no longer be decrypted on this server. Enter it again under Connection."
+            : "No Anthropic API key is configured. Add it under Connection, or as LigataAI:Claude:ApiKey in the site's configuration.", 503);
     }
 
     /// <summary>Availability without a network call, so open widgets can ask often. verify=true asks Anthropic (a success is trusted for a minute).</summary>
@@ -108,7 +129,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     {
         try
         {
-            await gate.Client.Models.Retrieve(O.Model, cancellationToken: token);
+            await Client.Models.Retrieve(O.Model, cancellationToken: token);
             gate.Healthy();
             gate.Remember(null);
         }
@@ -130,7 +151,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         {
             await Parallel.ForEachAsync(Enumerable.Range(0, texts.Count), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token }, async (i, ct) =>
             {
-                var result = await gate.Client.Messages.CountTokens(new MessageCountTokensParams { Model = O.Model, Messages = [new() { Role = Role.User, Content = texts[i].Length > 0 ? texts[i] : "." }] }, ct);
+                var result = await Client.Messages.CountTokens(new MessageCountTokensParams { Model = O.Model, Messages = [new() { Role = Role.User, Content = texts[i].Length > 0 ? texts[i] : "." }] }, ct);
                 counts[i] = (int)result.InputTokens;
             });
         }
@@ -142,7 +163,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
     {
         var document = await PdfText.ExtractAsync(bytes, token);
         int? tokens = null;
-        if (O.Configured && !gate.Rejected)
+        if (engines.ClaudeKey().Ready && !gate.Rejected)
             try { tokens = (await CountAsync([document.Text], token))[0]; } catch (GatewayException) { }
         return document with { Tokens = tokens };
     }
@@ -154,7 +175,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             case GatewayException g: return g;
             case AnthropicUnauthorizedException or AnthropicForbiddenException:
                 gate?.Reject();
-                return new GatewayException("invalid_key", "Anthropic rejected the API key (LigataAI:Claude:ApiKey).", 401);
+                return new GatewayException("invalid_key", "Anthropic rejected the API key.", 401);
             case AnthropicNotFoundException:
                 gate?.Reject();
                 return new GatewayException("model_unavailable", "The configured Claude model does not exist or is not available for this API key (LigataAI:Claude:Model).", 503);
@@ -231,11 +252,19 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         return messages;
     }
 
-    private static Effort Level(string configured, bool raise)
+    /// <summary>
+    /// The editor's thinking setting (Behaviour): the effort level, whether Claude thinks at all ("off": no thinking, at low effort)
+    /// and the room thinking gets on top of the answer, since thinking shares max_tokens with it.
+    /// </summary>
+    public static (Effort Effort, bool Thinks, int Room) Level(string effort) => effort switch
     {
-        var level = configured.Trim().ToLowerInvariant() switch { "medium" => 1, "high" => 2, _ => 0 };
-        return Math.Min(2, level + (raise ? 1 : 0)) switch { 1 => Effort.Medium, 2 => Effort.High, _ => Effort.Low };
-    }
+        "off" => (Effort.Low, false, 0),
+        "medium" => (Effort.Medium, true, 8_000),
+        "high" => (Effort.High, true, 16_000),
+        "xhigh" => (Effort.Xhigh, true, 32_000),
+        "max" => (Effort.Max, true, 64_000),
+        _ => (Effort.Low, true, 2_048),
+    };
 
     /// <summary>
     /// Streams one answer to the browser. The cached prefix is everything that is the same for every visitor (tools,
@@ -247,8 +276,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         var token = http.RequestAborted;
         var b = settings.Behaviour;
         var limit = Math.Min(b.ContextLimit, O.MaxContextTokens);
-        var effort = Level(O.Effort, b.Thinking);
-        var room = effort == Effort.High ? 16_000 : effort == Effort.Medium ? 8_000 : 2_048;
+        var level = Level(b.Effort);
         var conversation = Messages(request, lookups);
         var tools = lookups != null ? Tools() : null;
         var system = new List<TextBlockParam>
@@ -256,19 +284,25 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
             new() { Text = stable, CacheControl = new CacheControlEphemeral() },
             new() { Text = context },
         };
-        MessageCreateParams Parameters(int round) => new()
+        // Optional fields are left out, never sent as null: the API refuses "tool_choice": null ("Input should be an object").
+        MessageCreateParams Parameters(int round)
         {
-            Model = O.Model,
-            // Thinking shares max_tokens with the answer, so the answer limit gets room on top.
-            MaxTokens = (request.Compact ? ChatRelay.SummaryTokens : b.MaxAnswerTokens) + room,
-            System = system,
-            Messages = conversation,
-            OutputConfig = new OutputConfig { Effort = effort },
-            Metadata = new Metadata { UserID = visitor.Length > 64 ? visitor[..64] : visitor },
+            var parameters = new MessageCreateParams
+            {
+                Model = O.Model,
+                // Thinking shares max_tokens with the answer, so the answer limit gets room on top.
+                MaxTokens = (request.Compact ? ChatRelay.SummaryTokens : b.MaxAnswerTokens) + level.Room,
+                System = system,
+                Messages = conversation,
+                // A summary keeps the same thinking and effort: changing either between requests would lose the cached conversation.
+                Thinking = level.Thinks ? new ThinkingConfigAdaptive() : new ThinkingConfigDisabled(),
+                OutputConfig = new OutputConfig { Effort = level.Effort },
+                Metadata = new Metadata { UserID = visitor.Length > 64 ? visitor[..64] : visitor },
+            };
+            if (tools == null) return parameters;
             // A summary keeps the tools declared (the cached prefix stays the same) but may not call them; neither may an answer after its last round of lookups.
-            Tools = tools,
-            ToolChoice = tools != null && (request.Compact || round >= Lookups.MaxRounds) ? new ToolChoiceNone() : null,
-        };
+            return request.Compact || round >= Lookups.MaxRounds ? parameters with { Tools = tools, ToolChoice = new ToolChoiceNone() } : parameters with { Tools = tools };
+        }
 
         // Reject conversations that cannot fit before paying for them. Exact counting only near the limit.
         var images = request.Messages.Sum(m => m.Attachments?.Count(a => a.Type == "image") ?? 0);
@@ -280,7 +314,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
         {
             try
             {
-                var counted = await gate.Client.Messages.CountTokens(new MessageCountTokensParams { Model = O.Model, System = system, Messages = conversation }, token);
+                var counted = await Client.Messages.CountTokens(new MessageCountTokensParams { Model = O.Model, System = system, Messages = conversation }, token);
                 estimate = (int)counted.InputTokens + (tools != null ? 500 : 0);
             }
             catch (Exception e) when (!token.IsCancellationRequested) { logger.LogDebug(e, "Ligata AI could not count tokens; using the estimate."); }
@@ -313,7 +347,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                 IAsyncEnumerator<RawMessageStreamEvent> stream;
                 try
                 {
-                    stream = gate.Client.Messages.CreateStreaming(Parameters(round), token).GetAsyncEnumerator(token);
+                    stream = Client.Messages.CreateStreaming(Parameters(round), token).GetAsyncEnumerator(token);
                     // The request is sent on the first read: failures before the first event become a normal HTTP error.
                     if (!await stream.MoveNextAsync()) throw new GatewayException("model_failed", "The assistant returned no answer.", 502);
                 }
@@ -323,6 +357,8 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                     var error = Map(e, gate);
                     if (error.Code == "context_full") { await Error(http, error, countStats, limit, limit, outcome); return; }
                     if (error.Code == "gateway_unavailable") logger.LogWarning(e, "Ligata AI could not reach the Claude API.");
+                    // A refused request is a fault of this package or its settings: Anthropic says why (never anything secret).
+                    if (e is AnthropicBadRequestException && error.Code == "model_failed") logger.LogWarning("Ligata AI: Anthropic refused the request: {Message}", e.Message);
                     await Error(http, error, countStats, outcome: outcome);
                     return;
                 }
@@ -415,6 +451,14 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, ILogger<
                 if (countStats) store.Count(s => s.Failed++);
                 if (outcome != null) outcome.Error = "thinking_limit";
                 await sse!.Send("error", new { code = "thinking_limit", message = "The assistant thought for too long and could not finish its answer. Please try again or ask more specifically." });
+                return;
+            }
+            // At high effort Claude sometimes ends with everything in its thinking and nothing for the visitor.
+            if (answer.Length == 0 && stopReason is "end_turn" or "stop_sequence")
+            {
+                if (countStats) store.Count(s => s.Failed++);
+                if (outcome != null) outcome.Error = "empty_answer";
+                await sse!.Send("error", new { code = "empty_answer", message = "The assistant did not write an answer. Please try again." });
                 return;
             }
             if (stopReason == "refusal" && answer.Length == 0)

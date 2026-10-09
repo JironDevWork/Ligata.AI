@@ -19,6 +19,11 @@ public sealed record AssistantSettings
     public AssistantAppearance Appearance { get; init; } = new();
     public AssistantDisplay Display { get; init; } = new();
     public string GatewayUrl { get; init; } = "http://127.0.0.1:1210";
+    /// <summary>
+    /// Which AI answers when both are set up: gpu (the Ligata AI gateway) or api (Claude through Anthropic). Empty uses
+    /// LigataAI:Mode. When only one is set up, that one answers (see EngineSelector).
+    /// </summary>
+    public string Engine { get; init; } = "";
     /// <summary>Which licensed features the editor has switched on.</summary>
     public AssistantFeatures Features { get; init; } = new();
     public SupportSettings Support { get; init; } = new();
@@ -193,7 +198,10 @@ public sealed record AssistantBehaviour
     public string AnswerLength { get; init; } = "balanced";
     public bool StayOnTopic { get; init; } = true;
     public bool UseMarkdown { get; init; } = true;
+    /// <summary>Ligata GPU: think before answering (Gemma thinks or does not).</summary>
     public bool Thinking { get; init; }
+    /// <summary>Claude: off (no thinking), low, medium, high, xhigh or max. Higher levels think longer: slower, more careful and more expensive.</summary>
+    public string Effort { get; init; } = "low";
     public double Temperature { get; init; } = 0.7;
     public int MaxAnswerTokens { get; init; } = 1024;
     /// <summary>

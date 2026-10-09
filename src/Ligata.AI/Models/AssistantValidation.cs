@@ -17,6 +17,10 @@ public static partial class AssistantValidation
     private static readonly string[] Icons = ["chat", "sparkle", "help", "wave", "avatar"];
     private static readonly string[] Tones = ["friendly", "professional", "concise", "playful"];
     private static readonly string[] Lengths = ["short", "balanced", "detailed"];
+    /// <summary>"" = the site's default (LigataAI:Mode).</summary>
+    public static readonly string[] Engines = ["", "gpu", "api"];
+    /// <summary>How much Claude thinks: off (no thinking) or an effort level of the API.</summary>
+    public static readonly string[] Efforts = ["off", "low", "medium", "high", "xhigh", "max"];
     private static readonly string[] Languages = ["auto", "en", "de", "fr", "it"];
     private static readonly string[] Modes = ["all", "include", "exclude", "manual"];
     private static readonly string[] Fields = ["hidden", "optional", "required"];
@@ -58,6 +62,8 @@ public static partial class AssistantValidation
         Length(b.SiteName, 120, "behaviour.siteName", "The website name");
         Check(Tones.Contains(b.Tone), "behaviour.tone", "Choose a tone.");
         Check(Lengths.Contains(b.AnswerLength), "behaviour.answerLength", "Choose an answer length.");
+        Check(Efforts.Contains(b.Effort), "behaviour.effort", "Choose how much Claude thinks.");
+        Check(Engines.Contains(s.Engine ?? ""), "engine", "Choose the Ligata GPU or the Claude API.");
         Check(b.Temperature is >= 0 and <= 1.5, "behaviour.temperature", "Creativity must be between 0 and 1.5.");
         Check(b.MaxAnswerTokens is >= 128 and <= 4096, "behaviour.maxAnswerTokens", "Answer length limit must be between 128 and 4096 tokens.");
         Check(b.ContextLimit is >= 4096 and <= 262144, "behaviour.contextLimit", "The conversation limit must be between 4,096 and 262,144 tokens.");

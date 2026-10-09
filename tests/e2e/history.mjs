@@ -58,12 +58,19 @@ async function save() {
   await dash.locator('.notice.success', { hasText: 'Saved' }).waitFor();
 }
 
-await check('editors switch the history on: the consent request states the period, so every visitor agrees again', async () => {
+/** Deletes every conversation in the history (a run that stopped half-way leaves some behind), once the list has loaded. */
+async function clearHistory() {
   await admin.goto(base + '/umbraco/section/ai-assistant/dashboard/conversations');
-  await historyPage.locator('.bar, h2').first().waitFor({ timeout: 20000 });
-  // A run that stopped half-way leaves conversations behind.
-  if (await historyPage.locator('button', { hasText: 'Delete all' }).isEnabled({ timeout: 2000 }).catch(() => false)) { await historyPage.locator('button', { hasText: 'Delete all' }).click(); await admin.reload(); }
-  await historyPage.locator('h2', { hasText: 'No conversations are kept' }).waitFor({ timeout: 20000 });
+  const empty = historyPage.locator('h2', { hasText: 'No conversations are kept' });
+  const remove = historyPage.locator('button:has-text("Delete all"):enabled');
+  await empty.or(remove).first().waitFor({ timeout: 20000 });
+  // Reloading before the deletion has finished would cancel it.
+  if (await remove.count()) { await Promise.all([admin.waitForResponse(r => r.url().includes('/history/delete-all')), remove.click()]); await admin.reload(); }
+  await empty.waitFor({ timeout: 20000 });
+}
+
+await check('editors switch the history on: the consent request states the period, so every visitor agrees again', async () => {
+  await clearHistory();
   await admin.screenshot({ path: path.join(out, '01-history-off.png') });
   const card = await setHistory(true, 14);
   const text = await card.innerText();
@@ -251,11 +258,7 @@ await check('switching the history off asks nobody again and keeps nothing new',
   await newConversation(w);
   await askAndWait(w, 'History off: still answered?');
   assert(chats(w).at(-1).history === undefined && await listed('History off: still answered?') === 0, 'answered, not kept');
-  await admin.goto(base + '/umbraco/section/ai-assistant/dashboard/conversations');
-  await historyPage.locator('.bar, h2').first().waitFor({ timeout: 20000 });
-  if (await historyPage.locator('button', { hasText: 'Delete all' }).isEnabled().catch(() => false)) await historyPage.locator('button', { hasText: 'Delete all' }).click();
-  await admin.reload();
-  await historyPage.locator('h2', { hasText: 'No conversations are kept' }).waitFor({ timeout: 20000 });
+  await clearHistory();
 });
 
 await v.context.close();

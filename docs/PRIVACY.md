@@ -97,6 +97,8 @@ The chat works with Cookiebot in both consent modes.
 - If you need it, ask Anthropic about zero data retention.
 - Use an API key of an organisation under the commercial terms, never a personal account.
 
+**Both engines set up (0.8).** Editors switch between the Ligata GPU and Claude under *Connection → AI engine*. The consent names who answers, so a switch asks every visitor again before their next question, and the privacy policy text under *Privacy* changes with the engine: copy it into the privacy policy when switching. Keep both agreements on file while both engines can answer (the GPU operator's data processing agreement and Anthropic's addendum).
+
 **Record of processing activities (Art. 30 GDPR).** Add an entry for the chat:
 
 | Field | Example |

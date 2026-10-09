@@ -84,6 +84,10 @@ export const styles = css`
   .feature.on{border-color:color-mix(in srgb,var(--ok) 40%,var(--line));background:color-mix(in srgb,var(--ok) 4%,var(--surface))}.feature small{display:inline-flex;gap:5px;align-items:center;margin-top:4px}.feature small svg{width:14px;height:14px}
   .muted-card{opacity:.82}
   .display-modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .engines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.swatch.engine{padding:14px 16px;gap:8px}.swatch.engine small{font-size:12.5px;line-height:1.45}
+  .engine-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+  .add-engine>summary{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}.add-engine[open]>summary{margin-bottom:4px}
+  .other-engine>summary{font-size:13px;color:var(--muted);margin:0}
   .swatch.display{gap:6px}.swatch.display small{font-size:11.5px;line-height:1.35}
   .mini{display:flex;gap:7px;align-items:flex-end;padding:8px;border-radius:10px;background:var(--subtle);margin-bottom:4px}.mini b{display:block;font-size:10.5px;color:var(--muted);font-weight:600;margin:0 0 2px 2px}
   .mini .face{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none;font-style:normal;font-size:9px;font-weight:700;background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--accent)}.mini .face svg{width:13px;height:13px}
@@ -91,6 +95,6 @@ export const styles = css`
   .team-card .big{font-size:26px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
   .spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
   @media(max-width:1180px){.split{grid-template-columns:1fr}.preview{position:static}.preview .frame{height:640px}}
-  @media(max-width:820px){.two,.three{grid-template-columns:1fr}.workspace{padding:18px 16px 40px}.k-item{grid-template-columns:auto 1fr;}.k-tokens,.k-actions{grid-column:2}}
+  @media(max-width:820px){.two,.three,.engines{grid-template-columns:1fr}.workspace{padding:18px 16px 40px}.k-item{grid-template-columns:auto 1fr;}.k-tokens,.k-actions{grid-column:2}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 `;

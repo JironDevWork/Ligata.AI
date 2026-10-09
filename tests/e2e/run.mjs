@@ -60,17 +60,17 @@ await check('AI Assistant section opens on the overview', async () => {
 await check('connection: wrong key format is refused', async () => {
   await tab('Connection');
   await dash().locator('input[type=url]').fill(gateway);
-  await dash().locator('input[type=password]').fill('sk-not-a-ligata-key');
-  await dash().locator('button', { hasText: 'Save & test' }).click();
+  await dash().locator('input[name=gatewayKey]').fill('sk-not-a-ligata-key');
+  await dash().locator('section.card', { hasText: 'Gateway address' }).locator('button', { hasText: 'Save & test' }).click();
   await dash().locator('.notice.error[role=alert]').waitFor();
   assert((await dash().locator('.notice.error[role=alert]').innerText()).includes('lai_'), 'explains the key format');
 });
 
 await check('connection: key is stored encrypted and the gateway answers', async () => {
-  await dash().locator('input[type=password]').fill(key);
-  await dash().locator('button', { hasText: 'Save & test' }).click();
+  await dash().locator('input[name=gatewayKey]').fill(key);
+  await dash().locator('section.card', { hasText: 'Gateway address' }).locator('button', { hasText: 'Save & test' }).click();
   await dash().locator('.notice.success', { hasText: 'Connected' }).waitFor({ timeout: 15000 });
-  const placeholder = await dash().locator('input[type=password]').getAttribute('placeholder');
+  const placeholder = await dash().locator('input[name=gatewayKey]').getAttribute('placeholder');
   assert(placeholder.includes('Stored') && !placeholder.includes(key.slice(20, 40)), 'only a hint of the key is shown');
   await shot(page, '01-connection');
 });
