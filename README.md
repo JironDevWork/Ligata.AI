@@ -31,7 +31,7 @@ visitor ──► chat bubble ──► the site's Umbraco (this package) ─┬
 
 ## What editors get
 
-A new top-level section, **AI Assistant** (or **Support** when the AI is not licensed). Administrators get it on install; editors get the Inbox.
+A new top-level section, **AI Assistant** (or **Support** when no AI is licensed: neither the website assistant nor the content assistant). Administrators get it on install; editors get the Inbox.
 
 - **Inbox** (live):
   - conversations that need a reply, active chats, mine, all open and closed, with search and chat/email filters;

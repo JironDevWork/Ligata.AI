@@ -1165,10 +1165,15 @@ using (var scope = app.Services.CreateScope())
         var (editorSettingsNow, editorVersionNow) = editorStore.Settings();
         Rejects<AssistantConflictException>(() => editorStore.Save(editorSettingsNow, editorVersionNow - 1), "Stale content assistant settings are refused.");
         Rejects<AssistantValidationException>(() => editorStore.Save(editorSettingsNow with { DefaultMode = "chaos" }, editorVersionNow), "Invalid content assistant settings are refused.");
-        // A fresh fixture and default settings for the browser suite.
+        // A fresh fixture, an empty log and default settings for the browser suite.
+        using (var editorClean = services.GetRequiredService<Umbraco.Cms.Infrastructure.Scoping.IScopeProvider>().CreateScope())
+        {
+            editorClean.Database.Execute("DELETE FROM LigataAIEditorAction"); editorClean.Database.Execute("DELETE FROM LigataAIEditorChat"); editorClean.Database.Execute("DELETE FROM LigataAIEditorUsage");
+            editorClean.Complete();
+        }
         editorStore.Save(new EditorSettings(), editorStore.Settings().Version);
         await SeedEditorAsync(services);
-        var editorManifest = JsonSerializer.Serialize(await new AssistantManifestReader(services.GetRequiredService<IOptions<AssistantOptions>>(), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync());
+        var editorManifest = JsonSerializer.Serialize(await new AssistantManifestReader(Options.Create(new AssistantOptions()), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync());
         var unlicensed = JsonSerializer.Serialize(await new AssistantManifestReader(Options.Create(new AssistantOptions { Features = new() { ContentAssistant = false } }), services.GetRequiredService<IServiceScopeFactory>(), services.GetRequiredService<ILogger<AssistantManifestReader>>()).ReadPackageManifestsAsync());
         Assert(editorManifest.Contains("backofficeEntryPoint") && editorManifest.Contains("editor/entry.js") && editorManifest.Contains("Ligata.AI.ContentAssistant") && !unlicensed.Contains("editor/entry.js") && !unlicensed.Contains("Content assistant"),
             "The chat and its settings are in the backoffice only when the content assistant is licensed.");

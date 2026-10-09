@@ -113,6 +113,18 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
+- 0.9.0 (10 October 2026): the content assistant in the backoffice (see [Content assistant](#content-assistant-09) above and [CONTENT-ASSISTANT.md](CONTENT-ASSISTANT.md)). New browser suite `editor.mjs` 20/20 against the mock Anthropic API, which now plays a scripted assistant. Live: 40 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, all tasks done as asked, and all changes undone afterwards.
+
+  Found and fixed on the way:
+  - streamed answers broke at their end, because Umbraco's no-cache result filter set headers after the stream had started (the website preview too);
+  - Umbraco's internal index missed text inside blocks, so search now scans the draft text;
+  - values for the model were `\u`-escaped;
+  - an image attached with a message was not yet available to `upload_media`;
+  - messages were squeezed in the chat's scroll area.
+
+  A live-chat-only host now sets `Features:ContentAssistant=false` too, so its section is still called *Support*.
+
+  Browser: editor 20/20, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 222 domain and 366 total.
 - 0.8.0 (9 October 2026): two engines chosen in the backoffice (a key each for the Ligata GPU and Claude, stored encrypted or set in the configuration; the switch appears only with both), Claude's thinking effort under *Behaviour* (Off to Max; the GPU keeps on/off). New browser suite `engines.mjs` 8/8: only the GPU set up (no switch), a Claude key stored through the backoffice (checked, only a hint comes back, adding it does not switch), the effort setting, switching to Claude (visitors asked again, naming Anthropic; the request carries the chosen effort), Off without thinking, back to the GPU (nothing sent to Anthropic), removing Claude's key while it answers (the GPU takes over). The real API, for the first time (`claude-live.mjs`, five questions): every request with lookups failed because `"tool_choice": null` was sent, which Anthropic refuses and the mock accepted; fixed, the mock now refuses `null` fields, then all five answered (Off 1.0 s, Low 2.1 s, Medium 3.7 s, High 3.5 s, Extra high 6.1 s). Also fixed: the token budget answered 500 while no knowledge was *always known*, and the history suite's clean-up reloaded before its deletion had finished. Browser: engines 8/8, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7; package checks 197 domain and 300 total.
 - 0.7.4 (9 October 2026): a team chat reopened by the team shows on the website at once (the widget followed only open team chats, so the visitor saw it closed until leaving the chat and coming back); the closed chat on screen is now watched, and the server lets that poll wait. The Inbox list also refreshes right after *Reopen*, and its live loop always restarts after leaving the section. Browser: team 17/17 (new: reopen and close again, live on both sides), team without AI 5/5, AI 24/24; package checks 188 domain and 284 total.
 - 0.7.3 (9 October 2026): the memory bar is off by default (switched off once on existing sites; *Appearance → Show the memory bar*). Package checks 188 domain and 284 total.
@@ -185,7 +197,7 @@ Bug found by these runs and fixed: pressing Enter while a screenshot was still b
 bash tests/e2e/restart-host.sh          # host on :5310 with --support-fixture (all features on, team address) and --fake-captcha
 node gateway/test/mock-server.mjs 1298   # plus the dev gateway on :1220 as above
 cd tests/e2e && node support.mjs         # visitor and team member side by side, 17 checks, screenshots in .runtime/e2e/support
-bash restart-host.sh --LigataAI:Features:Assistant=false && node support-noai.mjs   # live chat and email without AI
+bash restart-host.sh --LigataAI:Features:Assistant=false --LigataAI:Features:ContentAssistant=false && node support-noai.mjs   # live chat and email without any AI
 ```
 
 `--fake-captcha` adds reCAPTCHA settings shaped like a Ligata.Forms configuration and a verifier that accepts tokens starting with `pass`; the browser suite replaces Google's script with a stub, so no request leaves the machine. `--support-fixture` raises the per-visitor limits because every test browser shares 127.0.0.1 (the limits themselves are covered by the database checks). The mock model answers questions about a "person" or something "unknown" with the handoff marker, split across stream chunks.

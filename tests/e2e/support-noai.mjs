@@ -1,5 +1,5 @@
-// Live chat and email without the AI (LigataAI:Features:Assistant=false), in Microsoft Edge (headless).
-//   bash restart-host.sh --LigataAI:Features:Assistant=false && node support-noai.mjs
+// Live chat and email without any AI (LigataAI:Features:Assistant=false and ContentAssistant=false), in Microsoft Edge (headless).
+//   bash restart-host.sh --LigataAI:Features:Assistant=false --LigataAI:Features:ContentAssistant=false && node support-noai.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
