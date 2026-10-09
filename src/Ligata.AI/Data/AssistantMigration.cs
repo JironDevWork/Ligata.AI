@@ -95,6 +95,19 @@ public sealed class EngineMigration(IMigrationContext context) : AsyncMigrationB
     }
 }
 
+/// <summary>0.9: the content assistant in the backoffice: its settings, conversations, activity log and usage.</summary>
+public sealed class EditorMigration(IMigrationContext context) : AsyncMigrationBase(context)
+{
+    protected override Task MigrateAsync()
+    {
+        if (!TableExists("LigataAIEditorSettings")) Create.Table<Ligata.AI.Editor.EditorSettingsRow>().Do();
+        if (!TableExists("LigataAIEditorChat")) Create.Table<Ligata.AI.Editor.EditorChatRow>().Do();
+        if (!TableExists("LigataAIEditorAction")) Create.Table<Ligata.AI.Editor.EditorActionRow>().Do();
+        if (!TableExists("LigataAIEditorUsage")) Create.Table<Ligata.AI.Editor.EditorUsageRow>().Do();
+        return Task.CompletedTask;
+    }
+}
+
 public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreScopeProvider scopes, Umbraco.Cms.Infrastructure.Scoping.IScopeProvider database, IKeyValueService keys, IUserGroupService groups, IOptions<AssistantOptions> options, ILogger<AssistantInstaller> logger)
 {
     public const string SectionAlias = "Ligata.AI.Section";
@@ -102,7 +115,7 @@ public sealed class AssistantInstaller(IMigrationPlanExecutor executor, ICoreSco
     public async Task InstallAsync()
     {
         var plan = new MigrationPlan("Ligata.AI");
-        plan.From(string.Empty).To<AssistantMigration>("ai-v1").To<SupportMigration>("ai-v2").To<ConsentMigration>("ai-v3").To<LookupMigration>("ai-v4").To<HistoryMigration>("ai-v5").To<HistoryConsentMigration>("ai-v6").To<EngineMigration>("ai-v7");
+        plan.From(string.Empty).To<AssistantMigration>("ai-v1").To<SupportMigration>("ai-v2").To<ConsentMigration>("ai-v3").To<LookupMigration>("ai-v4").To<HistoryMigration>("ai-v5").To<HistoryConsentMigration>("ai-v6").To<EngineMigration>("ai-v7").To<EditorMigration>("ai-v8");
         var result = await new Upgrader(plan).ExecuteAsync(executor, scopes, keys);
         if (!result.Successful) throw new InvalidOperationException("Ligata AI migration failed. Inspect the Umbraco migration log.");
         LivePages();

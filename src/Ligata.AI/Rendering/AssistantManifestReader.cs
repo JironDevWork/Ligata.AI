@@ -30,7 +30,7 @@ public sealed class AssistantManifestReader(IOptions<AssistantOptions> options, 
             new
             {
                 type = "section", alias = AssistantInstaller.SectionAlias, name = "Ligata AI", weight = 50,
-                meta = new { label = o.Features.Assistant ? "AI Assistant" : "Support", pathname = "ai-assistant" },
+                meta = new { label = o.Features.Assistant || o.Features.ContentAssistant ? "AI Assistant" : "Support", pathname = "ai-assistant" },
             },
         };
         if (o.Features.Inbox)
@@ -57,6 +57,19 @@ public sealed class AssistantManifestReader(IOptions<AssistantOptions> options, 
                 conditions = agents.Length > 0 ? new[] { Section(), Groups(agents) } : new[] { Section() },
             });
         }
+        if (o.Features.ContentAssistant)
+        {
+            // The content assistant: its chat is mounted once for the whole backoffice (it asks the server who may use it);
+            // its settings and activity log are a dashboard for the editor groups.
+            extensions.Add(new { type = "backofficeEntryPoint", alias = "Ligata.AI.Editor.Entry", name = "Ligata AI content assistant", js = $"/App_Plugins/LigataAI/editor/entry.js?v={Version}" });
+            extensions.Add(new
+            {
+                type = "dashboard", alias = "Ligata.AI.ContentAssistant", name = "Ligata AI content assistant settings", element = $"/App_Plugins/LigataAI/editor/dashboard.js?v={Version}", weight = 120,
+                meta = new { label = "Content assistant", pathname = "content-assistant" },
+                conditions = editors.Length > 0 ? new[] { Section(), Groups(editors) } : new[] { Section() },
+            });
+        }
+        if (!o.Features.Assistant && !o.Features.Inbox) return [new PackageManifest { Name = "Ligata AI", Version = Version, AllowPublicAccess = false, AllowTelemetry = false, Extensions = extensions.ToArray() }];
         extensions.Add(new
         {
             type = "dashboard", alias = "Ligata.AI.Dashboard", name = "Ligata AI settings", element = $"/App_Plugins/LigataAI/dashboard.js?v={Version}", weight = 100,

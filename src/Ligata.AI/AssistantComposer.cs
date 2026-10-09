@@ -58,6 +58,16 @@ public sealed class AssistantComposer : IComposer
         builder.Services.AddSingleton<ClaudeGate>();
         builder.Services.AddScoped<ClaudeEngine>();
         builder.Services.AddScoped<AssistantEngine>();
+        // The content assistant in the backoffice (0.9).
+        builder.Services.AddScoped<Editor.EditorStore>();
+        builder.Services.AddScoped<Editor.ContentSchema>();
+        builder.Services.AddScoped<Editor.EditorAccess>();
+        builder.Services.AddScoped<Editor.ContentTools>();
+        builder.Services.AddScoped<Editor.EditorMedia>();
+        builder.Services.AddScoped<Editor.EditorTools>();
+        builder.Services.AddScoped<Editor.EditorModel>();
+        builder.Services.AddScoped<Editor.EditorAgent>();
+        builder.Services.AddScoped<EditorUserFilter>();
         builder.Services.AddTransient<ITagHelperComponent, AssistantTagHelperComponent>();
         builder.Services.AddSingleton<IPackageManifestReader, AssistantManifestReader>();
         builder.AddNotificationAsyncHandler<UmbracoApplicationStartingNotification, AssistantStarting>();

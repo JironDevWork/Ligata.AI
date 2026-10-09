@@ -40,6 +40,15 @@ public sealed class AssistantOptions
     public SupportLimits Support { get; set; } = new();
     /// <summary>Consent before the AI sees a visitor's messages, and the details visitors are told.</summary>
     public PrivacyOptions Privacy { get; set; } = new();
+    /// <summary>The content assistant in the backoffice (everything else about it is set in the backoffice).</summary>
+    public ContentAssistantOptions ContentAssistant { get; set; } = new();
+}
+
+/// <summary>The content assistant: an AI chat for editors in the backoffice (Claude through the Anthropic API key under Connection).</summary>
+public sealed class ContentAssistantOptions
+{
+    /// <summary>A conversation is summarized before it would take more than this many tokens (capped at 80% of LigataAI:Claude:MaxContextTokens).</summary>
+    public int CompactAtTokens { get; set; } = 60_000;
 }
 
 /// <summary>
@@ -97,7 +106,9 @@ public sealed class FeatureOptions
     public bool LiveChat { get; set; } = true;
     /// <summary>Email contact form and email notifications.</summary>
     public bool Email { get; set; } = true;
-    public bool Any => Assistant || LiveChat || Email;
+    /// <summary>The content assistant in the backoffice: editors find, read and change content by chatting (0.9).</summary>
+    public bool ContentAssistant { get; set; } = true;
+    public bool Any => Assistant || LiveChat || Email || ContentAssistant;
     public bool Inbox => LiveChat || Email;
 }
 
