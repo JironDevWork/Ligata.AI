@@ -469,6 +469,8 @@
   const current = () => state.conversations.find(c => c.id === state.activeId) || null;
   const isTeamChat = c => !!(c?.team && c.team.kind === 'chat');
   const isOpenTeam = c => isTeamChat(c) && c.team.state !== 'closed' && !c.team.gone;
+  // A closed team chat on screen stays live, so a reopen by the team shows without leaving the chat.
+  const isWatched = c => isOpenTeam(c) || (isTeamChat(c) && !c.team.gone && state.open && state.view === 'chat' && c.id === state.activeId);
   function touch(c) { c.updated = Date.now(); state.conversations.sort((a, b) => b.updated - a.updated); }
   function startConversation(kind) {
     const c = blank(kind);
@@ -1073,7 +1075,7 @@
     if (id) state.activeId = id;
     state.view = view;
     const c = current();
-    if (view === 'chat' && c) { c.unread = 0; if (c.team && !isOpenTeam(c)) refreshOnce(c); }
+    if (view === 'chat' && c) { c.unread = 0; if (c.team && !isWatched(c)) refreshOnce(c); }
     closeSheet(); render(); persist(); syncLoops();
     if (view === 'chat') setTimeout(() => { if (!matchMedia('(max-width:520px)').matches && !form.classList.contains('hidden')) input.focus({ preventScroll: true }); }, 30);
   }
@@ -1626,6 +1628,7 @@
 
   function applyView(c, view, version, initial) {
     if (!c.team || !view) return;
+    const wasState = c.team.state;
     const before = JSON.stringify([c.team.state, c.team.agents, c.team.typing]);
     c.team.version = version;
     c.team.state = view.state;
@@ -1654,6 +1657,7 @@
     } else if (state.view === 'list') renderList();
     renderHeader();
     persist();
+    if (wasState !== c.team.state) syncLoops(); // reopened: live again; closed: only while on screen
   }
 
   // An agent reply while the visitor is elsewhere: unread count, teaser, chime, tab title.
@@ -1676,13 +1680,13 @@
     $('.launcher-row').append(teaser);
   }
 
-  // One long poll for the conversation in focus; other open team chats are checked every minute.
+  // One long poll for the conversation in focus (the one on screen, even closed); other open team chats are checked every minute.
   const loops = new Map();
   let hiddenSince = 0;
   function focusConversation() {
-    const open = state.conversations.filter(isOpenTeam);
     const c = current();
-    return open.includes(c) ? c : open.sort((a, b) => b.updated - a.updated)[0] || null;
+    if (c && isWatched(c)) return c;
+    return state.conversations.filter(isOpenTeam).sort((a, b) => b.updated - a.updated)[0] || null;
   }
   function syncLoops() {
     if (preview) return;
@@ -1694,7 +1698,7 @@
     const controller = new AbortController();
     loops.set(c.id, controller);
     let delay = 0;
-    while (!controller.signal.aborted && isOpenTeam(c) && state.conversations.includes(c)) {
+    while (!controller.signal.aborted && isWatched(c) && state.conversations.includes(c)) {
       if (hiddenSince && Date.now() - hiddenSince > 15 * 60000) break; // resumes when the tab is visible again
       try {
         const wait = c.team.version !== undefined && c.team.version !== null;
@@ -1822,6 +1826,7 @@
       closeSheet();
       document.documentElement.style.removeProperty('overflow');
       updateBadge();
+      syncLoops(); // a closed chat is only watched while on screen
     }
     persist();
   }

@@ -252,6 +252,20 @@ await check('leave and close: the visitor sees both and can start over', async (
   await inbox(a).locator('.composer .gate button', { hasText: 'Reopen' }).waitFor();
 });
 
+await check('reopen shows live on the website (the closed chat on screen is watched), closing again too', async () => {
+  const a = state.agent, v = state.visitor;
+  await inbox(a).locator('.thread-head button', { hasText: 'Reopen' }).click();
+  await v.widget.locator('.event', { hasText: /reopened/ }).waitFor({ timeout: 20000 });
+  await v.widget.locator('.closed-bar').waitFor({ state: 'hidden' });
+  await inbox(a).locator('.thread-head button', { hasText: 'Close' }).waitFor();
+  await v.widget.locator('.composer textarea').fill(`Back again ${run}`);
+  await v.widget.locator('.composer textarea').press('Enter');
+  await inbox(a).locator('.line.visitor .bubble', { hasText: `Back again ${run}` }).waitFor({ timeout: 20000 });
+  await inbox(a).locator('.thread-head button', { hasText: 'Close' }).click();
+  await v.widget.locator('.closed-bar:not(.hidden)').waitFor({ timeout: 20000 });
+  await inbox(a).locator('.composer .gate button', { hasText: 'Reopen' }).waitFor();
+});
+
 await check('phone: second visitor sees the team online, a failed spam check can be retried, the visitor ends the chat', async () => {
   const a = state.agent;
   const v = await visitor('phone', { viewport: { width: 390, height: 760 }, captcha: 'bot' });

@@ -74,7 +74,8 @@ public sealed class PublicSupportController(SupportService support, SupportStore
             var version = pulse.Version;
             var row = support.Authorize(id, request.Token);
             hub.VisitorSeen(id);
-            if (request.Wait && version == request.Version && row.LastSeq <= request.After && row.State != "closed")
+            // Closed conversations wait too: the widget watches the one on screen, so a reopen shows at once.
+            if (request.Wait && version == request.Version && row.LastSeq <= request.After)
             {
                 using var slot = hub.BeginPoll(guard.Address(HttpContext)?.ToString() ?? "unknown", Math.Clamp(options.Value.Support.PollsPerAddress, 1, 50));
                 if (slot == null) { Response.Headers.RetryAfter = "5"; return Problem("rate_limited", "Too many open connections.", 429); }

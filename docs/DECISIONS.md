@@ -2,7 +2,7 @@
 
 The reasoning behind Ligata.AI, so it survives the conversations it was worked out in. Each entry names the decision, why it was taken, and what was tried or rejected on the way. Details and measurements live in the linked documents; this file is the map.
 
-Versions: 0.1 (7 Oct 2026) to 0.7.3 (9 Oct 2026). Newest topics last within each section.
+Versions: 0.1 (7 Oct 2026) to 0.7.4 (9 Oct 2026). Newest topics last within each section.
 
 ## Shape of the product
 
@@ -55,6 +55,7 @@ Versions: 0.1 (7 Oct 2026) to 0.7.3 (9 Oct 2026). Newest topics last within each
 - **The visitor's AI conversation travels with the request**, so the team sees what was asked before.
 - **Team conversations are reached only with a random 256-bit token** kept in the visitor's browser and stored as a hash; ids alone grant nothing.
 - **Team members choose how visitors see them** (name and photo, name, nickname, anonymous), within what the site allows.
+- **The chat on screen stays live after it is closed (0.7.4).** A long poll used to follow open team chats only, so when the team reopened a conversation the visitor kept seeing it closed until they left the chat and came back. The widget now also watches a closed team chat while it is on screen (one long poll, as before; it stops when the panel closes or the visitor moves on), and the server lets that poll wait on a closed conversation. Closed chats that are not on screen are refreshed when the visitor opens them.
 
 ## Privacy (GDPR and the Swiss DSG)
 

@@ -1,10 +1,10 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest, bearer, managementBase } from './api.js?v=0.7.3';
-import { styles } from './styles.js?v=0.7.3';
-import { inboxStyles } from './inbox-styles.js?v=0.7.3';
-import { icon } from './ui.js?v=0.7.3';
+import { aiRequest, bearer, managementBase } from './api.js?v=0.7.4';
+import { styles } from './styles.js?v=0.7.4';
+import { inboxStyles } from './inbox-styles.js?v=0.7.4';
+import { icon } from './ui.js?v=0.7.4';
 
 const views = [['needs', 'Needs reply'], ['active', 'Active'], ['mine', 'Mine'], ['open', 'All open'], ['closed', 'Closed']];
 const displays = [
@@ -109,21 +109,23 @@ class LigataAIInbox extends UmbElementMixin(LitElement) {
   async loop() {
     let delay = 0;
     this.polling = true;
-    while (this.alive) {
-      try {
-        const data = await aiRequest(this.auth, '/inbox/updates?version=' + this.version, 'GET', undefined, { timeout: 40000 });
-        if (!this.alive) return;
-        const changed = data.version !== this.version;
-        this.version = data.version; this.counts = data.counts; this.online = data.online;
-        if (changed) { await this.load(); if (this.selected) await this.loadThread(this.selected, false); }
-        delay = 0;
-      } catch (e) {
-        if (!this.alive) return;
-        delay = Math.min(30000, (delay || 1000) * 2);
-        await new Promise(r => setTimeout(r, delay));
+    // Leaving the section ends the loop and coming back starts it again (connectedCallback), so the flag is always cleared.
+    try {
+      while (this.alive) {
+        try {
+          const data = await aiRequest(this.auth, '/inbox/updates?version=' + this.version, 'GET', undefined, { timeout: 40000 });
+          if (!this.alive) return;
+          const changed = data.version !== this.version;
+          this.version = data.version; this.counts = data.counts; this.online = data.online;
+          if (changed) { await this.load(); if (this.selected) await this.loadThread(this.selected, false); }
+          delay = 0;
+        } catch (e) {
+          if (!this.alive) return;
+          delay = Math.min(30000, (delay || 1000) * 2);
+          await new Promise(r => setTimeout(r, delay));
+        }
       }
-    }
-    this.polling = false;
+    } finally { this.polling = false; }
   }
 
   async select(id) {
@@ -180,7 +182,7 @@ class LigataAIInbox extends UmbElementMixin(LitElement) {
   async join() { if (await this.act(`/${this.selected}/join`)) { await this.loadThread(this.selected, false); this.mode = 'reply'; this.focusComposer(); } }
   async leave() { if (await this.act(`/${this.selected}/leave`, 'POST', undefined, 'You left the conversation. The visitor sees that you left.')) await this.loadThread(this.selected, false); }
   async close() { if (confirm('Close this conversation? The visitor sees that it was closed and can start a new one.') && await this.act(`/${this.selected}/close`, 'POST', undefined, 'Conversation closed.')) { await this.loadThread(this.selected, false); await this.load(); } }
-  async reopen() { if (await this.act(`/${this.selected}/reopen`, 'POST', undefined, 'Conversation reopened.')) await this.loadThread(this.selected, false); }
+  async reopen() { if (await this.act(`/${this.selected}/reopen`, 'POST', undefined, 'Conversation reopened.')) { await this.loadThread(this.selected, false); await this.load(); } }
   async remove() {
     if (!confirm('Delete this conversation permanently, including all messages? This cannot be undone.')) return;
     if (await this.act(`/${this.selected}`, 'DELETE', undefined, 'Conversation deleted.')) { this.selected = null; this.thread = null; await this.load(); }
