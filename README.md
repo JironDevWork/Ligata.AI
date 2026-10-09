@@ -90,8 +90,8 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.7.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
-dotnet add package Ligata.AI --version 0.7.1 --source C:/path/to/feed
+# copy artifacts/Ligata.AI.0.7.2.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+dotnet add package Ligata.AI --version 0.7.2 --source C:/path/to/feed
 ```
 
 Normal `.AddComposers()` discovers everything.
