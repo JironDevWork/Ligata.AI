@@ -38,7 +38,7 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
   - A daily cap per user.
   - What was sent to the AI is never kept beyond the session.
 - **Engines.**
-  - Both engines from the start; the fixed task set measures them. Multi-step editing with many tools is where a stronger model matters, so Claude is expected to do better at edits. The GPU keeps unpublished drafts in Switzerland.
+  - Claude Haiku 5.5 for now: multi-step editing with many tools is where a stronger model matters. The GPU comes later, once the fixed task set shows it is good enough. It would keep unpublished drafts in Switzerland.
   - The effort setting is its own (default Medium for editing, Low for questions).
 - **Privacy.** Editors' prompts and draft content go to the chosen engine. Unlike visitors, editors need no consent popup, but the privacy notes for staff and the record of processing need a line. Anthropic's addendum or the GPU operator's agreement covers it.
 - **Licensing.** A new feature flag, `LigataAI:Features:ContentAssistant`, works like the others: the configuration licenses it, editors switch it off.
@@ -54,7 +54,7 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
 1. **Inside Ligata.AI**, as a separate module next to the website assistant. It reuses the engines, keys and tool loop.
 2. **Drafts only by default.** A setting in the backoffice lets it publish by itself.
 3. **Administrators first.** Other groups follow once it has proven itself.
-4. **Both engines from the start.** About 20 fixed editor tasks run on the GPU and on Claude: finding pages, pointing at properties, proposing edits in blocks and per language. Their results decide whether the GPU is good enough for edits or stays for questions only.
+4. **Claude Haiku 5.5 (API) for now.** The module is built engine-agnostic, as the website assistant is. About 20 fixed editor tasks (finding pages, pointing at properties, proposing edits in blocks and per language) are kept as a test set. They are run on the GPU later, to decide whether it is good enough for edits.
 
 Work starts when the owner gives the go.
 
