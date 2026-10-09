@@ -403,13 +403,17 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
 
     /// <summary>Test chat in the backoffice. Uses the saved knowledge with the editor's current (unsaved) settings.</summary>
     [HttpPost("preview"), RequestSizeLimit(40_000_000)]
-    public async Task Preview([FromBody] PreviewRequest request)
+    public IActionResult Preview([FromBody] PreviewRequest request)
     {
         var settings = request.Settings ?? store.Settings().Settings;
-        try { AssistantValidation.Settings(settings); }
-        catch (AssistantValidationException e) { await ChatRelay.Json(HttpContext, 400, "invalid_settings", e.Message); return; }
         var user = security.BackOfficeSecurity?.CurrentUser?.Key.ToString("N") ?? "editor";
-        await relay.RunAsync(HttpContext, request.Chat, settings with { Enabled = true }, "backoffice-" + user, countStats: false);
+        // Streamed while the result executes, after the result filters set their headers (see StreamedResult).
+        return new StreamedResult(async http =>
+        {
+            try { AssistantValidation.Settings(settings); }
+            catch (AssistantValidationException e) { await ChatRelay.Json(http, 400, "invalid_settings", e.Message); return; }
+            await relay.RunAsync(http, request.Chat, settings with { Enabled = true }, "backoffice-" + user, countStats: false);
+        });
     }
 }
 

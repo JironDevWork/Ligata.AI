@@ -1220,12 +1220,17 @@ static async Task<(IContent Root, IContent Team, IContent Archive)> SeedEditorAs
         if (!(await types.CreateAsync(card, Constants.Security.SuperUserKey)).Success) throw new Exception("Seeding the card element type failed.");
     }
     var cards = await dataTypes.GetAsync("Editor fixture cards");
+    if (cards != null && cards.EditorUiAlias != "Umb.PropertyEditorUi.BlockList")
+    {
+        cards.EditorUiAlias = "Umb.PropertyEditorUi.BlockList";
+        await dataTypes.UpdateAsync(cards, Constants.Security.SuperUserKey);
+    }
     if (cards == null)
     {
         var editors = services.GetRequiredService<Umbraco.Cms.Core.PropertyEditors.PropertyEditorCollection>();
         cards = new DataType(editors[Constants.PropertyEditors.Aliases.BlockList]!, services.GetRequiredService<Umbraco.Cms.Core.Serialization.IConfigurationEditorJsonSerializer>(), -1)
         {
-            Name = "Editor fixture cards",
+            Name = "Editor fixture cards", EditorUiAlias = "Umb.PropertyEditorUi.BlockList",
             ConfigurationData = new Dictionary<string, object> { ["blocks"] = new object[] { new Dictionary<string, object> { ["contentElementTypeKey"] = card.Key.ToString(), ["label"] = "{{title}}" } } },
         };
         var made = await dataTypes.CreateAsync(cards, Constants.Security.SuperUserKey);

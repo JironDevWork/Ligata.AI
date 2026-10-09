@@ -3,6 +3,7 @@ using Ligata.AI.Editor;
 using Ligata.AI.Models;
 using Ligata.AI.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,15 @@ public sealed class EditorUserFilter(IOptions<AssistantOptions> options) : IAuth
 }
 
 public sealed record EditorSettingsRequest(EditorSettings Settings, int Version);
+
+/// <summary>
+/// A streamed answer (server-sent events) written while the result executes: result filters (Umbraco sets no-cache headers) run
+/// before the first byte, so they never meet a response that has already started.
+/// </summary>
+public sealed class StreamedResult(Func<HttpContext, Task> write) : IActionResult
+{
+    public Task ExecuteResultAsync(ActionContext context) => write(context.HttpContext);
+}
 public sealed record EditorUndoRequest(string? Note = null);
 
 /// <summary>
@@ -95,22 +105,25 @@ public sealed class EditorController(EditorStore store, EditorAgent agent, Edito
 
     /// <summary>Sends a message; the answer streams as server-sent events (chat, item, delta, thinking, navigate, refresh, waiting, done, error).</summary>
     [HttpPost("message"), RequestSizeLimit(40_000_000)]
-    public async Task<IActionResult> Message([FromBody] EditorMessageRequest request)
+    public IActionResult Message([FromBody] EditorMessageRequest request)
     {
-        try { await agent.MessageAsync(HttpContext, User!, request); }
-        catch (EditorException e) when (!Response.HasStarted) { return StatusCode(e.Status, Problem(e.Code, e.Message)); }
+        var user = User!;
+        return new StreamedResult(http => Streamed(http, () => agent.MessageAsync(http, user, request)));
+    }
+
+    private static async Task Streamed(HttpContext http, Func<Task> run)
+    {
+        try { await run(); }
+        catch (EditorException e) when (!http.Response.HasStarted) { await ChatRelay.Json(http, e.Status, e.Code, e.Message); }
         catch (OperationCanceledException) { }
-        return new EmptyResult();
     }
 
     /// <summary>Approves or declines the changes that wait; the assistant continues (streamed like a message).</summary>
     [HttpPost("decide")]
-    public async Task<IActionResult> Decide([FromBody] EditorDecideRequest request)
+    public IActionResult Decide([FromBody] EditorDecideRequest request)
     {
-        try { await agent.DecideAsync(HttpContext, User!, request); }
-        catch (EditorException e) when (!Response.HasStarted) { return StatusCode(e.Status, Problem(e.Code, e.Message)); }
-        catch (OperationCanceledException) { }
-        return new EmptyResult();
+        var user = User!;
+        return new StreamedResult(http => Streamed(http, () => agent.DecideAsync(http, user, request)));
     }
 
     // ---------- for the editor groups ----------

@@ -70,7 +70,7 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
     .lang{font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--subtle);border:1px solid var(--line);color:var(--muted)}
     .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:18px}
     .tile{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--surface)}.tile b{display:block;font-size:22px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}.tile small{font-size:12px}
-    .bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding:10px 0 0}.bars i{flex:1;min-width:4px;border-radius:3px 3px 0 0;background:var(--accent);opacity:.8;position:relative}.bars i:hover{opacity:1}
+    .bars{display:flex;align-items:flex-end;gap:4px;height:120px;padding:10px 0 0;border-bottom:1px solid var(--line)}.bars i{flex:1;min-width:4px;max-width:28px;border-radius:4px 4px 0 0;background:var(--accent);opacity:.8;position:relative}.bars i:hover{opacity:1}
     .status-line{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .ok-text{color:var(--ok)}.bad-text{color:var(--danger)}
     .more{display:flex;justify-content:center;padding:12px}

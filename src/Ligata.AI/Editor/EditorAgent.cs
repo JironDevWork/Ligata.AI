@@ -167,6 +167,7 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
 
             var first = state.Attachments.Count + 1;
             state.Attachments.AddRange(attachments);
+            foreach (var image in attachments) run.Context.Attachments.Add((image.Name ?? "image", image.MediaType ?? "image/png", image.Data ?? ""));
             var blocks = new List<StoredBlock> { StoredBlock.Of(EditorPrompt.Context(user, DateTime.Now, await PageLineAsync(run.Context, request.Page))) };
             for (var i = 0; i < attachments.Count; i++)
             {
@@ -413,7 +414,7 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
         var first = result.Split('\n')[0];
         return tool switch
         {
-            EditorTools.Search or EditorTools.Media => first.Length > 90 ? first[..90] + "…" : first.TrimEnd(':'),
+            EditorTools.Search or EditorTools.Media => System.Text.RegularExpressions.Regex.Match(first, @"^(\d+ (pages?|media items?) found|No (pages|media)[^.]*)") is { Success: true } m ? m.Value : first.Length > 60 ? first[..60] + "…" : first.TrimEnd(':'),
             EditorTools.Read => $"{result.Split('\n').Count(l => l.TrimStart().StartsWith("- "))} fields",
             _ => null,
         };

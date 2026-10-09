@@ -57,7 +57,44 @@ export function startMockAnthropic(port = 1230) {
     return null;
   }
 
+  /**
+   * The content assistant (its tools are declared), scripted by the editor's message so browser tests drive exact tool calls:
+   *   do: search_content {"query":"Editor fixture"}; read_content {"id":"$KEY"}; update_content {...} then: Done.
+   * Steps run one per round; $KEY is the first page key in the latest tool result, $BLOCK the first block short key
+   * ("block cards/1a2b3c4d"), $MEDIA the first media key. A summary request is answered with a summary.
+   */
+  function editorAnswer(body) {
+    const texts = m => (typeof m.content === 'string' ? [m.content] : m.content.filter(b => b.type === 'text').map(b => b.text));
+    const results = m => typeof m.content === 'string' ? [] : m.content.filter(b => b.type === 'tool_result').map(b => typeof b.content === 'string' ? b.content : (b.content || []).map(c => c.text).join(''));
+    const last = body.messages.at(-1);
+    if (texts(last).some(t => t.includes('This conversation is getting long'))) { state.summaries = (state.summaries || 0) + 1; return { parts: ['Summary: ', 'the editor worked on the editor fixture (key and pages as before).'] }; }
+    // The editor's latest message: the last user message with own text (not only the context or tool results).
+    let at = body.messages.length - 1;
+    const own = m => m.role === 'user' && texts(m).some(t => !t.startsWith('<context>') && !t.startsWith('[Image') && !t.startsWith('Summary of the earlier part'));
+    while (at > 0 && !own(body.messages[at])) at--;
+    const message = texts(body.messages[at]).filter(t => !t.startsWith('<context>') && !t.startsWith('[Image')).join(' ');
+    state.editorContext = texts(body.messages[at]).find(t => t.startsWith('<context>')) || state.editorContext;
+    const done = body.messages.slice(at + 1).filter(m => m.role === 'assistant' && typeof m.content !== 'string' && m.content.some(b => b.type === 'tool_use')).length;
+    const all = body.messages.slice(at).flatMap(results);
+    const latest = all.at(-1) || '';
+    const script = /do:\s*([\s\S]*?)(?:\s+then:\s*([\s\S]*))?$/.exec(message);
+    if (!script) return { parts: ['Claude mock editor answer about ', `“${message.slice(0, 50)}”.`] };
+    const steps = script[1].split(/;\s*(?=[a-z_]+\s*\{)/).map(s => s.trim()).filter(Boolean);
+    if (/declined this change/.test(latest)) return { parts: ['Understood, ', 'I left it as it was.'] };
+    if (done < steps.length) {
+      const m = /^([a-z_]+)\s*(\{[\s\S]*\})?$/.exec(steps[done]);
+      const pick = (pattern) => { for (const r of [...all].reverse()) { const found = pattern.exec(r); if (found) return found[1]; } return ''; };
+      const json = (m?.[2] || '{}')
+        .replaceAll('$KEY', pick(/key ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/))
+        .replaceAll('$BLOCK', pick(/block [\w/]+\/([0-9a-f]{8})/))
+        .replaceAll('$MEDIA', pick(/media key ([0-9a-f-]{36})/));
+      return { lookup: { name: m?.[1] || 'search_content', input: JSON.parse(json) }, parts: done === 0 ? ['On it.'] : [] };
+    }
+    return { parts: [(script[2] || 'Done.').trim(), all.some(r => r.startsWith('Not done')) ? ' (Something was not done.)' : ''] };
+  }
+
   function answerFor(body) {
+    if (body.tools?.some(t => t.name === 'read_content')) return editorAnswer(body);
     const last = body.messages.at(-1);
     const blocks = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : last.content;
     const asked = blocks.filter(b => b.type === 'text').map(b => b.text).join(' ');

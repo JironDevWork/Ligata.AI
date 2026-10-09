@@ -41,7 +41,7 @@ export const panelStyles = css`
   .log,.list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
   .log{padding:16px 16px 8px;display:flex;flex-direction:column;gap:10px}
   .log::-webkit-scrollbar,.list::-webkit-scrollbar{width:8px}.log::-webkit-scrollbar-thumb,.list::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
-  .log>*{animation:rise .26s var(--ease)}
+  .log>*{animation:rise .26s var(--ease);flex-shrink:0}
 
   .empty{margin:auto 0;padding:18px 6px;display:grid;gap:10px;justify-items:center;text-align:center}
   .empty.small{padding:30px 10px;color:var(--muted)}

@@ -141,8 +141,8 @@ export async function stream(auth, path, body, onEvent, signal) {
   });
   if (!response.ok || !(response.headers.get('content-type') || '').includes('text/event-stream')) {
     const data = await response.json().catch(() => null);
-    const error = new Error(data?.message || `Request failed (${response.status}).`);
-    error.code = data?.code; error.status = response.status;
+    const error = new Error(data?.message || data?.error?.message || `Request failed (${response.status}).`);
+    error.code = data?.code || data?.error?.code; error.status = response.status;
     throw error;
   }
   const reader = response.body.getReader();

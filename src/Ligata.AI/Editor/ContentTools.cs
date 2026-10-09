@@ -490,6 +490,6 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
             .Select(e => (Entity: e, Score: folded.Length == 0 ? 1 : Ligata.AI.Services.KnowledgeSnapshot.Fold(e.Name ?? "") is var name && name == folded ? 3 : name.Contains(folded) ? 2 : 0))
             .Where(x => x.Score > 0).OrderByDescending(x => x.Score).ThenByDescending(x => x.Entity.UpdateDate).Take(limit).ToList();
         if (items.Count == 0) return $"No media found{(folded.Length > 0 ? $" for “{query}”" : "")}.";
-        return $"{items.Count} media item{(items.Count == 1 ? "" : "s")}:\n" + string.Join("\n", items.Select(x => $"- “{x.Entity.Name}” — key {x.Entity.Key}, type {x.Entity.ContentTypeAlias}{(string.IsNullOrEmpty(x.Entity.MediaPath) ? "" : ", " + x.Entity.MediaPath)}"));
+        return $"{items.Count} media item{(items.Count == 1 ? "" : "s")} found:\n" + string.Join("\n", items.Select(x => $"- “{x.Entity.Name}” — key {x.Entity.Key}, type {x.Entity.ContentTypeAlias}{(string.IsNullOrEmpty(x.Entity.MediaPath) ? "" : ", " + x.Entity.MediaPath)}"));
     }
 }
