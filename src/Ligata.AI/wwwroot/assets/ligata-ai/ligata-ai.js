@@ -2087,6 +2087,8 @@
     // Less room above and below than at the sides: the ring stays clear of the lines around the words.
     const [padX, padY] = style === 'marker' ? [3, 1] : style === 'spotlight' ? [10, 8] : [8, 5];
     const until = Date.now() + Math.max(2, +G().seconds || 5) * 1000;
+    // The tag goes inside the ring near the top of the screen, also below a sticky header.
+    const inset = topInset();
     const current = marking = { mark, frame: 0 };
     const step = () => {
       if (marking !== current) return;
@@ -2095,7 +2097,7 @@
         const w = Math.max(r.width + padX * 2, 28), h = Math.max(r.height + padY * 2, 24);
         mark.style.width = `${w}px`; mark.style.height = `${h}px`;
         mark.style.transform = `translate(${Math.round(r.left + r.width / 2 - w / 2)}px,${Math.round(r.top + r.height / 2 - h / 2)}px)`;
-        mark.classList.toggle('below', r.top < 48);
+        mark.classList.toggle('below', r.top < inset + 48);
       }
       if (Date.now() < until) { current.frame = requestAnimationFrame(step); return; }
       mark.classList.remove('on');

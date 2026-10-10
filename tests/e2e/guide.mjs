@@ -71,15 +71,17 @@ function visitor(p) {
       }
       return null;
     }, words),
-    /** The highlight surrounds the words, and the words are on screen. */
+    /** The highlight surrounds the words, and the words are on screen (waited for: an earlier highlight may still be fading). */
     async marks(words) {
-      await this.mark().first().waitFor({ timeout: 8000 });
-      await sleep(250);
-      const box = await this.mark().first().boundingBox(), target = await this.words(words);
+      let box = null, target = null;
+      for (const started = Date.now(); Date.now() - started < 8000; await sleep(150)) {
+        box = await this.mark().last().boundingBox().catch(() => null);
+        target = await this.words(words);
+        if (box && target && target.y >= 0 && target.y + target.h <= target.vh && box.x <= target.x + 1 && box.y <= target.y + 1 && box.x + box.width >= target.x + target.w - 1 && box.y + box.height >= target.y + target.h - 1) return { box, target };
+      }
       assert(box && target, 'highlight and words found');
       assert(target.y >= 0 && target.y + target.h <= target.vh, `the words are on screen: ${JSON.stringify(target)}`);
-      assert(box.x <= target.x + 1 && box.y <= target.y + 1 && box.x + box.width >= target.x + target.w - 1 && box.y + box.height >= target.y + target.h - 1, `the highlight surrounds the words: ${JSON.stringify({ box, target })}`);
-      return { box, target };
+      throw new Error(`the highlight surrounds the words: ${JSON.stringify({ box, target })}`);
     },
   };
 }
@@ -237,14 +239,16 @@ await check('the page\'s own title wins over the menu item of the same name', as
 // ---------- forms and other parts the page's text does not hold (0.13) ----------
 /** The highlight surrounds the element (its start on screen, when it is taller than the screen). */
 async function marksElement(p, selector) {
-  const mark = p.locator('#ligata-ai-guide .mark').first();
-  await mark.waitFor({ timeout: 8000 });
-  await sleep(300);
-  const box = await mark.boundingBox(), target = await p.locator(selector).first().boundingBox(), vh = await p.evaluate(() => innerHeight);
+  let box = null, target = null;
+  const vh = await p.evaluate(() => innerHeight);
+  for (const started = Date.now(); Date.now() - started < 8000; await sleep(150)) {
+    box = await p.locator('#ligata-ai-guide .mark').last().boundingBox().catch(() => null);
+    target = await p.locator(selector).first().boundingBox();
+    if (box && target && target.y >= 0 && target.y < vh * 0.6 && box.x <= target.x + 1 && box.y <= target.y + 1 && box.x + box.width >= target.x + target.width - 1 && box.y + box.height >= target.y + target.height - 1) return { box, target };
+  }
   assert(box && target, 'highlight and element found');
   assert(target.y >= 0 && target.y < vh * 0.6, `the element's start is on screen: ${JSON.stringify(target)}`);
-  assert(box.x <= target.x + 1 && box.y <= target.y + 1 && box.x + box.width >= target.x + target.width - 1 && box.y + box.height >= target.y + target.height - 1, `the highlight surrounds the element: ${JSON.stringify({ box, target })}`);
-  return { box, target };
+  throw new Error(`the highlight surrounds the element: ${JSON.stringify({ box, target })}`);
 }
 
 await check('a form the page\'s text does not hold is read from the page as visitors get it, and listed with its page', async () => {

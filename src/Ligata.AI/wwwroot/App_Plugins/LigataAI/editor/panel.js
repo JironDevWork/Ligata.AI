@@ -1,7 +1,7 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { aiRequest } from '../api.js?v=0.13.0';
-import { panelStyles } from './panel-styles.js?v=0.13.0';
-import { glyph, kindIcon, stepIcon, documentPath, openDocument, go, markdown, diff, stream, when, modeInfo, effortInfo } from './shared.js?v=0.13.0';
+import { aiRequest } from '../api.js?v=0.13.1';
+import { panelStyles } from './panel-styles.js?v=0.13.1';
+import { glyph, kindIcon, stepIcon, documentPath, openDocument, go, markdown, diff, stream, when, modeInfo, effortInfo } from './shared.js?v=0.13.1';
 
 const store = {
   get(key, fallback) { try { const v = localStorage.getItem('ligata-ai-editor:' + key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },

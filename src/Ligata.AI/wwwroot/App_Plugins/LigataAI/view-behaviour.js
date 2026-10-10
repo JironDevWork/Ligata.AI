@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact, icon } from './ui.js?v=0.13.0';
+import { number, compact, icon } from './ui.js?v=0.13.1';
 
 const efforts = [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']];
 const effortHelp = {
