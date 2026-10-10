@@ -147,7 +147,7 @@ Since 0.12 the assistant can show visitors where something is, not only say it. 
   - when visitors are asked first: before scrolling or opening a page (default), only before opening a page, or never (another page then opens after a 2.6 s countdown the visitor can cancel);
   - the highlight: *Ring*, *Spotlight* (dims the rest of the page) or *Marker*, its colour (the chat's accent by default) and 2 to 15 seconds. *Try it in the preview* shows it.
 - **Both engines.** Claude and the GPU get the same tool. With the feature switched off, the tool is not declared, and earlier calls in a conversation are no longer repeated (the API refuses calls to undeclared tools).
-- **Measured with Claude Haiku 5.5** on Umbraco.BaselineV2 (10 October 2026, 51 real requests). With the final prompt, Haiku showed the right words on the right page every time. The questions:
+- **Measured with Claude Haiku 5.5** on Umbraco.BaselineV2 (10 October 2026, 63 real requests). With the final prompt, Haiku showed the right words on the right page every time. The questions:
   - the phone number, asked from the home page;
   - the opening hours "on the website, not in the chat";
   - the services page;
@@ -155,7 +155,7 @@ Since 0.12 the assistant can show visitors where something is, not only say it. 
   - something on the current page.
 
   A price question used no tool. After *No thanks*, the next answer knew the visitor had declined. Before the prompt said that calling the tool moves nothing, Haiku once asked in its answer whether to show the place instead of offering it.
-- **Checked with Gemma 4 12B** on demo.ligata.ch (10 visitor questions): it offers the right place on a computer and on a phone and uses no tool for a price question. A reminder next to the conversation (0.12.1) fixed the one case where it wrote the opening hours into the chat without offering them. Now and then it repeats its first paragraph after the tool call. See [docs/TESTING.md](docs/TESTING.md).
+- **Checked with Gemma 4 12B** on demo.ligata.ch (16 visitor questions): it offers the right place on a computer and on a phone and uses no tool for a price question. A reminder next to the conversation (0.12.1) fixed the one case where it wrote the opening hours into the chat without offering them. Its habit of writing the answer a second time after the tool call is caught: since 0.12.3 the website drops a word-for-word repeat. See [docs/TESTING.md](docs/TESTING.md).
 
 ## AI engine: own GPU or Claude API
 
