@@ -17,7 +17,7 @@ public sealed class EditorTools(ContentTools content, EditorMedia media)
 
     public static readonly IReadOnlyList<EditorTool> All =
     [
-        new(Search, null, "Find pages by words in their name or content, in every language, published or not. Returns the best matches with key, type, location, status and a snippet. Use it when the editor names a page, a topic or a phrase.",
+        new(Search, null, "Find pages by words in their name or content, in every language, published or not. It searches all the text of every page in the tree, settings pages too: each field and the fields inside blocks, so there is no need to check blocks separately. A number is found with any spacing. Returns the best matches with key, type, location, status and a snippet; with several words, each match says whether it has the whole phrase or which words it lacks. Use it when the editor names a page, a topic or a phrase.",
             """{"type":"object","properties":{"query":{"type":"string","description":"Words to look for, e.g. a page name or a phrase from its text."},"culture":{"type":"string","description":"Language for names and snippets (ISO code), default: the open page's language."},"type":{"type":"string","description":"Only pages of this document type alias."},"limit":{"type":"integer","description":"1 to 25, default 10."}},"required":["query"]}"""),
         new(Children, null, "List the pages directly below a page, in tree order, with key, type and status. parent \"root\" lists the top of the tree.",
             """{"type":"object","properties":{"parent":{"type":"string","description":"A page key, or \"root\"."},"culture":{"type":"string"},"skip":{"type":"integer"}},"required":["parent"]}"""),

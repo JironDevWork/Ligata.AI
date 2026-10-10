@@ -94,7 +94,7 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.9.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+# copy artifacts/Ligata.AI.0.9.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
 dotnet add package Ligata.AI --version 0.8.0 --source C:/path/to/feed
 ```
 
@@ -250,7 +250,7 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 ```powershell
 dotnet run --project tests/Ligata.AI.Tests -c Release                         # 227 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 374 checks with the database
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 376 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)

@@ -1081,6 +1081,13 @@ using (var scope = app.Services.CreateScope())
         var byText = await tools.SearchAsync(ctx, "kitchens wardrobes", null, null, 5);
         Assert(byText.Contains(rootKey) && byText.Contains("Kitchens and wardrobes") && (await tools.SearchAsync(ctx, "044 000", "de-CH", null, 5)).Contains("Rufen Sie uns an") && (await tools.SearchAsync(ctx, "Introduction", null, null, 5)).Contains(rootKey),
             "Drafts are searched by their text, inside blocks too, by numbers and by field labels, with a snippet: " + byText);
+        var teamKey = fixtureTeam.Key.ToString();
+        var phone = await tools.SearchAsync(ctx, "044 000 00 00", null, null, 10);
+        var squeezed = await tools.SearchAsync(ctx, "0440000000", null, null, 10);
+        Assert(phone.Contains(rootKey) && phone.Contains("has the whole phrase") && !phone.Contains(teamKey) && squeezed.Contains(rootKey) && !squeezed.Contains(teamKey),
+            "A number is found with any spacing; pages sharing only some digits with it (\"00\" in \"7:00\", not \"000\" in \"2000\") are left out once a page has it: " + phone);
+        var partly = await tools.SearchAsync(ctx, "workshop Saturday", "en-US", null, 10);
+        Assert(partly.Contains(rootKey) && partly.Contains("lacks “saturday”"), "With several words, each match says which words it lacks: " + partly);
         Assert((await tools.ChildrenAsync(ctx, rootKey, "en-US", 0)).Contains("“Team”") && (await tools.ChildrenAsync(ctx, rootKey, "en-US", 0)).Contains("draft"), "The tree below a page is listed with each page's status.");
         var cardKeys = BlockValue.Parse(fixtureRoot.GetValue("cards"), "Umbraco.BlockList")!.Items().Select(i => BlockValue.Key(i.Item)).ToList();
         var cardId = ContentFields.ShortId(cardKeys[0]);
@@ -1319,7 +1326,7 @@ static async Task<(IContent Root, IContent Team, IContent Archive)> SeedEditorAs
     var team = contents.Create("Team", root.Id, "editorArticle");
     team.SetCultureName("Team", "en-US"); team.SetCultureName("Team", "de-CH");
     team.SetValue("title", "Our team", "en-US"); team.SetValue("title", "Unser Team", "de-CH");
-    team.SetValue("intro", "Four joiners and an apprentice.", "en-US"); team.SetValue("intro", "Vier Schreiner und ein Lehrling.", "de-CH");
+    team.SetValue("intro", "Four joiners and an apprentice, since 2000. In from 7:00 to 12:00.", "en-US"); team.SetValue("intro", "Vier Schreiner und ein Lehrling, seit 2000. Da von 7:00 bis 12:00.", "de-CH");
     contents.Save(team); contents.Publish(team, ["en-US", "de-CH"]);
     var archive = contents.Create("Archive", root.Id, "editorArticle");
     archive.SetCultureName("Archive", "en-US");

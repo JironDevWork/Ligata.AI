@@ -163,7 +163,7 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
             if (type != null)
                 foreach (var p in ContentSchema.Properties(type))
                     await LinesAsync(text, p.Name ?? p.Alias, p.PropertyEditorAlias, p.DataTypeKey, page.GetValue(p.Alias, p.VariesByCulture() ? c : null), c, 0);
-            var all = text.ToString();
+            var all = Spaced(text.ToString());
             result[culture] = (all, Fold(all));
         }
         return result;
@@ -194,12 +194,29 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
 
     private static string Fold(string text) => Ligata.AI.Services.KnowledgeSnapshot.Fold(text);
 
+    /// <summary>Non-breaking and thin spaces (common in phone numbers and "Dr. Muster") as plain ones, one for one so snippets stay aligned.</summary>
+    private static string Spaced(string text) => text.Replace(' ', ' ').Replace(' ', ' ').Replace(' ', ' ');
+
+    /// <summary>Where a term occurs from `from` on: a word also inside a longer one ("telefon" in "telefonnummer"), a number only whole ("00" not in "2000").</summary>
+    private static int Next(string text, string term, int from)
+    {
+        var number = term.All(char.IsDigit);
+        for (var at = text.IndexOf(term, from, StringComparison.Ordinal); at >= 0; at = text.IndexOf(term, at + 1, StringComparison.Ordinal))
+            if (!number || ((at == 0 || !char.IsDigit(text[at - 1])) && (at + term.Length == text.Length || !char.IsDigit(text[at + term.Length])))) return at;
+        return -1;
+    }
+
+    private static bool Has(string text, string term) => Next(text, term, 0) >= 0;
+
     private static int Count(string text, string term)
     {
         var n = 0;
-        for (var at = text.IndexOf(term, StringComparison.Ordinal); at >= 0 && n < 5; at = text.IndexOf(term, at + term.Length, StringComparison.Ordinal)) n++;
+        for (var at = Next(text, term, 0); at >= 0 && n < 5; at = Next(text, term, at + term.Length)) n++;
         return n;
     }
+
+    /// <summary>Only the letters and digits, so "052 000 00 00", "052-000 0000" and "0520000000" are the same number.</summary>
+    private static string Squeeze(string text) => new([.. text.Where(char.IsLetterOrDigit)]);
 
     public async Task<string> SearchAsync(ToolContext context, string query, string? culture, string? type, int limit)
     {
@@ -208,29 +225,36 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
         limit = Math.Clamp(limit <= 0 ? 10 : limit, 1, MaxResults);
         var terms = Ligata.AI.Services.KnowledgeSnapshot.Terms(query).Distinct().ToList();
         if (terms.Count == 0) terms = [Fold(query)];
-        var phrase = Fold(query);
-        var pages = entities.GetAll(UmbracoObjectTypes.Document).OfType<IDocumentEntitySlim>().Where(e => !e.Trashed && access.InScope(context.Settings, e.Path)).Take(MaxScanned).ToList();
+        var phrase = Fold(Spaced(query));
+        // A phone number, IBAN or customer number (mostly digits) is found with any spacing, and only as a whole once a page has it.
+        var squeezed = Squeeze(phrase);
+        var number = squeezed.Length >= 6 && squeezed.Count(char.IsDigit) * 4 >= squeezed.Length * 3;
+        var pages =entities.GetAll(UmbracoObjectTypes.Document).OfType<IDocumentEntitySlim>().Where(e => !e.Trashed && access.InScope(context.Settings, e.Path)).Take(MaxScanned).ToList();
         if (!string.IsNullOrWhiteSpace(type)) pages = pages.Where(e => string.Equals(e.ContentTypeAlias, type.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
         var stale = pages.Where(e => !drafts.TryGetValue(e.Id, out var known) || known.Updated != e.UpdateDate).Select(e => e.Id).ToList();
         foreach (var batch in stale.Chunk(100))
             foreach (var page in contents.GetByIds(batch)) drafts[page.Id] = (page.UpdateDate, await TextOfAsync(page));
         // Ties go to the language asked for, else the open page's, else the site's default language.
         var preferred = string.IsNullOrWhiteSpace(culture) ? context.OpenCulture ?? await DefaultCultureAsync() : culture.Trim();
-        var scores = new List<(IDocumentEntitySlim Page, double Score, string Culture)>();
+        var scores = new List<(IDocumentEntitySlim Page, double Score, string Culture, bool Whole, string[] Missing)>();
         foreach (var page in pages)
         {
             if (!drafts.TryGetValue(page.Id, out var known)) continue;
-            var (bestScore, bestCulture) = (0.0, "");
+            var best = (Score: 0.0, Culture: "", Whole: false, Missing: Array.Empty<string>());
             foreach (var (c, (_, folded)) in known.Cultures)
             {
                 var name = folded[..Math.Max(0, folded.IndexOf('\n'))];
-                var score = (name == phrase ? 12 : 0) + terms.Count(name.Contains) * 4.0 + (folded.Contains(phrase) ? 6 : 0)
-                    + terms.Sum(t => Count(folded, t)) + (terms.All(folded.Contains) ? 3 : 0);
+                var whole = folded.Contains(phrase) || (number && Squeeze(folded).Contains(squeezed));
+                var missing = terms.Where(t => !Has(folded, t)).ToArray();
+                var score = (name == phrase ? 12 : 0) + terms.Count(t => Has(name, t)) * 4.0 + (whole ? 6 : 0)
+                    + terms.Sum(t => Count(folded, t)) + (missing.Length == 0 ? 3 : 0);
                 if (score > 0 && string.Equals(c, preferred, StringComparison.OrdinalIgnoreCase)) score += 0.5;
-                if (score > bestScore) (bestScore, bestCulture) = (score, c);
+                if (score > best.Score) best = (score, c, whole, missing);
             }
-            if (bestScore > 0) scores.Add((page, bestScore, bestCulture));
+            if (best.Score > 0) scores.Add((page, best.Score, best.Culture, best.Whole, best.Missing));
         }
+        // Pages that share only a few digits with a number ("00" in "10:00") are noise once a page has the whole number.
+        if (number && scores.Any(s => s.Whole)) scores = [.. scores.Where(s => s.Whole)];
         if (scores.Count == 0) return $"No pages found for “{query}”. Try other words (a name, a phrase from the text, a number), or browse with list_children.";
         var ranked = scores.OrderByDescending(s => s.Score).Take(100).ToList();
         var readable = await access.ReadableAsync(context.User, ranked.Select(s => s.Page.Key));
@@ -238,11 +262,13 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
         if (shown.Count == 0) return $"No pages you may see were found for “{query}”.";
         var text = new StringBuilder($"{shown.Count} page{(shown.Count == 1 ? "" : "s")} found for “{query}” (best first):\n");
         var n = 0;
-        foreach (var (page, _, c) in shown)
+        foreach (var (page, _, c, whole, missing) in shown)
         {
             // Named in the language asked for (else the preferred one) when the page has it; the snippet comes from where the words matched.
             var language = preferred != null && page.CultureNames.ContainsKey(preferred) ? preferred : c.Length > 0 ? c : null;
-            text.Append($"{++n}. “{Name(page, language)}” — key {page.Key}, type {page.ContentTypeAlias}, {Breadcrumb(page.Path, language)}, {Status(page, language)}{(language != null ? $" ({language})" : "")}");
+            // With several words the model is told how well a page matched, so a page with only "00" is not taken for the phone number.
+            var match = terms.Count < 2 ? "" : whole ? " — has the whole phrase" : missing.Length == 0 ? " — has all the words, not together" : $" — lacks {string.Join(", ", missing.Select(m => $"“{m}”"))}";
+            text.Append($"{++n}. “{Name(page, language)}” — key {page.Key}, type {page.ContentTypeAlias}, {Breadcrumb(page.Path, language)}, {Status(page, language)}{(language != null ? $" ({language})" : "")}{match}");
             if (drafts.TryGetValue(page.Id, out var known) && known.Cultures.TryGetValue(c, out var body) && Snippet(body.Text, body.Folded, terms, phrase) is { } snippet) text.Append($"\n   “…{snippet}…”");
             text.Append('\n');
         }
@@ -254,7 +280,7 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
     {
         var body = folded.IndexOf('\n') + 1;
         var at = folded.IndexOf(phrase, body, StringComparison.Ordinal);
-        if (at < 0) at = terms.Select(t => folded.IndexOf(t, body, StringComparison.Ordinal)).Where(i => i >= 0).DefaultIfEmpty(-1).Min();
+        if (at < 0) at = terms.Select(t => Next(folded, t, body)).Where(i => i >= 0).DefaultIfEmpty(-1).Min();
         if (at < 0 || at >= text.Length) return null;
         var start = Math.Max(body, at - 70);
         return text.Substring(start, Math.Min(170, text.Length - start)).Replace('\n', ' ').Trim();

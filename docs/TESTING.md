@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 374 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 376 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -124,6 +124,14 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
+- 0.9.1 (10 October 2026): finding numbers. On the deployed demo, the content assistant was asked which pages show the phone number. The answer was right (two pages), but its search for *+41 52 000 00 00* reported nine pages: the query's parts *41*, *52*, *000* and *00* also matched inside *2000* and times like *10:00*. The model sorted that out itself, and then wrongly added that blocks had not been checked. Now:
+  - a number in a query matches only whole numbers;
+  - a number is found with any spacing;
+  - once a page has the whole number, pages sharing only some digits are left out;
+  - each result says whether it has the whole phrase or which words it lacks;
+  - the tool description says that search covers every field and the fields inside blocks.
+
+  Package checks: 227 domain and 376 total (two new: a phone number with and without spaces, while a page with *2000* and *7:00* stays out; which words a match lacks). Browser: editor 23/23.
 - 0.9.0 (10 October 2026): the content assistant in the backoffice (see [Content assistant](#content-assistant-09) above and [CONTENT-ASSISTANT.md](CONTENT-ASSISTANT.md)). New browser suite `editor.mjs` 20/20 against the mock Anthropic API, which now plays a scripted assistant. Live: 40 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, all tasks done as asked, and all changes undone afterwards.
 
   Found and fixed on the way:
@@ -135,7 +143,7 @@ Results (8 October 2026, version 0.4.0):
 
   A live-chat-only host now sets `Features:ContentAssistant=false` too, so its section is still called *Support*.
 
-  Browser: editor 23/23, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 227 domain and 374 total.
+  Browser: editor 23/23, API 15/15, AI 24/24, team 17/17, team without AI 5/5, history 8/8, privacy 7/7, memory 12/12, engines 8/8. Package checks: 227 domain and 374 total (0.9.0).
 
   A review against the goal added three things:
   - Auto mode asks before risky changes (clearing a field, removing most of a text or a block, changing what all languages share);

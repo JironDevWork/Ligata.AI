@@ -90,7 +90,7 @@ Everything runs on the site's server with the signed-in user's permissions. Read
 
 | Tool | What it does |
 | --- | --- |
-| `search_content` | Searches the **draft** text of every page in every language. This includes field labels and the fields inside blocks, so "Telefon" finds the block field labelled *Telefon*. Results show the key, type, location, status and a snippet. The text is kept in memory and read again only for pages that changed. |
+| `search_content` | Searches the **draft** text of every page in every language. This includes field labels and the fields inside blocks, so "Telefon" finds the block field labelled *Telefon*. Results show the key, type, location, status and a snippet. With several words, each result says whether it has the whole phrase or which words it lacks. A number is found with any spacing (*052 000 00 00* is *0520000000*), and once a page has the whole number, pages that only share some of its digits (*00* in *10:00*) are left out. The text is kept in memory and read again only for pages that changed. |
 | `list_children` | The pages below a page, or the top of the tree, with their status. |
 | `read_content` | A page in one language: name, status, URL, other languages, and every field with its **path**, kind and draft value. Fields inside blocks are included (`modules/3f2a91c0/heading`, settings as `modules/3f2a91c0:settings/background`, nested blocks further down). Long values are shortened and can be read in full by path. Very large pages are capped at 40,000 characters. |
 | `describe_type` | A page or block type: fields, required, shared by all languages, allowed values, limits, accepted block types, allowed child types. |
@@ -200,9 +200,9 @@ Conversations are kept for the set period (30 days by default), and the activity
   - Block Grid parsing (areas, values per language, expose), JSON values stored as strings;
   - the instructions;
   - the conversation sent back with thinking signatures and one cache breakpoint.
-- **Database checks.** 44 database checks (374 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
+- **Database checks.** 46 database checks (376 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
   - modes by group;
-  - search by name, text, numbers and labels; tree, read, describe;
+  - search by name, text, numbers (any spacing, only whole numbers) and labels, and how well each page matched; tree, read, describe;
   - planning versus saving, drafts versus live, edits inside blocks per language;
   - a block named by its short key or by its whole path;
   - refusals: unknown path, unchanged value, protected field, read-only type, outside the scope, language, invalid value;
