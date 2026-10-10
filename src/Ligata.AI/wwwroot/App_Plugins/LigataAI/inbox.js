@@ -1,10 +1,10 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest, bearer, managementBase } from './api.js?v=0.12.0';
-import { styles } from './styles.js?v=0.12.0';
-import { inboxStyles } from './inbox-styles.js?v=0.12.0';
-import { icon } from './ui.js?v=0.12.0';
+import { aiRequest, bearer, managementBase } from './api.js?v=0.12.1';
+import { styles } from './styles.js?v=0.12.1';
+import { inboxStyles } from './inbox-styles.js?v=0.12.1';
+import { icon } from './ui.js?v=0.12.1';
 
 const views = [['needs', 'Needs reply'], ['active', 'Active'], ['mine', 'Mine'], ['open', 'All open'], ['closed', 'Closed']];
 const displays = [

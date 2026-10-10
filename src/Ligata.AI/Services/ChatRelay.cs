@@ -238,7 +238,9 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             http.Response.ContentType = "text/event-stream; charset=utf-8";
             http.Response.Headers.CacheControl = "no-store";
             http.Response.Headers["X-Accel-Buffering"] = "no";
-            string? currentEvent = null; var finished = false;
+            string? currentEvent = null;
+            bool finished = false, looked = false;
+            var tail = '\0';
             var answer = new StringBuilder();
             var looking = lookups?.Begin();
             try
@@ -251,15 +253,29 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                     if (currentEvent == "tool_calls")
                     {
                         // The model looks something up: answered here, never passed to the browser as is.
-                        if (line.StartsWith("data: ")) await LookupAsync(http, line[6..], looking, outcome, token);
+                        if (line.StartsWith("data: ")) { await LookupAsync(http, line[6..], looking, outcome, token); looked = true; }
                         else if (line.Length == 0) currentEvent = null;
                         continue;
                     }
-                    if (line.StartsWith("data: ") && currentEvent == "delta" && (counting || outcome != null))
+                    if (line.StartsWith("data: ") && currentEvent == "delta")
                     {
                         var piece = Delta(line[6..]);
-                        if (answer.Length < 200_000) answer.Append(piece);
-                        outcome?.Append(piece);
+                        // Text written after a lookup starts a new paragraph instead of running on from the text before it.
+                        if (looked && piece.Length > 0)
+                        {
+                            if (tail != '\0' && !char.IsWhiteSpace(tail) && !char.IsWhiteSpace(piece[0]))
+                            {
+                                piece = "\n\n" + piece;
+                                line = "data: " + JsonSerializer.Serialize(new { text = piece }, AssistantJson.Options);
+                            }
+                            looked = false;
+                        }
+                        if (piece.Length > 0) tail = piece[^1];
+                        if (counting || outcome != null)
+                        {
+                            if (answer.Length < 200_000) answer.Append(piece);
+                            outcome?.Append(piece);
+                        }
                     }
                     else if (line.StartsWith("data: ") && currentEvent is "done" or "error")
                     {

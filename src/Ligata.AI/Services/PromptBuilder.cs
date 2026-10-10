@@ -207,6 +207,8 @@ public static class PromptBuilder
         if (settings.Behaviour.IncludePageContext && !string.IsNullOrWhiteSpace(pagePath))
             text.AppendLine($"The visitor is on the page \"{Clean(pageTitle, 150)}\" ({Clean(pagePath, 300)}).");
         // A short reminder close to the conversation: the model follows it more reliably than the rule far above the knowledge.
+        // The same for showing the way: a smaller model otherwise often writes the place into the chat without offering to show it.
+        if (lookups && settings.Guide is { Enabled: true }) text.AppendLine($"If the visitor asks where something is or cannot find or see it, call {Lookups.Show} as well as answering.");
         if (team) text.AppendLine(lookups
             ? $"If neither the knowledge nor a lookup answers the visitor's question about {Site(settings)}, or they want a person, end your reply with {TeamMarker} on its own line."
             : $"If the knowledge does not answer the visitor's question about {Site(settings)}, or they want a person, end your reply with {TeamMarker} on its own line.");
