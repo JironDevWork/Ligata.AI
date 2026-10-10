@@ -1,12 +1,12 @@
 import { LitElement, html, css, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest } from '../api.js?v=0.10.1';
-import { styles } from '../styles.js?v=0.10.1';
-import { icon, controls, number, compact } from '../ui.js?v=0.10.1';
-import { glyph, kindIcon, kindLabel, documentPath, go, diff, when, modeInfo, effortInfo } from './shared.js?v=0.10.1';
+import { aiRequest } from '../api.js?v=0.11.0';
+import { styles } from '../styles.js?v=0.11.0';
+import { icon, controls, number, compact } from '../ui.js?v=0.11.0';
+import { glyph, kindIcon, kindLabel, documentPath, go, diff, when, modeInfo, effortInfo } from './shared.js?v=0.11.0';
 
-const tabs = [['activity', 'Activity', 'history'], ['settings', 'Settings', 'sliders'], ['usage', 'Usage', 'chart']];
+const tabs = [['activity', 'Activity', 'history'], ['settings', 'Settings', 'sliders'], ['usage', 'Usage', 'chart'], ['privacy', 'Privacy', 'shield']];
 const actions = [
   ['edit', 'Change content', 'Text, fields and blocks of pages, saved as drafts.'],
   ['create', 'Create pages', 'New pages, saved as drafts.'],
@@ -25,7 +25,7 @@ const prices = { 'claude-haiku-5-5': [0.10, 0.01, 0.50] };
  * (Settings), and what it costs (Usage).
  */
 class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
-  static properties = Object.fromEntries(['tab', 'loaded', 'settings', 'version', 'saved', 'meta', 'busy', 'message', 'error', 'errors', 'activity', 'filter', 'open', 'detail', 'usage', 'tree', 'picking', 'typeFilter']
+  static properties = Object.fromEntries(['tab', 'privacy', 'privacyLanguage', 'loaded', 'settings', 'version', 'saved', 'meta', 'busy', 'message', 'error', 'errors', 'activity', 'filter', 'open', 'detail', 'usage', 'tree', 'picking', 'typeFilter']
     .map(k => [k, { state: true }]));
   static styles = [styles, css`
     .lead{color:var(--muted);max-width:760px}
@@ -101,6 +101,27 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
   async loadTab() {
     if (this.tab === 'activity') await this.loadActivity();
     if (this.tab === 'usage') this.usage = await this.request('/usage?days=30');
+    if (this.tab === 'privacy') await this.loadPrivacy();
+  }
+
+  /** The privacy note for staff, written for the settings on screen (unsaved changes too). */
+  async loadPrivacy(language = this.privacyLanguage || 'de') {
+    this.privacyLanguage = language;
+    try { this.privacy = await this.request(`/privacy?language=${language}`, 'POST', this.settings); }
+    catch (e) { this.privacy = { language, error: e.message }; }
+  }
+
+  async copyPrivacy() {
+    try { await navigator.clipboard.writeText(this.privacy.text); this.message = 'Copied. Add it to your staff privacy notes or internal guidelines, and fill in the parts in [square brackets].'; }
+    catch { this.error = 'The browser did not allow copying. Select the text and copy it with Ctrl+C.'; }
+  }
+
+  downloadPrivacy() {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([this.privacy.text], { type: 'text/markdown;charset=utf-8' }));
+    link.download = this.privacy.language === 'de' ? 'datenschutz-inhaltsassistent.md' : 'privacy-content-assistant.md';
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
   get dirty() { return this.settings && JSON.stringify(this.settings) !== this.saved; }
@@ -155,7 +176,7 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
       ${this.message ? html`<div class="notice success" role="status">${icon('check')}<div>${this.message}</div><button class="icon-btn" aria-label="Dismiss" @click=${() => this.message = ''}>${icon('close')}</button></div>` : nothing}
       ${this.error ? html`<div class="notice error" role="alert">${icon('warn')}<div><strong>Please check</strong><p>${this.error}</p>${Object.keys(this.errors).length ? html`<ul>${Object.values(this.errors).map(v => html`<li>${v}</li>`)}</ul>` : nothing}</div><button class="icon-btn" aria-label="Dismiss" @click=${() => this.error = ''}>${icon('close')}</button></div>` : nothing}
       <nav class="tabs" aria-label="Content assistant">${tabs.map(([id, label, i]) => html`<button aria-current=${this.tab === id ? 'page' : 'false'} @click=${() => this.switchTab(id)}>${id === 'activity' ? glyph('history') : icon(i)}${label}</button>`)}</nav>
-      ${this.tab === 'settings' ? this.settingsView() : this.tab === 'usage' ? this.usageView() : this.activityView()}
+      ${this.tab === 'settings' ? this.settingsView() : this.tab === 'usage' ? this.usageView() : this.tab === 'privacy' ? this.privacyView() : this.activityView()}
     </div>`;
   }
 
@@ -403,6 +424,35 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
   }
 
   // ---------- usage ----------
+  privacyView() {
+    const note = this.privacy, language = this.privacyLanguage || 'de', responsible = !!this.settings.responsible?.trim();
+    return html`<div class="grid">
+      <section class="card">
+        <header><div><h2>Who is responsible</h2><p class="muted">The employer or site operator with its address, and a contact for privacy questions. It opens the privacy note below and the one editors read in the chat.</p></div></header>
+        ${this.text('responsible', 'Responsible party and privacy contact', { rows: 4, max: 1000, placeholder: 'Atelier Ahorn GmbH, Musterstrasse 12, 8400 Winterthur\nPrivacy questions: datenschutz@ahorn.example' })}
+        ${!responsible ? html`<div class="notice warning">${icon('warn')}<div>Until you fill this in and save, editors see a placeholder in square brackets in the chat's privacy note.</div></div>` : nothing}
+        <div class="section">${this.toggle('notForMonitoring', 'The activity log is not used to monitor staff', 'Adds to the note: the activity log and the usage figures are not used to monitor performance or behaviour. Switch it on only when that holds, for example under a works agreement.')}</div>
+      </section>
+      <section class="card">
+        <header><div><h2>Privacy note for staff</h2><p class="muted">What the people who use the assistant need to know (Art. 13 GDPR, Art. 19 DSG): what goes to Anthropic, who sees what, how long it is kept. Written for these settings, including unsaved changes. Editors read the saved version in the chat under <em>Privacy note</em>, in their backoffice language. A template, not legal advice: have it reviewed.</p></div></header>
+        <div class="row">
+          <div class="segmented" role="group" aria-label="Language">${[['de', 'Deutsch'], ['en', 'English']].map(([value, label]) => html`<button type="button" aria-pressed=${String(language === value)} @click=${() => this.loadPrivacy(value)}>${label}</button>`)}</div>
+          <span class="grow"></span>
+          <button type="button" class="btn small" @click=${() => this.loadPrivacy(language)}>${icon('refresh')}Update</button>
+          <button type="button" class="btn small" ?disabled=${!note?.text} @click=${() => this.downloadPrivacy()}>${icon('file')}Download</button>
+          <button type="button" class="btn small primary" ?disabled=${!note?.text} @click=${() => this.copyPrivacy()}>${icon('copy')}Copy</button>
+        </div>
+        ${note?.error ? html`<div class="notice error">${icon('warn')}<div>${note.error}</div></div>`
+          : html`<pre class="code policy" aria-label="Privacy note for staff" tabindex="0">${note?.text || 'Loading…'}</pre>`}
+        <ul class="checklist section">
+          <li><span class="mark">${icon('edit')}</span><div class="grow"><small>Give the note to everyone in the groups that may use the assistant, for example with your staff privacy notes or internal guidelines. Fill in the parts in [square brackets].</small></div></li>
+          <li><span class="mark">${icon('edit')}</span><div class="grow"><small>The activity log and the usage per person show who did what, and when. In Germany, involve an existing works council before you introduce the assistant (§ 87(1) no. 6 BetrVG); in Austria a works agreement may be needed (§§ 96, 96a ArbVG). In Switzerland, monitoring behaviour is not allowed (Art. 26 ArGV 3); a log that makes changes traceable is, when proportionate and staff are informed.</small></div></li>
+          <li><span class="mark">${icon('edit')}</span><div class="grow"><small>Add the assistant to your record of processing activities, and keep Anthropic’s Data Processing Addendum with your records. The template also lives in the package under <code>docs/privacy/staff-de.md</code> and <code>staff-en.md</code>.</small></div></li>
+        </ul>
+      </section>
+    </div>`;
+  }
+
   usageView() {
     const u = this.usage;
     if (!u) return html`<div class="empty">${icon('refresh', 'spin')}</div>`;

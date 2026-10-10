@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.10.1';
+import { icon, number, compact } from './ui.js?v=0.11.0';
 
 export const insightsView = {
   duration(ms) {

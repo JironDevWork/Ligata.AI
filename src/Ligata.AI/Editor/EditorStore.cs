@@ -241,12 +241,15 @@ public sealed class EditorStore(IScopeProvider scopes)
 
     // ---------- retention ----------
     /// <summary>Deletes conversations and activity past their period. Returns how many rows went.</summary>
+    /// <summary>Daily usage counters (name and numbers, no content) are kept this long, for the usage page and the yearly view.</summary>
+    public const int KeepUsageDays = 400;
+
     public int Purge(EditorSettings settings, DateTime now)
     {
         using var scope = scopes.CreateScope();
         var chats = scope.Database.Execute("DELETE FROM LigataAIEditorChat WHERE UpdatedUtc<@0", now.AddDays(-settings.Limits.KeepChatsDays));
         var actions = scope.Database.Execute("DELETE FROM LigataAIEditorAction WHERE CreatedUtc<@0", now.AddDays(-settings.Limits.KeepActivityDays));
-        var usage = scope.Database.Execute("DELETE FROM LigataAIEditorUsage WHERE Day<@0", now.AddDays(-400).ToString("yyyy-MM-dd"));
+        var usage = scope.Database.Execute("DELETE FROM LigataAIEditorUsage WHERE Day<@0", now.AddDays(-KeepUsageDays).ToString("yyyy-MM-dd"));
         scope.Complete();
         return chats + actions + usage;
     }

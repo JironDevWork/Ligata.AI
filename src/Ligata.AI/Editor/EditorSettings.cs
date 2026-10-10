@@ -30,6 +30,10 @@ public sealed record EditorSettings
     public bool EffortInChat { get; init; } = true;
     /// <summary>House rules for every conversation: tone, spelling, conventions ("Swiss spelling: ss instead of ß").</summary>
     public string Guidelines { get; init; } = "";
+    /// <summary>Who is responsible for the processing, with a contact for privacy questions: shown in the privacy note for staff.</summary>
+    public string Responsible { get; init; } = "";
+    /// <summary>The privacy note promises that the activity log and usage figures are not used to monitor performance or behaviour. Only when that holds (a works agreement, for example).</summary>
+    public bool NotForMonitoring { get; init; }
     public EditorLimits Limits { get; init; } = new();
 }
 
@@ -119,6 +123,7 @@ public static class EditorValidation
         Check(s.AskAfterChanges is >= 0 and <= 200, "askAfterChanges", "Ask again after 0 to 200 changes.");
         Check(Efforts.Contains(s.Effort), "effort", "Choose a supported effort level.");
         Check((s.Guidelines ?? "").Length <= 4000, "guidelines", "The guidelines can be at most 4,000 characters.");
+        Check((s.Responsible ?? "").Length <= 1000, "responsible", "Who is responsible can be at most 1,000 characters.");
         var scope = s.Scope ?? new();
         Check(scope.Roots is { Count: <= 50 }, "scope.roots", "Choose at most 50 starting points.");
         Check(scope.ReadOnlyTypes is { Count: <= 200 } && scope.ReadOnlyTypes.All(t => t is { Length: > 0 and <= 255 }), "scope.readOnlyTypes", "Invalid document type.");

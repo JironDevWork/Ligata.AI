@@ -177,13 +177,15 @@ It can be filtered by kind, person and words, and offers *Open page* and *Undo*.
 
 ## Privacy
 
-Editors' messages, the content the assistant reads and attached images go to Anthropic (USA), as for the website assistant in API mode. The website's visitors are not involved and need no consent.
+Editors' messages, the content the assistant reads, attached images and the editor's backoffice name go to Anthropic (USA), as for the website assistant in API mode. The website's visitors are not involved and need no consent.
 
-What to do:
-- Mention it in the privacy notes for staff and in the record of processing activities.
-- Anthropic's data processing addendum covers it.
+**Privacy note for staff (0.11).** The people who use the assistant have to be told what happens with their data (Art. 13 GDPR, Art. 19 DSG). The package writes that note for you:
+- **In the chat.** The start screen says that messages and the content read go to Anthropic (USA) and links to *Privacy note*. The conversations list has the same link. The note opens in the panel, in the editor's backoffice language (German for `de-*`, else English).
+- **Under *AI Assistant → Content assistant → Privacy*.** Enter who is responsible (employer or operator, address, privacy contact). Until you do, editors see a placeholder in square brackets. A switch adds the promise that the activity log and the usage figures are not used to monitor staff; switch it on only when that holds, for example under a works agreement. Below is the note for these settings, including unsaved ones, in German or English, to copy or download for your staff privacy notes.
+- **What it says.** Who is responsible; which data (messages and images, content read, name and open page, changes, usage); purpose and legal basis (Art. 6(1)(b) and (f) GDPR); Anthropic as processor (Data Processing Addendum, no training, deletion within 30 days, Standard Contractual Clauses); who sees what and for how long, from the settings (conversations only for their owner, the activity log and usage for the editor groups); not to paste other people's data or passwords; their rights.
+- **The templates** are `docs/privacy/staff-de.md` and `staff-en.md`, with notes for operators: works councils (§ 87(1) no. 6 BetrVG in Germany, §§ 96, 96a ArbVG in Austria, Art. 26 ArGV 3 in Switzerland) and why § 26 BDSG is not named.
 
-Conversations are kept for the set period (30 days by default), and the activity log for its own period. Usage counters hold names and numbers, no content. See [PRIVACY.md](PRIVACY.md#content-assistant-09).
+Also add the assistant to the record of processing activities; Anthropic's data processing addendum covers the transfer. Conversations are kept for the set period (30 days by default), the activity log for its own period, and usage counters (names and numbers, no content) for 400 days. See [PRIVACY.md](PRIVACY.md#content-assistant-09).
 
 ## Limits of this version
 
@@ -194,14 +196,15 @@ Conversations are kept for the set period (30 days by default), and the activity
 
 ## Tests
 
-- **Domain checks.** 31 checks of the content assistant are among the 228 domain checks (`dotnet run --project tests/Ligata.AI.Tests -c Release`). They cover:
+- **Domain checks.** 32 checks of the content assistant are among the 229 domain checks (`dotnet run --project tests/Ligata.AI.Tests -c Release`). They cover:
   - settings validation, effort choice (also from the configuration) and the tools offered, including tools a conversation already used;
+  - the privacy note for staff in German and English, filled in from the settings;
   - when each mode asks: Manual always, Bypass never, Auto for kinds not approved, for risky changes and after N changes; Read only gets only the tools that read;
   - HTML sanitizing and plain text, UDIs, editor kinds;
   - Block Grid parsing (areas, values per language, expose), JSON values stored as strings;
   - the instructions;
   - the conversation sent back with thinking signatures and one cache breakpoint.
-- **Database checks.** 47 database checks (378 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
+- **Database checks.** 47 database checks (379 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
   - modes by group (Read only comes with every other mode; a group may have only Read only);
   - search by name, text, numbers (any spacing, only whole numbers) and labels, and how well each page matched; tree, read, describe;
   - planning versus saving, drafts versus live, edits inside blocks per language;
@@ -211,5 +214,5 @@ Conversations are kept for the set period (30 days by default), and the activity
   - rich text sanitizing; block add, move and remove (expose, nothing left behind); create, publish (and Umbraco's refusal), sort, recycle bin;
   - Undo and its conflict, deletion restored;
   - activity filters, usage, conversations and retention, settings conflicts, the manifest by licence.
-- **Browser suite.** `tests/e2e/editor.mjs` has 25 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode (including Auto asking before a risky block removal, and Read only refusing changes and approvals), blocks, Undo, and the activity log, which records for each change who steered it, when, what they asked, before and after, and by hand, Auto or Bypass. It also covers settings, the effort from the configuration and from the chat, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
+- **Browser suite.** `tests/e2e/editor.mjs` has 26 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode (including Auto asking before a risky block removal, and Read only refusing changes and approvals), blocks, Undo, and the activity log, which records for each change who steered it, when, what they asked, before and after, and by hand, Auto or Bypass. It also covers settings, the privacy note (in the settings and in the chat), the effort from the configuration and from the chat, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
 - **Live.** 59 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, through a budget proxy: 40 while building and 19 against the final code. The final 19 covered one task per mode, then the activity log read back and Undo. On the deployed demo, three more questions (11 requests, nothing changed): where the phone number is (0.9.0), a request to replace it in Read only mode (0.10.0), and what Read only can do (0.10.1, the conversation saved as Read only). The results are in [TESTING.md](TESTING.md#content-assistant-09).

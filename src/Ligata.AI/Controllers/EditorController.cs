@@ -147,6 +147,37 @@ public sealed class EditorController(EditorStore store, EditorAgent agent, Edito
         });
     }
 
+    /// <summary>
+    /// The privacy note for staff (Art. 13 GDPR): everyone who may use the assistant reads it in the chat, in their backoffice
+    /// language unless another is asked for; the editor groups post their unsaved settings to see the note they would give.
+    /// </summary>
+    [HttpGet("privacy")]
+    public async Task<IActionResult> Privacy([FromQuery] string? language)
+    {
+        var user = User;
+        if (user == null) return Unauthorized();
+        var settings = store.Settings().Settings;
+        if (!Admin(user) && EditorAccess.Modes(settings, user).Length == 0) return StatusCode(403, Problem("forbidden", "Your user group may not use the content assistant."));
+        return Ok(await PrivacyNoteAsync(user, settings, language));
+    }
+
+    [HttpPost("privacy")]
+    public async Task<IActionResult> PrivacyPreview([FromQuery] string? language, [FromBody] EditorSettings draft)
+    {
+        if (Forbidden() is { } no) return no;
+        return Ok(await PrivacyNoteAsync(User!, draft ?? store.Settings().Settings, language));
+    }
+
+    private async Task<object> PrivacyNoteAsync(EditorUser user, EditorSettings settings, string? language)
+    {
+        var names = (await groups.GetAllAsync(0, 500)).Items.ToDictionary(g => g.Alias, g => g.Name ?? g.Alias, StringComparer.OrdinalIgnoreCase);
+        string Name(string alias) => names.TryGetValue(alias, out var name) ? name : alias;
+        var chosen = EditorPrivacy.Language(language ?? user.User.Language);
+        var text = EditorPrivacy.Generate(chosen, settings, ClaudeEngine.DisplayName(model.Model),
+            settings.Access.Where(a => a.Modes.Count > 0).Select(a => Name(a.Group)), options.Value.EditorGroups.Select(Name));
+        return new { language = chosen, text, responsible = !string.IsNullOrWhiteSpace(settings.Responsible) };
+    }
+
     /// <summary>The pages below a page (or the top), for choosing where the assistant may work.</summary>
     [HttpGet("tree")]
     public IActionResult Tree([FromQuery] Guid? parent)

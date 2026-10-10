@@ -21,9 +21,11 @@ public static partial class PrivacyPolicy
     [GeneratedRegex(@"\n{3,}")]
     private static partial Regex BlankLines();
 
-    public static string Template(string language)
+    public static string Template(string language) => Resource($"Ligata.AI.Privacy.{(Languages.Contains(language) ? language : "en")}.md");
+
+    /// <summary>A template embedded in the package (docs/privacy), with Unix line ends.</summary>
+    public static string Resource(string name)
     {
-        var name = $"Ligata.AI.Privacy.{(Languages.Contains(language) ? language : "en")}.md";
         using var stream = typeof(PrivacyPolicy).Assembly.GetManifestResourceStream(name) ?? throw new InvalidOperationException($"Missing resource {name}.");
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd().Replace("\r\n", "\n");

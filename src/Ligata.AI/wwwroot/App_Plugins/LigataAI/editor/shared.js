@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { bearer, managementBase } from '../api.js?v=0.10.1';
+import { bearer, managementBase } from '../api.js?v=0.11.0';
 
 // Tabler Icons 3.35.0 (MIT, https://tabler.io/icons), outline set: the same family as the rest of the package.
 const paths = {
@@ -18,6 +18,7 @@ const paths = {
   blocks: 'M4 4h6v6h-6z M14 4h6v6h-6z M4 14h6v6h-6z M17 17m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
   photo: 'M15 8h.01 M3 6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3h-12a3 3 0 0 1-3-3v-12z M3 16l5-5c.928-.893 2.072-.893 3 0l5 5 M14 14l1-1c.928-.893 2.072-.893 3 0l3 3',
   open: 'M12 6h-6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6 M11 13l9-9 M15 4h5v5',
+  back: 'M5 12l14 0 M5 12l6 6 M5 12l6-6',
   edit: 'M4 20h4l10.5-10.5a2.828 2.828 0 1 0-4-4l-10.5 10.5v4 M13.5 6.5l4 4',
   create: 'M14 3v4a1 1 0 0 0 1 1h4 M17 21h-10a2 2 0 0 1-2-2v-14a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z M12 11l0 6 M9 14l6 0',
   publish: 'M21 12a9 9 0 1 0-9 9 M3.6 9h16.8 M3.6 15h8.4 M11.578 3a17 17 0 0 0 0 18 M12.5 3c1.719 2.755 2.5 5.876 2.5 9 M18 21v-7m3 3l-3-3l-3 3',

@@ -165,6 +165,9 @@ export const panelStyles = css`
   .chat-title{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chat-meta{font-size:11.5px;color:var(--muted)}
   .list-note{font-size:11.5px;color:var(--muted);padding:10px;margin:0}
+  .empty p.fine{font-size:11.5px;margin-top:6px}
+  button.link{display:inline;padding:0;border:0;background:none;color:var(--accent);font:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+  .note{padding:8px 10px 14px;font-size:13px;line-height:1.55}.note h4:first-child{margin-top:4px;font-size:15px}
 
   .spin{animation:spin 1.6s linear infinite}
   @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}

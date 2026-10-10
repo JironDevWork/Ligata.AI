@@ -363,6 +363,40 @@ await check('settings: groups, modes, actions and limits are saved and validated
   assert((await dash.locator('.tiles').innerText()).includes('messages'), 'usage');
 });
 
+await check('privacy note: the text for staff in the settings, a line and the full note in the chat', async () => {
+  const dash = page.locator('ligata-ai-editor-dashboard');
+  if (await panel.locator('section.panel.open').count()) await panel.locator('header button[aria-label="Close"]').click();
+  await dash.locator('nav.tabs button', { hasText: 'Privacy' }).click();
+  await dash.locator('pre.policy', { hasText: 'Datenschutzhinweis' }).waitFor({ timeout: 10000 });
+  assert((await dash.locator('pre.policy').innerText()).includes('[Name und Anschrift') && await dash.locator('.notice.warning', { hasText: 'placeholder' }).count() === 1, 'placeholder until someone is named');
+  await dash.locator('textarea').first().fill('Fixture Ltd, 1 Test Street, Zurich\nPrivacy questions: privacy@fixture.example');
+  await dash.locator('label.switch', { hasText: 'not used to monitor staff' }).click();
+  await dash.locator('button', { hasText: 'Update' }).click();
+  await dash.locator('pre.policy', { hasText: 'Fixture Ltd' }).waitFor({ timeout: 10000 });
+  await dash.locator('.segmented button', { hasText: 'English' }).click();
+  await dash.locator('pre.policy', { hasText: 'Privacy notice' }).waitFor({ timeout: 10000 });
+  const english = await dash.locator('pre.policy').innerText();
+  assert(english.includes('Fixture Ltd') && english.includes('Anthropic') && english.includes('deleted 30 days after the last message') && english.includes('We do not use the activity log') && !english.includes('BetrVG'), 'English note: ' + english.slice(0, 300));
+  await dash.locator('button', { hasText: 'Save changes' }).click();
+  await dash.locator('.notice.success', { hasText: 'Saved' }).waitFor({ timeout: 10000 });
+  await page.screenshot({ path: path.join(out, '6-privacy-settings.png'), fullPage: true });
+  // In the chat: a line under the suggestions, and the note (saved settings) in the editor's backoffice language.
+  if (!(await panel.locator('section.panel.open').count())) await panel.locator('.launcher').click();
+  const earlier = await page.evaluate(() => document.querySelector('ligata-ai-editor-panel').chatId);
+  await newChat();
+  assert((await panel.locator('.empty .fine').innerText()).includes('Anthropic (USA)'), 'the welcome says where messages go');
+  await panel.locator('.empty .fine button.link').click();
+  await panel.locator('.note h4').first().waitFor({ timeout: 10000 });
+  const note = await panel.locator('.note').innerText();
+  assert(note.includes('Fixture Ltd') && note.includes('Anthropic') && !note.includes('{{'), 'the note in the chat: ' + note.slice(0, 300));
+  assert((await panel.locator('header strong').innerText()) === 'Privacy note', 'titled');
+  await page.screenshot({ path: path.join(out, '6-privacy-chat.png') });
+  await panel.locator('.note button', { hasText: 'Back to the chat' }).click();
+  await panel.locator('.empty h3').waitFor({ timeout: 5000 });
+  if (earlier) await page.evaluate(id => document.querySelector('ligata-ai-editor-panel').openChat(id), earlier);
+  await saveSettings(s => ({ ...s, responsible: '', notForMonitoring: false }));
+});
+
 await check('conversations survive a reload and are listed', async () => {
   await page.reload();
   await panel.locator('section.panel.open .log .msg').first().waitFor({ timeout: 20000 });

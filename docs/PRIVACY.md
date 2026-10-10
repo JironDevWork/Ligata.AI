@@ -8,6 +8,12 @@ This guide explains what Ligata.AI does to protect visitors' data, what you conf
 
 Both are also in the package, and the backoffice fills them in for your setup: **AI Assistant → Settings → Privacy → Text for your privacy policy** (copy or download).
 
+For the content assistant in the backoffice, the privacy note for staff (0.11):
+- [docs/privacy/staff-de.md](privacy/staff-de.md): Datenschutzhinweis für Mitarbeitende.
+- [docs/privacy/staff-en.md](privacy/staff-en.md): the English version.
+
+The backoffice fills it in under **AI Assistant → Content assistant → Privacy**, and editors read it in the chat. See [Content assistant](#content-assistant-09).
+
 ## What the package does
 
 | Topic | Behaviour |
@@ -140,13 +146,14 @@ Measures the software provides. Add your organisational ones (access rights, bac
 
 The content assistant in the backoffice is for the site's own staff, not for visitors, so no visitor consent is involved.
 
-- **What leaves the site.** Editors' messages and attached images, together with the content the assistant reads to answer them (drafts too), go to Anthropic (USA). Each request carries only a pseudonymous id of the backoffice user (`metadata.user_id`).
+- **What leaves the site.** Editors' messages and attached images, together with the content the assistant reads to answer them (drafts too), go to Anthropic (USA). Each message also names the editor (their backoffice name) and the page they have open, and each request carries a pseudonymous id of the backoffice user (`metadata.user_id`); email addresses are not sent.
 - **Legal basis and records.** The processing serves the operator's work on its own website: its legitimate interest, or the employment relationship. Add it to the record of processing activities ("content editing with an AI assistant; recipient Anthropic; staff messages and website content"). Anthropic's data processing addendum covers the transfer.
-- **Tell your editors.** Say in the staff privacy notes or the internal guidelines that the assistant sends what they write and the content it reads to Anthropic, and that personal data of third parties (customers in a form text, for example) should not be pasted into the chat.
+- **Tell your editors (0.11).** The package writes the privacy note for staff (Art. 13 GDPR, Art. 19 DSG) from the settings: *AI Assistant → Content assistant → Privacy*, in German and English, to copy into the staff privacy notes. Editors also read it in the chat (*Privacy note* on the start screen and in the conversations list), in their backoffice language. Enter who is responsible there, or editors see a placeholder. The templates are `docs/privacy/staff-de.md` and `staff-en.md`.
+- **Works councils.** The activity log and the usage per person show who did what, and when. In Germany that makes the assistant a technical system suited to monitoring (§ 87(1) no. 6 BetrVG): involve an existing works council first. In Austria a works agreement may be needed (§§ 96, 96a ArbVG). In Switzerland, systems meant to monitor behaviour are not allowed (Art. 26 ArGV 3); a proportionate log that makes changes traceable is, when staff are informed. The note promises not to use the log for monitoring only when that is switched on under *Privacy*.
 - **What the site keeps.**
   - Conversations, per user and visible only to that user, deleted after the set period (30 days by default).
   - The activity log: who asked, their message (shortened), what changed with values before and after, and how it was approved. It is kept for its own period (365 days by default) and is visible to the editor groups.
-  - Daily usage counters per person: name, number of messages, steps and changes, and tokens. They hold no content.
+  - Daily usage counters per person: name, number of messages, steps and changes, and tokens. They hold no content and are deleted after 400 days.
 - **Limits.** Who may use it and what it may change are set per user group; every change runs with the editor's own Umbraco permissions.
 
 ## Not covered by the package

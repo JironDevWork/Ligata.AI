@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 228 assertions
+# Package domain and security checks (no database): 229 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 378 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 379 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -54,7 +54,7 @@ The database mode refuses any path outside a `.runtime` folder or not named `ai-
 ```bash
 node tests/e2e/mock-anthropic.mjs &
 CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 LigataAI__ContentAssistant__CompactAtTokens=9000 LigataAI__ContentAssistant__Effort=low bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e && node editor.mjs          # 25 checks, screenshots in .runtime/e2e/editor
+cd tests/e2e && node editor.mjs          # 26 checks, screenshots in .runtime/e2e/editor
 ```
 
 | Check | What is verified |
@@ -75,6 +75,7 @@ cd tests/e2e && node editor.mjs          # 25 checks, screenshots in .runtime/e2
 | Navigation | `open_page` takes the editor to the page in the asked language |
 | Media | An attached image reaches Claude and is uploaded after approval, logged |
 | Activity | Who steered it, what they asked, before and after; Undo from the log |
+| Privacy note | *Privacy* tab: a placeholder until someone is named, then the note with the responsible party, in German and English, with the promise not to monitor staff once switched on; saved. In the chat: a line on the start screen and the full note in the editor's language |
 | Conversations | Restored after a reload, listed |
 | Summaries | Long conversations are summarized and continue from the summary |
 | Stop | Stops a slow answer; the conversation goes on |
@@ -126,6 +127,14 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
+- 0.11.0 (10 October 2026): **the privacy note for staff** (Art. 13 GDPR, Art. 19 DSG).
+  - It is filled in from the settings: who is responsible, periods, user groups, the model, image uploads.
+  - Editors read it in the chat, in their backoffice language. The start screen says where messages go and links to it.
+  - The editor groups copy or download it under *Content assistant → Privacy*.
+  - An optional promise not to monitor staff replaces a bracketed hint that editors would have seen.
+  - PRIVACY.md now says that the editor's backoffice name goes to Anthropic too, and covers works councils.
+
+  Package checks: 229 domain and 379 total. Browser: editor 26/26 (new: privacy note), API 15/15.
 - 0.10.1 (10 October 2026): found on the demo with 0.10.0.
   - Answers with Markdown tables showed raw `| … |` lines; the chat now shows them as tables.
   - Search results and page lists said "published, draft changed", which the model read as unsaved. They now say "published; the draft has unpublished changes", as reading a page already did.

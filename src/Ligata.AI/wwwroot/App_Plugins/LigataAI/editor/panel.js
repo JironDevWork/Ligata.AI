@@ -1,7 +1,7 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { aiRequest } from '../api.js?v=0.10.1';
-import { panelStyles } from './panel-styles.js?v=0.10.1';
-import { glyph, kindIcon, stepIcon, documentPath, openDocument, go, markdown, diff, stream, when, modeInfo, effortInfo } from './shared.js?v=0.10.1';
+import { aiRequest } from '../api.js?v=0.11.0';
+import { panelStyles } from './panel-styles.js?v=0.11.0';
+import { glyph, kindIcon, stepIcon, documentPath, openDocument, go, markdown, diff, stream, when, modeInfo, effortInfo } from './shared.js?v=0.11.0';
 
 const store = {
   get(key, fallback) { try { const v = localStorage.getItem('ligata-ai-editor:' + key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
@@ -15,7 +15,7 @@ const maxImageBytes = 5 * 1024 * 1024;
  * with before and after; in Manual mode (and for risky changes in Auto) they wait for Approve or Decline.
  */
 export class LigataAIEditorPanel extends LitElement {
-  static properties = Object.fromEntries(['open', 'expanded', 'session', 'chatId', 'title', 'items', 'busy', 'thinking', 'waiting', 'mode', 'effort', 'images', 'page', 'view', 'error', 'decisions', 'noting', 'collapsed', 'menu', 'contextInfo', 'off']
+  static properties = Object.fromEntries(['open', 'expanded', 'session', 'chatId', 'title', 'items', 'busy', 'thinking', 'waiting', 'mode', 'effort', 'images', 'page', 'view', 'error', 'decisions', 'noting', 'collapsed', 'menu', 'contextInfo', 'off', 'privacyNote']
     .map(k => [k, { state: true }]));
   static styles = panelStyles;
 
@@ -245,7 +245,7 @@ export class LigataAIEditorPanel extends LitElement {
         ${glyph('sparkle')}${this.pending.length ? html`<span class="badge">${this.pending.length}</span>` : nothing}</button>` : nothing}
       <section class="panel ${this.open ? 'open' : ''} ${this.expanded ? 'docked' : ''}" role="dialog" aria-label="Content assistant" aria-hidden=${String(!this.open)}>
         ${this.header()}
-        ${!available ? this.unavailable() : this.view === 'history' ? this.history() : this.conversation()}
+        ${!available ? this.unavailable() : this.view === 'history' ? this.history() : this.view === 'privacy' ? this.privacy() : this.conversation()}
       </section>`;
   }
 
@@ -254,7 +254,7 @@ export class LigataAIEditorPanel extends LitElement {
     return html`<header>
       <span class="mark">${glyph('sparkle')}</span>
       <div class="title">
-        <strong>${this.view === 'history' ? 'Conversations' : this.title || 'Content assistant'}</strong>
+        <strong>${this.view === 'history' ? 'Conversations' : this.view === 'privacy' ? 'Privacy note' : this.title || 'Content assistant'}</strong>
         <span class="sub">${s.model}${this.busy ? html` · <span class="live">working</span>` : this.waiting ? html` · <span class="wait">waiting for you</span>` : nothing}</span>
       </div>
       <button class="icon" title="Conversations" aria-label="Conversations" aria-pressed=${String(this.view === 'history')} @click=${() => { this.view = this.view === 'history' ? 'chat' : 'history'; if (this.view === 'history') this.refreshSession(); }}>${glyph('history')}</button>
@@ -277,8 +277,22 @@ export class LigataAIEditorPanel extends LitElement {
           <button class="chat-open" @click=${() => this.openChat(c.id)}><span class="chat-title">${c.title || 'Conversation'}</span><span class="chat-meta">${when(c.updated)} · ${modeInfo[c.mode]?.label || c.mode}</span></button>
           <button class="icon small" title="Delete" aria-label="Delete conversation" @click=${() => this.deleteChat(c.id)}>${glyph('trash')}</button>
         </div>`)}
-      <p class="list-note">Conversations are kept for ${this.session.keepDays || 'a limited number of'} days. Only you see yours; what the assistant changed is in the activity log.</p>
+      <p class="list-note">Conversations are kept for ${this.session.keepDays || 'a limited number of'} days. Only you see yours; what the assistant changed is in the activity log. <button class="link" @click=${() => this.showPrivacy()}>Privacy note</button></p>
     </div>`;
+  }
+
+  /** The privacy note for staff (what goes to Anthropic, who sees what, how long), in the editor's backoffice language. */
+  async showPrivacy() {
+    this.view = 'privacy';
+    this.privacyNote = await this.request('/privacy').catch(e => ({ error: e.message }));
+  }
+
+  privacy() {
+    const note = this.privacyNote;
+    return html`<div class="list"><div class="msg ai note">
+      ${!note ? html`<p class="muted">Loading…</p>` : note.error ? html`<p class="problem">${glyph('warn')}<span>${note.error}</span></p>` : html`<div class="text">${markdown(note.text)}</div>`}
+      <p><button class="btn quiet" @click=${() => this.view = 'chat'}>${glyph('back')}Back to the chat</button></p>
+    </div></div>`;
   }
 
   conversation() {
@@ -316,6 +330,7 @@ export class LigataAIEditorPanel extends LitElement {
       <h3>How can I help with the content?</h3>
       <p>${this.mode === 'readonly' ? 'I find pages, read them and answer questions about the content. Read only: nothing is changed.' : html`I find pages, read them and make changes${this.session.actions?.includes('publish') ? '' : ' as drafts'}. ${modeInfo[this.mode]?.text || ''}`}</p>
       <div class="ideas">${ideas.map(i => html`<button @click=${() => i.endsWith('…') ? this.prefill(i.replace(' …', ' ')) : this.send(i)}>${i}</button>`)}</div>
+      <p class="fine">What you write and the content it reads are sent to Anthropic (USA). <button class="link" @click=${() => this.showPrivacy()}>Privacy note</button></p>
     </div>`;
   }
 

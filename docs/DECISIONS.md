@@ -2,7 +2,7 @@
 
 The reasoning behind Ligata.AI, so it survives the conversations it was worked out in. Each entry names the decision, why it was taken, and what was tried or rejected on the way. Details and measurements live in the linked documents; this file is the map.
 
-Versions: 0.1 (7 Oct 2026) to 0.10.1 (10 Oct 2026). Newest topics last within each section.
+Versions: 0.1 (7 Oct 2026) to 0.11.0 (10 Oct 2026). Newest topics last within each section.
 
 ## Shape of the product
 
@@ -37,6 +37,11 @@ The request: an AI assistant inside Umbraco that manages content. It should have
   - approving a change that waited from before the switch is refused, while declining still works.
 
   Every group with another mode gets Read only too, because it can only do less. A group can also have only Read only. A group allowed only Auto still starts in Auto, not in the Read only that comes with it.
+- **A privacy note for staff, in the chat and to copy (0.11).** Editors are data subjects too: their messages, their name and what they changed go to Anthropic and into the activity log. The note is written from the settings (who is responsible, periods, groups, model), like the website's privacy text. It is shown where the data is collected, in the chat, and offered to copy for the staff privacy notes. Choices:
+  - The note does not cite § 26 BDSG (disputed since CJEU C-34/21) and names Art. 6(1)(b) and (f) GDPR.
+  - The promise not to monitor staff with the log is a switch, not a bracketed hint, because editors read the same text.
+  - Works councils are a note for operators, not part of the note for staff.
+  - The editor's name stays in the context the model gets (it addresses the editor and can tell whose request it handles), and the note says so.
 - **Tools the model can use well.** Paths like `modules/3f2a91c0/heading` use the first 8 hex digits of a block's key, not list positions, so they stay valid while blocks are added. Values are shown and taken in natural shapes: text as text, pickers as `{page, key}`, links as `{name, page}`. Kinds that are not allowed are not declared to new conversations. A conversation that already used one keeps it declared, because the API refuses a history that calls an undeclared tool. Calling it is then refused. The prompt holds no content: everything is fetched through tools, and a very large page is capped at 40,000 characters.
 - **Search over drafts, not Umbraco's index.** The first live test asked for the phone number. Umbraco's internal Examine index found nothing in the block fields, and the model had to browse. Now every page's draft text is scanned: the name, then "Label: value" lines, including fields inside blocks. The text is kept in memory and read again only for pages whose update date changed. Field labels make "Telefon" find the field labelled *Telefon*. Numbers count only whole and with any spacing, and a phone number with or without its country code (0.9.1, 0.10): on the demo, a search for a phone number listed every page with *00* in a time of day, and only the model's own reading kept the answer right.
 - **Written in the stored form.** Content is changed with `IContentService` on the stored values. A value inside a block keeps the form it already has: a JSON string, as seeders write it, or an object, as the backoffice writes it. Untouched fields stay byte for byte. A culture-variant value written into a block also exposes the block in that language. A new block shows only in the language it was written in, which matches Umbraco's block-level variance.

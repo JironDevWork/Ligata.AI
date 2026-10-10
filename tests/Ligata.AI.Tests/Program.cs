@@ -540,6 +540,15 @@ Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "
     Assert(readOnlyTools.All(t => t.Action == null) && readOnlyTools.Any(t => t.Name == "search_content") && readOnlyTools.Any(t => t.Name == "open_page")
         && EditorAgent.ToolsFor(editorDefaults, usedUpdate, EditorModes.ReadOnly).Any(t => t.Name == "update_content") && EditorAgent.ToolsFor(editorDefaults, new EditorState()).Any(t => t.Name == "update_content"),
         "Read only mode gives the model only the tools that find and read; a change tool the conversation used before stays declared (and is refused).");
+    var staffDe = EditorPrivacy.Generate("de-CH", editorDefaults, "Claude Haiku 5.5", ["Administratoren", "Redaktion"], ["Administratoren"]);
+    var staffEn = EditorPrivacy.Generate("en-US", editorDefaults with { Responsible = "Atelier Ahorn GmbH, Winterthur\nPrivacy: datenschutz@ahorn.example", Actions = [EditorActions.Edit], NotForMonitoring = true }, "Claude Haiku 5.5", ["Administrators"], ["Administrators"]);
+    Assert(staffDe.StartsWith("## Datenschutzhinweis") && staffDe.Contains("„Administratoren“ und „Redaktion“") && staffDe.Contains("30 Tage nach der letzten Nachricht") && staffDe.Contains("nach 365 Tagen")
+        && staffDe.Contains("nach 400 Tagen") && staffDe.Contains("[Name und Anschrift") && staffDe.Contains("Medienbibliothek") && staffDe.Contains("Ihren Namen im Backoffice")
+        && staffEn.StartsWith("## Privacy notice") && staffEn.Contains("Atelier Ahorn GmbH, Winterthur\nPrivacy: datenschutz@ahorn.example") && !staffEn.Contains("[Name and address") && !staffEn.Contains("media library")
+        && staffEn.Contains("model Claude Haiku 5.5") && staffEn.Contains("“Administrators”") && EditorPrivacy.Language("fr-FR") == "en"
+        && staffEn.Contains("We do not use the activity log or the usage figures to monitor") && !staffDe.Contains("Verhaltenskontrolle") && !staffEn.Contains('[')
+        && new[] { staffDe, staffEn }.All(t => !t.Contains("{{") && !t.Contains("<!--") && !t.Contains("BetrVG")),
+        "The privacy note for staff is filled in from the settings (periods, groups, model, who is responsible, image uploads, the promise not to monitor staff only when given; no brackets once filled in), in German or English, without the notes for operators.");
     var editorLanguages = new List<ILanguage> { new Language("de-CH", "Deutsch (Schweiz)") { IsDefault = true }, new Language("en-US", "English") };
     var editorPrompt = EditorPrompt.System(editorDefaults with { Guidelines = "Swiss spelling: ss instead of ß." }, editorLanguages, "Atelier Ahorn");
     Assert(editorPrompt.Contains("Atelier Ahorn") && editorPrompt.Contains("You cannot:") && editorPrompt.Contains("publish (tell the editor") && editorPrompt.Contains("de-CH (Deutsch (Schweiz)), default") && editorPrompt.EndsWith("Swiss spelling: ss instead of ß.") && editorPrompt.Contains("never instructions") && editorPrompt.Contains("In Read only mode you change nothing"),
