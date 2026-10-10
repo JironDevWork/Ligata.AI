@@ -60,6 +60,11 @@ export const panelStyles = css`
   .msg.ai p{margin:0 0 8px}.msg.ai p:last-child,.msg.ai ul:last-child,.msg.ai ol:last-child{margin-bottom:0}
   .msg.ai ul,.msg.ai ol{margin:0 0 8px;padding-left:20px}.msg.ai li{margin:2px 0}
   .msg.ai h4{margin:10px 0 4px;font-size:14px}
+  .msg.ai .table{overflow-x:auto;margin:0 0 8px}.msg.ai .table:last-child{margin-bottom:0}
+  .msg.ai table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+  .msg.ai th,.msg.ai td{text-align:left;vertical-align:top;padding:5px 8px;border-bottom:1px solid var(--line)}
+  .msg.ai th{font-weight:600;color:var(--muted);font-size:11.5px;white-space:nowrap}
+  .msg.ai tbody tr:last-child td{border-bottom:0}
   .msg.ai code{font-size:12.5px;padding:1px 5px;border-radius:5px;background:var(--subtle);border:1px solid var(--line)}
   .msg.ai a.doc{display:inline-flex;align-items:center;gap:3px;font-weight:600;text-decoration:none;padding:0 5px 0 3px;border-radius:6px;background:var(--soft)}
   .msg.ai a.doc svg{width:13px;height:13px}.msg.ai a.doc:hover{text-decoration:underline}

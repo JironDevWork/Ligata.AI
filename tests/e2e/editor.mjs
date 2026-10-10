@@ -283,6 +283,17 @@ await check('Read only mode: only reading tools, nothing is changed, approving i
   await useMode('manual');
 });
 
+await check('Markdown tables in answers show as tables', async () => {
+  const shown = await page.evaluate(async () => {
+    const { markdown } = await import('/App_Plugins/LigataAI/editor/shared.js');
+    const { render } = await import('@umbraco-cms/backoffice/external/lit');
+    const div = document.createElement('div');
+    render(markdown('Found it on two pages:\n\n| Page | Language |\n|---|---|\n| [Kontakt](umb://document/683b5c9a51f2492681c1ffb7b06b69b9) | de-CH |\n| Impressum | **en-US** |\n\nNothing was changed.'), div);
+    return { head: [...div.querySelectorAll('th')].map(t => t.textContent.trim()), rows: div.querySelectorAll('tbody tr').length, first: div.querySelector('tbody td')?.textContent.trim(), bold: !!div.querySelector('td strong'), paragraphs: div.querySelectorAll('p').length, pipes: div.textContent.includes('|') };
+  });
+  assert(shown.head.join(',') === 'Page,Language' && shown.rows === 2 && shown.first === 'Kontakt' && shown.bold && shown.paragraphs === 2 && !shown.pipes, 'table: ' + JSON.stringify(shown));
+});
+
 await check('the effort chosen in the chat reaches Claude', async () => {
   await panel.locator('.chooser .pill', { hasText: 'effort' }).click();
   await panel.locator('.menu button', { hasText: 'High' }).click();

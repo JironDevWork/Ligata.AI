@@ -138,9 +138,9 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
         {
             if (!d.CultureNames.ContainsKey(culture)) return "not in this language";
             var published = d.PublishedCultures.Contains(culture);
-            return !published ? "draft" : d.EditedCultures.Contains(culture) ? "published, draft changed" : "published";
+            return !published ? "draft, not published" : d.EditedCultures.Contains(culture) ? "published; the draft has unpublished changes" : "published";
         }
-        return !d.Published ? "draft" : d.Edited ? "published, draft changed" : "published";
+        return !d.Published ? "draft, not published" : d.Edited ? "published; the draft has unpublished changes" : "published";
     }
 
     // ---------- search_content ----------

@@ -1,10 +1,10 @@
 import { LitElement, html, css, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest } from './api.js?v=0.10.0';
-import { styles } from './styles.js?v=0.10.0';
-import { inboxStyles } from './inbox-styles.js?v=0.10.0';
-import { icon, number } from './ui.js?v=0.10.0';
+import { aiRequest } from './api.js?v=0.10.1';
+import { styles } from './styles.js?v=0.10.1';
+import { inboxStyles } from './inbox-styles.js?v=0.10.1';
+import { icon, number } from './ui.js?v=0.10.1';
 
 const views = [['all', 'All'], ['unanswered', 'Unanswered'], ['team', 'Handed to the team'], ['kept', 'Kept']];
 const settingsPath = '/umbraco/section/ai-assistant/dashboard/settings?tab=privacy';

@@ -54,7 +54,7 @@ The database mode refuses any path outside a `.runtime` folder or not named `ai-
 ```bash
 node tests/e2e/mock-anthropic.mjs &
 CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 LigataAI__ContentAssistant__CompactAtTokens=9000 LigataAI__ContentAssistant__Effort=low bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e && node editor.mjs          # 24 checks, screenshots in .runtime/e2e/editor
+cd tests/e2e && node editor.mjs          # 25 checks, screenshots in .runtime/e2e/editor
 ```
 
 | Check | What is verified |
@@ -68,6 +68,7 @@ cd tests/e2e && node editor.mjs          # 24 checks, screenshots in .runtime/e2
 | Read only | A change from Manual waits; after switching to Read only, *Approve* is off and the server refuses it, *Decline* works. A change tool the conversation used before is refused with the reason, the model is told the mode, and the page stays as it was. A new conversation gets only the tools that find and read |
 | Audit | Each change is in the log with who steered it, when, the request, the page and language, and how it was approved: declined, approved by hand, Auto, a risky one declined, Bypass. Before and after are readable; stored values stay on the server; a decline note is kept |
 | Blocks | A card added at the start, in English only (expose) |
+| Tables | A Markdown table in an answer shows as a table (header, rows, links and bold inside cells), not as raw pipe lines |
 | Undo | From the chat card: the value from before is back |
 | Settings | The tools offered follow the allowed actions (a conversation that already used a tool switched off later goes on: the tool stays declared and calling it is refused); the instructions say what it cannot do and are cached; guidelines saved; invalid settings refused; usage shown |
 | Effort | *High* chosen in the chat reaches Claude as adaptive thinking at high effort |
@@ -125,6 +126,13 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
+- 0.10.1 (10 October 2026): found on the demo with 0.10.0.
+  - Answers with Markdown tables showed raw `| … |` lines; the chat now shows them as tables.
+  - Search results and page lists said "published, draft changed", which the model read as unsaved. They now say "published; the draft has unpublished changes", as reading a page already did.
+
+  Browser: editor 25/25 (new: tables).
+
+  **On the deployed demo (demo.ligata.ch, real Claude Haiku 5.5, 4 requests, nothing changed).** In Read only mode, the request was to replace *052 000 00 00* everywhere with a new number. The assistant searched for the number in its national form and found it on all four places where the site writes *+41 52 000 00 00* (contact page and website settings, German and English). It changed nothing and said so. It described the exact change it would make, asked whether to keep the *+41* form, and explained that Manual, Auto or Bypass would make it.
 - 0.10.0 (10 October 2026): **Read only**, a fourth mode for the content assistant, asked for after the demo check.
   - It finds, reads and opens pages and changes nothing. The model gets no tool that changes content and is told the mode with each message, so it describes the change it would make instead.
   - Approving a change that waited from before the switch is refused; declining works, and a change queued behind it does not run (logged as declined).

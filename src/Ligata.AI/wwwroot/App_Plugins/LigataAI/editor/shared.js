@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { bearer, managementBase } from '../api.js?v=0.10.0';
+import { bearer, managementBase } from '../api.js?v=0.10.1';
 
 // Tabler Icons 3.35.0 (MIT, https://tabler.io/icons), outline set: the same family as the rest of the package.
 const paths = {
@@ -86,12 +86,23 @@ function inline(line, onOpen) {
 export function markdown(text, onOpen) {
   const lines = String(text || '').replace(/\r/g, '').split('\n');
   const blocks = [];
-  let list = null, paragraph = [];
+  let list = null, paragraph = [], table = null;
+  // Tables: rows written as "| a | b |"; a row of dashes after the first makes it the header.
+  const cells = row => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+  const separator = row => /^[\s|:-]+$/.test(row) && row.includes('-');
   const flush = () => {
     if (paragraph.length) { blocks.push(html`<p>${paragraph.map((l, i) => html`${i ? html`<br>` : nothing}${inline(l, onOpen)}`)}</p>`); paragraph = []; }
     if (list) { const items = list.items; blocks.push(list.ordered ? html`<ol>${items.map(i => html`<li>${inline(i, onOpen)}</li>`)}</ol>` : html`<ul>${items.map(i => html`<li>${inline(i, onOpen)}</li>`)}</ul>`); list = null; }
+    if (table) {
+      const head = table.length > 1 && separator(table[1]) ? cells(table[0]) : null;
+      const rows = (head ? table.slice(2) : table).filter(r => !separator(r)).map(cells);
+      blocks.push(html`<div class="table"><table>${head ? html`<thead><tr>${head.map(c => html`<th>${inline(c, onOpen)}</th>`)}</tr></thead>` : nothing}<tbody>${rows.map(r => html`<tr>${r.map(c => html`<td>${inline(c, onOpen)}</td>`)}</tr>`)}</tbody></table></div>`);
+      table = null;
+    }
   };
   for (const line of lines) {
+    if (/^\s*\|.*\|\s*$/.test(line)) { if (!table) { flush(); table = []; } table.push(line); continue; }
+    if (table) flush();
     const heading = /^#{1,6}\s+(.*)/.exec(line);
     const bullet = /^\s*[-*•]\s+(.*)/.exec(line);
     const number = /^\s*\d+[.)]\s+(.*)/.exec(line);

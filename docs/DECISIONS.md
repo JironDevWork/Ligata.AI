@@ -2,7 +2,7 @@
 
 The reasoning behind Ligata.AI, so it survives the conversations it was worked out in. Each entry names the decision, why it was taken, and what was tried or rejected on the way. Details and measurements live in the linked documents; this file is the map.
 
-Versions: 0.1 (7 Oct 2026) to 0.10.0 (10 Oct 2026). Newest topics last within each section.
+Versions: 0.1 (7 Oct 2026) to 0.10.1 (10 Oct 2026). Newest topics last within each section.
 
 ## Shape of the product
 
