@@ -83,6 +83,6 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
 
 ### Still open
 
-- **Gemma on the GPU** is tested with the mock model only. A few real questions through the gateway need a valid gateway test key, since the old test key `key-a` is no longer accepted.
+- **Gemma repeats itself** after the tool call now and then: the answer's first paragraph comes again in other words. Gemma offers the right place, though (checked on demo.ligata.ch, see [TESTING.md](TESTING.md#showing-the-way-012)). Dropping a repeated paragraph on the website would need a reliable test for "the same in other words", so it waits.
 - **Guided tours.** For example "Show me how to book a call": a few steps, each confirmed by the visitor.
 - **Things that are not text**: a map, a picture or a button without words. Today the assistant can only point at words.

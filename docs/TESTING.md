@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 260 assertions
+# Package domain and security checks (no database): 261 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 410 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 411 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -140,7 +140,7 @@ cd tests/e2e; node guide.mjs                            # 18 checks
 
 On the GPU path (`run.mjs`, mock llama-server): "show me ‹heading›" calls the tool through the gateway, and the widget highlights the heading and says so.
 
-**Live, with the real Claude Haiku 5.5** (10 October 2026, Umbraco.BaselineV2 with Ligata.AI 0.12.0, through the counting proxy). 42 requests:
+**Live, with the real Claude Haiku 5.5** (10 October 2026, Umbraco.BaselineV2 with Ligata.AI 0.12.0 and 0.12.1, through the counting proxy). 51 requests:
 
 - "Wo finde ich eure Telefonnummer? Ich sehe sie nirgends." (home page, computer). In the first run Haiku answered correctly but asked "Soll ich Ihnen die Stelle auf der Seite zeigen?" instead of calling the tool. After the prompt explained that calling it only adds a button: `show_on_website(/kontakt/, "+41 52 000 00 00", "Telefonnummer")`, the card *Bring mich hin*, then /kontakt/ opened. The number was first at the screen's lower edge; it is now scrolled to the middle, with the chat open beside it.
 - "Zeig mir eure Öffnungszeiten bitte direkt auf der Website, nicht hier im Chat." The hours were not written in the chat. /kontakt/ opened and scrolled, the hours block was highlighted, and the chat stepped aside because it covered them.
@@ -152,7 +152,16 @@ On the GPU path (`run.mjs`, mock llama-server): "show me ‹heading›" calls th
 - "Where is the imprint of this website?" then *No thanks*. The first run claimed "I've also highlighted the heading" and repeated its first sentence. The tool result now says that nothing has moved yet. In the next run the answer said where it is, and the follow-up knew the visitor had declined.
 - The prompt's English date line leaked into a German answer ("Today is Saturday, 10 October 2026, so…"). The language rule now says to reply in the visitor's language also when what was found is in another one; the next run wrote "Heute ist Samstag, der 10. Oktober 2026".
 
-Not run: real questions to Gemma 4 12B through the production gateway. The old test key is no longer accepted, and a new one is the owner's to create.
+**Live on demo.ligata.ch with the real Gemma 4 12B** (the demo answers with the GPU; 10 visitor questions after deploying 0.12.0 and 0.12.1):
+
+- "Wo finde ich eure Telefonnummer? Ich sehe sie nirgends." (computer, twice): `show_on_website(/kontakt/, "+41 52 000 00 00", "Telefonnummer")` after two searches. *Bring mich hin* opened /kontakt/ with the number in the middle of the screen, highlighted, and the chat open beside it. The follow-up about Saturday was answered from the contact page.
+- Phone: "Wo ist eure Adresse? Zeig sie mir." The card, then /kontakt/ scrolled to the address with the chat stepped aside and the bar. The follow-up was answered in the same conversation.
+- "Where on this page is the address of the workshop?" (/kontakt/): highlighted at once, no card.
+- "Was kostet ungefähr ein Esstisch aus Eiche bei euch?": no tool.
+- Phone, same page: "Wo stehen hier die Öffnungszeiten? Ich finde sie nicht." With 0.12.0 Gemma wrote the hours into the chat and offered nothing (64 s). 0.12.1 adds a reminder next to the conversation, as the team handoff has. Then the card *Weiter unten auf dieser Seite* appeared, and tapping it scrolled to the hours and highlighted them, with the bar.
+- Gemma sometimes repeats its first paragraph after the tool call, despite the tool result asking it not to. 0.12.1 at least separates the two parts on the GPU path too. The first answer after a deploy took about 64 s, because the changed instructions had to be read into the GPU's cache once; later answers took 7 to 15 s.
+
+The gateway test key `.runtime/key-a.txt` is no longer accepted by the production gateway, so these checks ran through the demo's own connection.
 
 ### Privacy: consent, withdrawal, Cookiebot (browser)
 
