@@ -10,7 +10,10 @@ public sealed record EditorSettings
 {
     /// <summary>Switched on for the groups under Access. Licensed by LigataAI:Features:ContentAssistant.</summary>
     public bool Enabled { get; init; } = true;
-    /// <summary>Who may use it (user group aliases) and which permission modes each group may choose. Administrators first.</summary>
+    /// <summary>
+    /// Who may use it (user group aliases) and which permission modes each group may choose. Administrators first. A group with
+    /// any mode that changes content may also choose Read only; a group with only Read only uses the assistant to find and read.
+    /// </summary>
     public List<EditorGroup> Access { get; init; } = [new("admin", [.. EditorModes.All])];
     /// <summary>The mode a new conversation starts in (falls back to the safest mode the user may use).</summary>
     public string DefaultMode { get; init; } = EditorModes.Manual;
@@ -63,13 +66,18 @@ public sealed record EditorLimits
 
 public static class EditorModes
 {
+    /// <summary>Finds, reads and opens pages, and changes nothing: the model is given no tool that changes content (0.10).</summary>
+    public const string ReadOnly = "readonly";
     /// <summary>Every change waits for the user's approval.</summary>
     public const string Manual = "manual";
     /// <summary>Changes listed under AutoApprove run at once; the others ask.</summary>
     public const string Auto = "auto";
     /// <summary>Every allowed change runs without asking.</summary>
     public const string Bypass = "bypass";
-    public static readonly string[] All = [Manual, Auto, Bypass];
+    /// <summary>From the safest to the least safe.</summary>
+    public static readonly string[] All = [ReadOnly, Manual, Auto, Bypass];
+    /// <summary>The modes that may change content.</summary>
+    public static readonly string[] Changing = [Manual, Auto, Bypass];
 }
 
 /// <summary>What a write does. Each is allowed or not (Actions) and asks or not in Auto mode (AutoApprove).</summary>
@@ -105,7 +113,7 @@ public static class EditorValidation
         Check(s.Access is { Count: <= 50 } && s.Access.All(a => a != null && System.Text.RegularExpressions.Regex.IsMatch(a.Group ?? "", "^[A-Za-z0-9_.-]{1,100}$") && a.Modes is { Count: > 0 } && a.Modes.All(EditorModes.All.Contains)),
             "access", "Choose at least one mode for every user group.");
         Check(s.Access == null || s.Access.Select(a => a.Group.ToLowerInvariant()).Distinct().Count() == s.Access.Count, "access", "Each user group can be listed once.");
-        Check(EditorModes.All.Contains(s.DefaultMode), "defaultMode", "Choose Manual, Auto or Bypass as the starting mode.");
+        Check(EditorModes.All.Contains(s.DefaultMode), "defaultMode", "Choose Read only, Manual, Auto or Bypass as the starting mode.");
         Check(s.Actions is { Count: <= 10 } && s.Actions.All(EditorActions.All.Contains), "actions", "Unknown action.");
         Check(s.AutoApprove is { Count: <= 10 } && s.AutoApprove.All(EditorActions.All.Contains), "autoApprove", "Unknown action.");
         Check(s.AskAfterChanges is >= 0 and <= 200, "askAfterChanges", "Ask again after 0 to 200 changes.");

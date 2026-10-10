@@ -1,7 +1,7 @@
 import { LitElement, html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { aiRequest } from '../api.js?v=0.9.1';
-import { panelStyles } from './panel-styles.js?v=0.9.1';
-import { glyph, kindIcon, stepIcon, documentPath, openDocument, go, markdown, diff, stream, when, modeInfo, effortInfo } from './shared.js?v=0.9.1';
+import { aiRequest } from '../api.js?v=0.10.0';
+import { panelStyles } from './panel-styles.js?v=0.10.0';
+import { glyph, kindIcon, stepIcon, documentPath, openDocument, go, markdown, diff, stream, when, modeInfo, effortInfo } from './shared.js?v=0.10.0';
 
 const store = {
   get(key, fallback) { try { const v = localStorage.getItem('ligata-ai-editor:' + key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
@@ -290,7 +290,7 @@ export class LigataAIEditorPanel extends LitElement {
       </div>
       ${this.pending.length > 1 && !this.busy ? html`<div class="approve-bar">${glyph('hand')}<span>${this.pending.length} changes wait for you</span>
         <button class="btn quiet" @click=${() => this.decide(this.pending.map(p => ({ id: p.id, approve: false })))}>Decline all</button>
-        <button class="btn primary" @click=${() => this.decide(this.pending.map(p => ({ id: p.id, approve: true })))}>Approve all</button></div>` : nothing}
+        <button class="btn primary" ?disabled=${this.mode === 'readonly'} title=${this.mode === 'readonly' ? 'Read only changes nothing: switch the mode to approve.' : ''} @click=${() => this.decide(this.pending.map(p => ({ id: p.id, approve: true })))}>Approve all</button></div>` : nothing}
       ${this.composer()}`;
   }
 
@@ -310,11 +310,11 @@ export class LigataAIEditorPanel extends LitElement {
     const page = this.page?.name;
     const ideas = page
       ? [`What is on “${page}”?`, `Check “${page}” for spelling and grammar mistakes`, `Make the introduction of “${page}” shorter`, 'Which pages are not published yet?']
-      : ['Where is the page with our opening hours?', 'Which pages mention our phone number?', 'Which pages are not published yet?', 'Create a news article draft about …'];
+      : ['Where is the page with our opening hours?', 'Which pages mention our phone number?', 'Which pages are not published yet?', this.mode === 'readonly' ? 'Where do we write about …' : 'Create a news article draft about …'];
     return html`<div class="empty">
       <span class="hero">${glyph('sparkle')}</span>
       <h3>How can I help with the content?</h3>
-      <p>I find pages, read them and make changes${this.session.actions?.includes('publish') ? '' : ' as drafts'}. ${modeInfo[this.mode]?.text || ''}</p>
+      <p>${this.mode === 'readonly' ? 'I find pages, read them and answer questions about the content. Read only: nothing is changed.' : html`I find pages, read them and make changes${this.session.actions?.includes('publish') ? '' : ' as drafts'}. ${modeInfo[this.mode]?.text || ''}`}</p>
       <div class="ideas">${ideas.map(i => html`<button @click=${() => i.endsWith('…') ? this.prefill(i.replace(' …', ' ')) : this.send(i)}>${i}</button>`)}</div>
     </div>`;
   }
@@ -370,14 +370,14 @@ export class LigataAIEditorPanel extends LitElement {
       </div>
       ${c.changes?.length ? html`<div class="changes">${c.changes.map(ch => this.change(ch, c))}</div>` : nothing}
       ${c.notes?.length ? html`<ul class="notes">${c.notes.map(n => html`<li>${glyph('info')}${n}</li>`)}</ul>` : nothing}
-      ${state === 'pending' && c.reason ? html`<p class="reason">${c.reason}</p>` : nothing}
+      ${(state === 'pending' || state === 'declined') && c.reason ? html`<p class="reason">${c.reason}</p>` : nothing}
       ${state === 'failed' && item.detail ? html`<p class="reason bad">${item.detail}</p>` : nothing}
       ${state === 'declined' && item.detail ? html`<p class="reason">Your note: ${item.detail}</p>` : nothing}
       ${state === 'pending' && !this.busy ? html`<div class="card-actions">
           ${this.noting === item.id ? html`<input class="note" placeholder="What should it do instead? (optional)" .value=${decided?.note || ''} @input=${e => this.decisions = { ...this.decisions, [item.id]: { id: item.id, approve: false, note: e.target.value, draft: true } }} @keydown=${e => { if (e.key === 'Enter') this.choose(item, false); if (e.key === 'Escape') this.noting = null; }}>
               <button class="btn quiet" @click=${() => this.choose(item, false)}>Decline</button>`
             : html`<button class="btn quiet" @click=${() => { this.noting = item.id; requestAnimationFrame(() => this.renderRoot.querySelector('input.note')?.focus()); }}>Decline…</button>`}
-          <button class="btn primary" @click=${() => this.choose(item, true)}>${glyph('check')}Approve</button>
+          <button class="btn primary" ?disabled=${this.mode === 'readonly'} title=${this.mode === 'readonly' ? 'Read only changes nothing: switch the mode to approve.' : ''} @click=${() => this.choose(item, true)}>${glyph('check')}Approve</button>
         </div>` : nothing}
       ${state === 'done' || (state === 'undone' && c.documentKey) ? html`<div class="card-actions subtle">
           ${c.documentKey && c.kind !== 'media' && c.kind !== 'delete' ? html`<button class="btn link" @click=${() => this.openPage(c.documentKey, c.culture)}>${glyph('open')}Open page</button>` : nothing}

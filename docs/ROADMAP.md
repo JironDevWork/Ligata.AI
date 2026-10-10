@@ -6,7 +6,7 @@ What comes next. Each item is planned with the owner before work starts.
 
 **The request.** A chat agent inside Umbraco, like the assistant on the website but for editors. A bubble at the bottom right of the backoffice. You ask "where is the page with our opening hours?" or "change the phone number on the contact page", and it finds the page, opens it, shows what it is doing and makes the change. It is a tool-using agent, not a text generator, and it only does content management.
 
-**Built in 0.9** as decided below, with permission modes like Claude Code's (Manual, Auto, Bypass), an activity log and its own settings and limits. See [CONTENT-ASSISTANT.md](CONTENT-ASSISTANT.md) and the decisions in [DECISIONS.md](DECISIONS.md#the-content-assistant-in-the-backoffice-09).
+**Built in 0.9** as decided below, with permission modes like Claude Code's (Manual, Auto, Bypass, and Read only since 0.10), an activity log and its own settings and limits. See [CONTENT-ASSISTANT.md](CONTENT-ASSISTANT.md) and the decisions in [DECISIONS.md](DECISIONS.md#the-content-assistant-in-the-backoffice-09).
 
 ### Does it exist already? (research, 9 October 2026)
 

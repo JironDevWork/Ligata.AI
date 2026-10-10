@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { bearer, managementBase } from '../api.js?v=0.9.1';
+import { bearer, managementBase } from '../api.js?v=0.10.0';
 
 // Tabler Icons 3.35.0 (MIT, https://tabler.io/icons), outline set: the same family as the rest of the package.
 const paths = {
@@ -176,6 +176,7 @@ export function when(value) {
 }
 
 export const modeInfo = {
+  readonly: { label: 'Read only', icon: 'eye', text: 'Finds and reads pages, and changes nothing.' },
   manual: { label: 'Manual', icon: 'hand', text: 'Asks before every change.' },
   auto: { label: 'Auto', icon: 'bolt', text: 'Makes safe drafts on its own; asks before risky changes and the rest.' },
   bypass: { label: 'Bypass', icon: 'shield', text: 'Makes every allowed change without asking.' },

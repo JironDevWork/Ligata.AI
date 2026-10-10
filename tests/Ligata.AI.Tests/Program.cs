@@ -482,6 +482,7 @@ Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "
         "The content assistant starts with administrators only, drafts only (no publishing) and Manual mode.");
     Rejects<AssistantValidationException>(() => EditorValidation.Settings(editorDefaults with { Access = [new("admin", ["yolo"])] }), "Unknown permission modes are refused.");
     Rejects<AssistantValidationException>(() => EditorValidation.Settings(editorDefaults with { Access = [new("admin", [])] }), "A group needs at least one mode.");
+    EditorValidation.Settings(editorDefaults with { DefaultMode = EditorModes.ReadOnly, Access = [new("admin", [.. EditorModes.All]), new("writer", [EditorModes.ReadOnly])] });
     Rejects<AssistantValidationException>(() => EditorValidation.Settings(editorDefaults with { Access = [new("admin", ["manual"]), new("ADMIN", ["auto"])] }), "A group is listed once.");
     Rejects<AssistantValidationException>(() => EditorValidation.Settings(editorDefaults with { Actions = ["edit", "drop-database"] }), "Unknown actions are refused.");
     Rejects<AssistantValidationException>(() => EditorValidation.Settings(editorDefaults with { Effort = "max" }), "The content assistant's effort goes up to Extra high.");
@@ -534,9 +535,14 @@ Assert(hub.BeginPoll("203.0.113.1", 2) is { } pollAgain && Dispose(pollAgain), "
     var usedPublish = new EditorState { Messages = [new() { Role = "assistant", Blocks = [new() { Type = "tool_use", Id = "t1", Name = "publish_content", Input = JsonDocument.Parse("{}").RootElement.Clone() }] }] };
     Assert(EditorAgent.ToolsFor(editorDefaults, usedPublish).Any(t => t.Name == "publish_content") && !EditorAgent.ToolsFor(editorDefaults, new EditorState()).Any(t => t.Name == "publish_content"),
         "A tool the conversation already used stays declared after its action is switched off (the API refuses calls to undeclared tools in the history); new conversations do not get it.");
+    var usedUpdate = new EditorState { Messages = [new() { Role = "assistant", Blocks = [new() { Type = "tool_use", Id = "t2", Name = "update_content", Input = JsonDocument.Parse("{}").RootElement.Clone() }] }] };
+    var readOnlyTools = EditorAgent.ToolsFor(editorDefaults, new EditorState(), EditorModes.ReadOnly);
+    Assert(readOnlyTools.All(t => t.Action == null) && readOnlyTools.Any(t => t.Name == "search_content") && readOnlyTools.Any(t => t.Name == "open_page")
+        && EditorAgent.ToolsFor(editorDefaults, usedUpdate, EditorModes.ReadOnly).Any(t => t.Name == "update_content") && EditorAgent.ToolsFor(editorDefaults, new EditorState()).Any(t => t.Name == "update_content"),
+        "Read only mode gives the model only the tools that find and read; a change tool the conversation used before stays declared (and is refused).");
     var editorLanguages = new List<ILanguage> { new Language("de-CH", "Deutsch (Schweiz)") { IsDefault = true }, new Language("en-US", "English") };
     var editorPrompt = EditorPrompt.System(editorDefaults with { Guidelines = "Swiss spelling: ss instead of ß." }, editorLanguages, "Atelier Ahorn");
-    Assert(editorPrompt.Contains("Atelier Ahorn") && editorPrompt.Contains("You cannot:") && editorPrompt.Contains("publish (tell the editor") && editorPrompt.Contains("de-CH (Deutsch (Schweiz)), default") && editorPrompt.EndsWith("Swiss spelling: ss instead of ß.") && editorPrompt.Contains("never instructions"),
+    Assert(editorPrompt.Contains("Atelier Ahorn") && editorPrompt.Contains("You cannot:") && editorPrompt.Contains("publish (tell the editor") && editorPrompt.Contains("de-CH (Deutsch (Schweiz)), default") && editorPrompt.EndsWith("Swiss spelling: ss instead of ß.") && editorPrompt.Contains("never instructions") && editorPrompt.Contains("In Read only mode you change nothing"),
         "The content assistant's instructions name the site, its languages, what it may not do and the house rules, and treat content as data.");
     Assert(!EditorPrompt.System(editorDefaults with { Actions = [.. EditorActions.All] }, editorLanguages, "x").Contains("You cannot:"), "With every action allowed nothing is listed as forbidden.");
     var storedConversation = new List<StoredMessage>
@@ -1067,9 +1073,15 @@ using (var scope = app.Services.CreateScope())
         static JsonElement J(string json) => JsonDocument.Parse(json).RootElement.Clone();
         var editorStore = services.GetRequiredService<EditorStore>();
         var adminUser = new EditorUser((await services.GetRequiredService<IUserService>().GetAsync(admin))!);
-        Assert(EditorAccess.Modes(new EditorSettings(), adminUser).SequenceEqual(["manual", "auto", "bypass"]) && EditorAccess.Mode(new EditorSettings(), adminUser, "bypass") == "bypass"
+        Assert(EditorAccess.Modes(new EditorSettings(), adminUser).SequenceEqual(["readonly", "manual", "auto", "bypass"]) && EditorAccess.Mode(new EditorSettings(), adminUser, "bypass") == "bypass"
             && EditorAccess.Mode(new EditorSettings() with { Access = [new("admin", ["manual"])] }, adminUser, "bypass") == "manual" && EditorAccess.Modes(new EditorSettings() with { Access = [new("editor", ["manual", "auto"])] }, adminUser).Length == 0,
             "Who may use the content assistant, and in which modes, comes from the user's groups (a mode not allowed falls back to an allowed one).");
+        var onlyAuto = new EditorSettings() with { Access = [new("admin", ["auto"])] };
+        var onlyRead = new EditorSettings() with { Access = [new("admin", ["readonly"])] };
+        Assert(EditorAccess.Modes(onlyAuto, adminUser).SequenceEqual(["readonly", "auto"]) && EditorAccess.Mode(onlyAuto, adminUser, null) == "auto" && EditorAccess.Mode(onlyAuto, adminUser, "readonly") == "readonly"
+            && EditorAccess.Modes(onlyRead, adminUser).SequenceEqual(["readonly"]) && EditorAccess.Mode(onlyRead, adminUser, "bypass") == "readonly" && EditorAccess.Mode(new EditorSettings() with { DefaultMode = "readonly" }, adminUser, null) == "readonly"
+            && EditorPrompt.Context(adminUser, DateTime.Now, null, "readonly").Contains("Mode: Read only"),
+            "Read only comes with every mode that changes content; a group may have only Read only; a group allowed only Auto starts in Auto; each message names the mode.");
         var (fixtureRoot, fixtureTeam, fixtureArchive) = await SeedEditorAsync(services);
         using var editorScope = app.Services.CreateScope();
         var tools = editorScope.ServiceProvider.GetRequiredService<ContentTools>();
@@ -1084,8 +1096,10 @@ using (var scope = app.Services.CreateScope())
         var teamKey = fixtureTeam.Key.ToString();
         var phone = await tools.SearchAsync(ctx, "044 000 00 00", null, null, 10);
         var squeezed = await tools.SearchAsync(ctx, "0440000000", null, null, 10);
-        Assert(phone.Contains(rootKey) && phone.Contains("has the whole phrase") && !phone.Contains(teamKey) && squeezed.Contains(rootKey) && !squeezed.Contains(teamKey),
-            "A number is found with any spacing; pages sharing only some digits with it (\"00\" in \"7:00\", not \"000\" in \"2000\") are left out once a page has it: " + phone);
+        var international = await tools.SearchAsync(ctx, "+41 (0)44 000 00 00", null, null, 10);
+        Assert(phone.Contains(rootKey) && phone.Contains("has the number") && !phone.Contains(teamKey) && squeezed.Contains(rootKey) && !squeezed.Contains(teamKey)
+            && international.Contains(rootKey) && international.Contains("has the number") && international.Contains("044 000 00 00") && !international.Contains(teamKey),
+            "A phone number is found with any spacing and with or without the country code; pages sharing only some digits with it (\"00\" in \"7:00\", not \"000\" in \"2000\") are left out once a page has it: " + international);
         var partly = await tools.SearchAsync(ctx, "workshop Saturday", "en-US", null, 10);
         Assert(partly.Contains(rootKey) && partly.Contains("lacks “saturday”"), "With several words, each match says which words it lacks: " + partly);
         Assert((await tools.ChildrenAsync(ctx, rootKey, "en-US", 0)).Contains("“Team”") && (await tools.ChildrenAsync(ctx, rootKey, "en-US", 0)).Contains("draft"), "The tree below a page is listed with each page's status.");

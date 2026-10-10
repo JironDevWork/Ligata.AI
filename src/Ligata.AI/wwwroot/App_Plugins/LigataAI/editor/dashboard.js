@@ -1,10 +1,10 @@
 import { LitElement, html, css, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest } from '../api.js?v=0.9.1';
-import { styles } from '../styles.js?v=0.9.1';
-import { icon, controls, number, compact } from '../ui.js?v=0.9.1';
-import { glyph, kindIcon, kindLabel, documentPath, go, diff, when, modeInfo, effortInfo } from './shared.js?v=0.9.1';
+import { aiRequest } from '../api.js?v=0.10.0';
+import { styles } from '../styles.js?v=0.10.0';
+import { icon, controls, number, compact } from '../ui.js?v=0.10.0';
+import { glyph, kindIcon, kindLabel, documentPath, go, diff, when, modeInfo, effortInfo } from './shared.js?v=0.10.0';
 
 const tabs = [['activity', 'Activity', 'history'], ['settings', 'Settings', 'sliders'], ['usage', 'Usage', 'chart']];
 const actions = [
@@ -275,6 +275,8 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
   whoCard() {
     const s = this.settings, groups = this.meta.groups;
     const modesOf = alias => s.access.find(a => a.group.toLowerCase() === alias.toLowerCase())?.modes || [];
+    // Read only comes with every other mode (it can only do less), so it is ticked and locked there.
+    const implied = (alias, mode) => mode === 'readonly' && modesOf(alias).some(m => m !== 'readonly');
     const toggle = (alias, mode, on) => {
       const access = structuredClone(s.access);
       let entry = access.find(a => a.group.toLowerCase() === alias.toLowerCase());
@@ -283,15 +285,15 @@ class LigataAIEditorDashboard extends UmbElementMixin(LitElement) {
       this.set('access', access.filter(a => a.modes.length));
     };
     return html`<section class="card">
-      <header><div><h2>Who can use it</h2><p class="muted">A user group with at least one mode sees the assistant. People in several groups get every mode of their groups. Start with administrators; add other groups once it has proven itself.</p></div></header>
+      <header><div><h2>Who can use it</h2><p class="muted">A user group with at least one mode sees the assistant. People in several groups get every mode of their groups. Groups that may change content can always switch to Read only; give a group only Read only to let it find and read. Start with administrators; add other groups once it has proven itself.</p></div></header>
       <table class="grid-table"><thead><tr><th>User group</th>${Object.entries(modeInfo).map(([k, v]) => html`<th class="center" title=${v.text}><span class="mode-head">${glyph(v.icon)}${v.label}</span></th>`)}</tr></thead>
         <tbody>${groups.map(g => html`<tr><td><strong>${g.name}</strong> <small class="muted">${g.alias}</small></td>
-          ${Object.keys(modeInfo).map(mode => html`<td class="center"><input type="checkbox" aria-label="${g.name}: ${modeInfo[mode].label}" .checked=${modesOf(g.alias).includes(mode)} @change=${e => toggle(g.alias, mode, e.target.checked)}></td>`)}</tr>`)}
+          ${Object.keys(modeInfo).map(mode => html`<td class="center"><input type="checkbox" aria-label="${g.name}: ${modeInfo[mode].label}" .checked=${modesOf(g.alias).includes(mode) || implied(g.alias, mode)} ?disabled=${implied(g.alias, mode)} title=${implied(g.alias, mode) ? 'Comes with the other modes of this group' : ''} @change=${e => toggle(g.alias, mode, e.target.checked)}></td>`)}</tr>`)}
         </tbody></table>
       ${this.fieldError('access')}
       <div class="section">
         ${this.segmented('defaultMode', 'Mode of a new conversation', Object.entries(modeInfo).map(([k, v]) => [k, v.label]), 'Each person can switch between the modes their group allows, in the chat.')}
-        <div class="grid three">${Object.entries(modeInfo).map(([k, v]) => html`<div class="row" style="align-items:flex-start;gap:8px">${glyph(v.icon)}<small><b>${v.label}</b>: ${k === 'auto' ? `makes the changes ticked under “Auto approves” on its own unless they are risky (clearing a field, removing a block, changing what all languages share), and asks before the others.` : v.text}</small></div>`)}</div>
+        <div class="grid two">${Object.entries(modeInfo).map(([k, v]) => html`<div class="row" style="align-items:flex-start;gap:8px">${glyph(v.icon)}<small><b>${v.label}</b>: ${k === 'auto' ? `makes the changes ticked under “Auto approves” on its own unless they are risky (clearing a field, removing a block, changing what all languages share), and asks before the others.` : v.text}</small></div>`)}</div>
       </div>
     </section>`;
   }

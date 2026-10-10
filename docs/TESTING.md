@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 227 assertions
+# Package domain and security checks (no database): 228 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 376 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 378 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -54,7 +54,7 @@ The database mode refuses any path outside a `.runtime` folder or not named `ai-
 ```bash
 node tests/e2e/mock-anthropic.mjs &
 CONFIG_KEY=0 LigataAI__Mode=api LigataAI__Claude__ApiKey=sk-ant-mock-0000000000000000 LigataAI__Claude__BaseUrl=http://127.0.0.1:1230 LigataAI__ContentAssistant__CompactAtTokens=9000 LigataAI__ContentAssistant__Effort=low bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e && node editor.mjs          # 23 checks, screenshots in .runtime/e2e/editor
+cd tests/e2e && node editor.mjs          # 24 checks, screenshots in .runtime/e2e/editor
 ```
 
 | Check | What is verified |
@@ -65,6 +65,7 @@ cd tests/e2e && node editor.mjs          # 23 checks, screenshots in .runtime/e2
 | Auto | Drafts run on their own; publishing asks (showing what goes live) and publishes after approval; the third change of one message asks when *Ask again after* is 2 |
 | Auto, risky | Removing a block that all languages share asks, with the reason, even though edits are approved automatically; declined, the block stays |
 | Bypass | Changes and publishing run without asking, logged as Bypass |
+| Read only | A change from Manual waits; after switching to Read only, *Approve* is off and the server refuses it, *Decline* works. A change tool the conversation used before is refused with the reason, the model is told the mode, and the page stays as it was. A new conversation gets only the tools that find and read |
 | Audit | Each change is in the log with who steered it, when, the request, the page and language, and how it was approved: declined, approved by hand, Auto, a risky one declined, Bypass. Before and after are readable; stored values stay on the server; a decline note is kept |
 | Blocks | A card added at the start, in English only (expose) |
 | Undo | From the chat card: the value from before is back |
@@ -124,7 +125,15 @@ node privacy.mjs                                                            # Co
 | Cookiebot | The request names the category and opens Cookiebot's dialog; accepting unlocks the chat without recording anything until the first question (source `cookiebot`); declining withdraws at once; without Cookiebot on a page the chat asks itself; with the history on, the chat states the period once per period (*Continue*) and again after a change |
 
 Results (8 October 2026, version 0.4.0):
-- 0.9.1 (10 October 2026): finding numbers. On the deployed demo, the content assistant was asked which pages show the phone number. The answer was right (two pages), but its search for *+41 52 000 00 00* reported nine pages: the query's parts *41*, *52*, *000* and *00* also matched inside *2000* and times like *10:00*. The model sorted that out itself, and then wrongly added that blocks had not been checked. Now:
+- 0.10.0 (10 October 2026): **Read only**, a fourth mode for the content assistant, asked for after the demo check.
+  - It finds, reads and opens pages and changes nothing. The model gets no tool that changes content and is told the mode with each message, so it describes the change it would make instead.
+  - Approving a change that waited from before the switch is refused; declining works, and a change queued behind it does not run (logged as declined).
+  - Groups that may change content can always switch to it; a group can also have only Read only.
+
+  Search: a phone number is also found with or without the country code (*+41 52 000 00 00*, *0041 52 …*, *+41 (0)52 …* and *052 000 00 00* are one number), and its snippet shows the number. A change declined because the editor wrote a new message now says so instead of showing as the editor's note.
+
+  Package checks: 228 domain and 378 total. Browser: editor 24/24 (new: Read only), API 15/15.
+- 0.9.1 (10 October 2026, built but not deployed; superseded by 0.10.0): finding numbers. On the deployed demo, the content assistant was asked which pages show the phone number. The answer was right (two pages), but its search for *+41 52 000 00 00* reported nine pages: the query's parts *41*, *52*, *000* and *00* also matched inside *2000* and times like *10:00*. The model sorted that out itself, and then wrongly added that blocks had not been checked. Now:
   - a number in a query matches only whole numbers;
   - a number is found with any spacing;
   - once a page has the whole number, pages sharing only some digits are left out;

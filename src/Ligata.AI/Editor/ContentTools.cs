@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Ligata.AI.Models;
 using Microsoft.Extensions.Logging;
 using Umbraco.Cms.Core;
@@ -218,6 +219,32 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
     /// <summary>Only the letters and digits, so "052 000 00 00", "052-000 0000" and "0520000000" are the same number.</summary>
     private static string Squeeze(string text) => new([.. text.Where(char.IsLetterOrDigit)]);
 
+    /// <summary>A phone number as written: digits with spaces, dots, dashes, slashes or brackets, maybe after + or 00.</summary>
+    private static readonly Regex PhoneLike = new(@"(?<![\w+])(?:\+|00)?\d[\d \-./()]{4,}\d(?!\w)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The ways a phone number may be written, as digits: as given, and the national number without the country code or the
+    /// leading 0. "052 000 00 00", "+41 52 000 00 00", "0041 52 000 00 00" and "+41 (0)52 000 00 00" all give 520000000.
+    /// The country code is the first group after + or 00; written without spaces, codes of one to three digits are tried.
+    /// </summary>
+    private static HashSet<string> Phone(string written)
+    {
+        var digits = new string([.. written.Where(char.IsDigit)]);
+        var forms = new HashSet<string> { digits };
+        var plus = written.StartsWith('+');
+        if (plus || written.StartsWith("00"))
+        {
+            var rest = written[(plus ? 1 : 2)..];
+            var group = rest.TakeWhile(char.IsDigit).Count();
+            var after = digits[(plus ? 0 : 2)..];
+            foreach (var code in group is >= 1 and <= 3 && group < rest.Length ? [group] : new[] { 1, 2, 3 })
+                if (after.Length > code) forms.Add(after[code..].TrimStart('0'));
+        }
+        else if (digits.StartsWith('0')) forms.Add(digits[1..]);
+        forms.RemoveWhere(f => f.Length < 7);
+        return forms;
+    }
+
     public async Task<string> SearchAsync(ToolContext context, string query, string? culture, string? type, int limit)
     {
         query = (query ?? "").Trim();
@@ -228,7 +255,14 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
         var phrase = Fold(Spaced(query));
         // A phone number, IBAN or customer number (mostly digits) is found with any spacing, and only as a whole once a page has it.
         var squeezed = Squeeze(phrase);
-        var number = squeezed.Length >= 6 && squeezed.Count(char.IsDigit) * 4 >= squeezed.Length * 3;
+        var phone = PhoneLike.Matches(phrase).Select(m => Phone(m.Value)).Where(f => f.Count > 0).MaxBy(f => f.Max(x => x.Length));
+        var number = phone != null || (squeezed.Length >= 6 && squeezed.Count(char.IsDigit) * 4 >= squeezed.Length * 3);
+        // Where on a page the number asked for is written, in any of its forms (-1: nowhere); for the snippet too.
+        int NumberAt(string folded)
+        {
+            if (phone != null) foreach (Match m in PhoneLike.Matches(folded)) if (Phone(m.Value).Overlaps(phone)) return m.Index;
+            return number && Squeeze(folded).Contains(squeezed) ? int.MaxValue : -1;
+        }
         var pages =entities.GetAll(UmbracoObjectTypes.Document).OfType<IDocumentEntitySlim>().Where(e => !e.Trashed && access.InScope(context.Settings, e.Path)).Take(MaxScanned).ToList();
         if (!string.IsNullOrWhiteSpace(type)) pages = pages.Where(e => string.Equals(e.ContentTypeAlias, type.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
         var stale = pages.Where(e => !drafts.TryGetValue(e.Id, out var known) || known.Updated != e.UpdateDate).Select(e => e.Id).ToList();
@@ -244,7 +278,7 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
             foreach (var (c, (_, folded)) in known.Cultures)
             {
                 var name = folded[..Math.Max(0, folded.IndexOf('\n'))];
-                var whole = folded.Contains(phrase) || (number && Squeeze(folded).Contains(squeezed));
+                var whole = folded.Contains(phrase) || NumberAt(folded) >= 0;
                 var missing = terms.Where(t => !Has(folded, t)).ToArray();
                 var score = (name == phrase ? 12 : 0) + terms.Count(t => Has(name, t)) * 4.0 + (whole ? 6 : 0)
                     + terms.Sum(t => Count(folded, t)) + (missing.Length == 0 ? 3 : 0);
@@ -267,19 +301,21 @@ public sealed partial class ContentTools(IContentService contents, IMediaService
             // Named in the language asked for (else the preferred one) when the page has it; the snippet comes from where the words matched.
             var language = preferred != null && page.CultureNames.ContainsKey(preferred) ? preferred : c.Length > 0 ? c : null;
             // With several words the model is told how well a page matched, so a page with only "00" is not taken for the phone number.
-            var match = terms.Count < 2 ? "" : whole ? " — has the whole phrase" : missing.Length == 0 ? " — has all the words, not together" : $" — lacks {string.Join(", ", missing.Select(m => $"“{m}”"))}";
+            var match = phone != null && whole ? " — has the number" : terms.Count < 2 ? "" : whole ? " — has the whole phrase"
+                : missing.Length == 0 ? " — has all the words, not together" : $" — lacks {string.Join(", ", missing.Select(m => $"“{m}”"))}";
             text.Append($"{++n}. “{Name(page, language)}” — key {page.Key}, type {page.ContentTypeAlias}, {Breadcrumb(page.Path, language)}, {Status(page, language)}{(language != null ? $" ({language})" : "")}{match}");
-            if (drafts.TryGetValue(page.Id, out var known) && known.Cultures.TryGetValue(c, out var body) && Snippet(body.Text, body.Folded, terms, phrase) is { } snippet) text.Append($"\n   “…{snippet}…”");
+            if (drafts.TryGetValue(page.Id, out var known) && known.Cultures.TryGetValue(c, out var body) && Snippet(body.Text, body.Folded, terms, phrase, NumberAt(body.Folded)) is { } snippet) text.Append($"\n   “…{snippet}…”");
             text.Append('\n');
         }
         return text.ToString().TrimEnd();
     }
 
-    /// <summary>The line around the first match (the phrase first, else any term), without the page name line.</summary>
-    private static string? Snippet(string text, string folded, List<string> terms, string phrase)
+    /// <summary>The line around the first match (the phrase first, then where the number asked for is written, else any term), without the page name line.</summary>
+    private static string? Snippet(string text, string folded, List<string> terms, string phrase, int number = -1)
     {
         var body = folded.IndexOf('\n') + 1;
         var at = folded.IndexOf(phrase, body, StringComparison.Ordinal);
+        if (at < 0 && number >= body && number < folded.Length) at = number;
         if (at < 0) at = terms.Select(t => Next(folded, t, body)).Where(i => i >= 0).DefaultIfEmpty(-1).Min();
         if (at < 0 || at >= text.Length) return null;
         var start = Math.Max(body, at - 70);

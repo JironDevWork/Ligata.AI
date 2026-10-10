@@ -73,7 +73,7 @@ const lastCard = () => cards().last();
 async function useMode(mode) {
   await panel.locator('.chooser .pill').first().click();
   await panel.locator(`.menu button.mode-${mode}`).click();
-  assert((await panel.locator('.chooser .pill').first().innerText()).toLowerCase().includes(mode), 'mode pill shows ' + mode);
+  assert((await panel.locator('.chooser .pill').first().innerText()).toLowerCase().replace(/\s/g, '').includes(mode), 'mode pill shows ' + mode);
 }
 async function newChat() { await panel.locator('header button[aria-label="New conversation"]').click(); await panel.locator('.empty h3').waitFor({ timeout: 5000 }); }
 const script = (steps, final = 'Done.') => 'do: ' + steps.join('; ') + ' then: ' + final;
@@ -245,6 +245,42 @@ await check('the model is only given the tools this site allows', async () => {
   assert(tools.includes('read_content') && tools.includes('update_content') && !tools.includes('publish_content') && !tools.includes('create_content') && !tools.includes('upload_media'), 'tools: ' + tools);
   assert((await mockState()).last.system[0].text.includes('You cannot:') && (await mockState()).last.system[0].cache_control, 'the instructions say what it cannot do and are cached');
   await saveSettings(s => ({ ...s, actions: ['edit', 'create', 'publish', 'unpublish', 'move', 'delete', 'media'], autoApprove: ['edit', 'create', 'media'] }));
+});
+
+await check('Read only mode: only reading tools, nothing is changed, approving is refused', async () => {
+  // A change prepared in Manual waits; then the editor switches to Read only.
+  await newChat();
+  await useMode('manual');
+  await send(script([find, read, 'update_content {"id":"$KEY","culture":"en-US","changes":[{"path":"title","value":"Read only title"}]}'], 'Changed it.'));
+  assert(await lastCard().evaluate(c => c.classList.contains('pending')), 'the change waits');
+  await useMode('readonly');
+  assert(await lastCard().locator('button', { hasText: 'Approve' }).isDisabled(), 'Approve is off in Read only');
+  const chatId = await page.evaluate(() => document.querySelector('ligata-ai-editor-panel').chatId);
+  const pendingId = await page.evaluate(() => document.querySelector('ligata-ai-editor-panel').items.filter(i => i.state === 'pending').at(-1).id);
+  const refused = await api('/decide', 'POST', { chatId, decisions: [{ id: pendingId, approve: true }], mode: 'readonly' }).then(() => null, e => e);
+  assert(refused && /read only/i.test(refused.message || String(refused)), 'approving in Read only is refused: ' + (refused?.message || refused));
+  // Declining still works.
+  await lastCard().locator('button', { hasText: 'Decline' }).click();
+  await lastCard().locator('button', { hasText: 'Decline' }).click();
+  await idle();
+  assert((await lastCard().innerText()).includes('Declined'), 'declined in Read only');
+  // A change tool the conversation used before stays declared (the API needs it for the history), and calling it is refused.
+  await send(script([read, 'update_content {"id":"$KEY","culture":"en-US","changes":[{"path":"title","value":"Read only title"}]}'], 'I would change the title.'));
+  const step = await panel.locator('.step.failed').last().innerText();
+  assert(step.includes('Could not') && step.includes('read only'), 'refused step: ' + step);
+  const last = (await mockState()).last;
+  const said = JSON.stringify(last.messages.filter(m => m.role === 'user').slice(-3));
+  assert(said.includes('Mode: Read only') && said.includes('Read only mode'), 'the model is told the mode and why: ' + said.slice(0, 300));
+  assert(!last.tools.some(t => ['create_content', 'publish_content', 'upload_media'].includes(t.name)), 'no other change tools: ' + last.tools.map(t => t.name));
+  assert(valueOf(await documentOf(fixtureKey), 'title', 'en-US') !== 'Read only title', 'nothing changed');
+  // A new conversation in Read only gets only the tools that find and read.
+  await newChat();
+  assert((await panel.locator('.empty').innerText()).includes('nothing is changed'), 'the welcome says so');
+  await send('Which tools do you have?');
+  const tools = (await mockState()).last.tools.map(t => t.name);
+  assert(tools.includes('search_content') && tools.includes('read_content') && tools.includes('open_page') && !tools.some(t => /update|create|publish|move|delete|upload|blocks/.test(t)), 'tools: ' + tools);
+  await page.screenshot({ path: path.join(out, '3b-read-only.png') });
+  await useMode('manual');
 });
 
 await check('the effort chosen in the chat reaches Claude', async () => {

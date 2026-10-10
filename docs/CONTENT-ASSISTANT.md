@@ -34,7 +34,7 @@ It is a separate part of the package (`src/Ligata.AI/Editor`, `App_Plugins/Ligat
 
 1. **Anthropic API key.** Add it under *AI Assistant → Settings → Connection* (stored encrypted), or as `LigataAI__Claude__ApiKey`. The content assistant always uses Claude (`LigataAI:Claude:Model`, default Claude Haiku 5.5), whichever engine answers visitors.
 2. **Licence.** `LigataAI:Features:ContentAssistant` is `true` by default. Set it to `false` and neither the bubble nor its settings page loads.
-3. **Who.** Out of the box, **administrators only** (all three modes), **Manual** mode, and **drafts only**: no publishing, moving or deleting. Change this under *AI Assistant → Content assistant → Settings*.
+3. **Who.** Out of the box, **administrators only** (all modes), **Manual** mode, and **drafts only**: no publishing, moving or deleting. Change this under *AI Assistant → Content assistant → Settings*.
 
 Without a key, only administrators see the bubble. It explains that the key is missing and links to *Connection*.
 
@@ -44,6 +44,7 @@ The modes copy Claude Code's permission modes. Each person chooses in the chat (
 
 | Mode | What happens to a change |
 | --- | --- |
+| **Read only** (0.10) | Nothing changes. The assistant finds, reads and opens pages and answers questions; it is given no tool that changes content. Asked for a change, it says exactly what it would change (page, field, before and after), and the editor can switch modes to have it made. A change that was waiting from before the switch can be declined, not approved. Groups that may change content can always switch to it; give a group only *Read only* to let it find and read without risk. |
 | **Manual** | Every change waits for *Approve* or *Decline*. Declining can carry a note ("shorter, calmer"), which the assistant reads. |
 | **Auto** | Safe changes run at once; risky ones ask. A change is safe when two things hold. First, its kind is ticked under *Auto approves* (by default content edits, new pages and image uploads, all saved as drafts). Second, it carries no risk: it does not clear a field, remove most of a text or remove a block, and it changes nothing that all languages share. Everything else asks first, for example publishing, deleting, or removing a card that every language shows. The card says why. After *Ask again after N changes* (default 10) for one message, the next change asks again: a safety net against long runs. |
 | **Bypass** | Every allowed change runs without asking. Reserve it for groups you trust. |
@@ -90,7 +91,7 @@ Everything runs on the site's server with the signed-in user's permissions. Read
 
 | Tool | What it does |
 | --- | --- |
-| `search_content` | Searches the **draft** text of every page in every language. This includes field labels and the fields inside blocks, so "Telefon" finds the block field labelled *Telefon*. Results show the key, type, location, status and a snippet. With several words, each result says whether it has the whole phrase or which words it lacks. A number is found with any spacing (*052 000 00 00* is *0520000000*), and once a page has the whole number, pages that only share some of its digits (*00* in *10:00*) are left out. The text is kept in memory and read again only for pages that changed. |
+| `search_content` | Searches the **draft** text of every page in every language. This includes field labels and the fields inside blocks, so "Telefon" finds the block field labelled *Telefon*. Results show the key, type, location, status and a snippet. With several words, each result says whether it has the whole phrase or which words it lacks. A number is found with any spacing (*052 000 00 00* is *0520000000*), and a phone number also with or without the country code (*+41 52 000 00 00*, *0041 52 …* and *+41 (0)52 …* are *052 000 00 00*), and once a page has the whole number, pages that only share some of its digits (*00* in *10:00*) are left out. The text is kept in memory and read again only for pages that changed. |
 | `list_children` | The pages below a page, or the top of the tree, with their status. |
 | `read_content` | A page in one language: name, status, URL, other languages, and every field with its **path**, kind and draft value. Fields inside blocks are included (`modules/3f2a91c0/heading`, settings as `modules/3f2a91c0:settings/background`, nested blocks further down). Long values are shortened and can be read in full by path. Very large pages are capped at 40,000 characters. |
 | `describe_type` | A page or block type: fields, required, shared by all languages, allowed values, limits, accepted block types, allowed child types. |
@@ -193,15 +194,15 @@ Conversations are kept for the set period (30 days by default), and the activity
 
 ## Tests
 
-- **Domain checks.** 30 checks of the content assistant are among the 227 domain checks (`dotnet run --project tests/Ligata.AI.Tests -c Release`). They cover:
+- **Domain checks.** 31 checks of the content assistant are among the 228 domain checks (`dotnet run --project tests/Ligata.AI.Tests -c Release`). They cover:
   - settings validation, effort choice (also from the configuration) and the tools offered, including tools a conversation already used;
-  - when each mode asks: Manual always, Bypass never, Auto for kinds not approved, for risky changes and after N changes;
+  - when each mode asks: Manual always, Bypass never, Auto for kinds not approved, for risky changes and after N changes; Read only gets only the tools that read;
   - HTML sanitizing and plain text, UDIs, editor kinds;
   - Block Grid parsing (areas, values per language, expose), JSON values stored as strings;
   - the instructions;
   - the conversation sent back with thinking signatures and one cache breakpoint.
-- **Database checks.** 46 database checks (376 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
-  - modes by group;
+- **Database checks.** 47 database checks (378 assertions with the domain checks), against a fresh multilingual fixture (rich text, a Block List of cards with values per language). They cover:
+  - modes by group (Read only comes with every other mode; a group may have only Read only);
   - search by name, text, numbers (any spacing, only whole numbers) and labels, and how well each page matched; tree, read, describe;
   - planning versus saving, drafts versus live, edits inside blocks per language;
   - a block named by its short key or by its whole path;
@@ -210,5 +211,5 @@ Conversations are kept for the set period (30 days by default), and the activity
   - rich text sanitizing; block add, move and remove (expose, nothing left behind); create, publish (and Umbraco's refusal), sort, recycle bin;
   - Undo and its conflict, deletion restored;
   - activity filters, usage, conversations and retention, settings conflicts, the manifest by licence.
-- **Browser suite.** `tests/e2e/editor.mjs` has 23 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode (including Auto asking before a risky block removal), blocks, Undo, and the activity log, which records for each change who steered it, when, what they asked, before and after, and by hand, Auto or Bypass. It also covers settings, the effort from the configuration and from the chat, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
+- **Browser suite.** `tests/e2e/editor.mjs` has 24 checks against the strict mock Anthropic API, which plays a scripted assistant: `do: tool {json}; tool {json} then: text`. It covers every mode (including Auto asking before a risky block removal, and Read only refusing changes and approvals), blocks, Undo, and the activity log, which records for each change who steered it, when, what they asked, before and after, and by hand, Auto or Bypass. It also covers settings, the effort from the configuration and from the chat, open_page, image upload, summaries, Stop, the daily limit, access by group, and that no key reaches the browser. See [TESTING.md](TESTING.md#content-assistant-09).
 - **Live.** 59 requests to the real Claude Haiku 5.5 on Umbraco.BaselineV2, through a budget proxy: 40 while building and 19 against the final code. The final 19 covered one task per mode, then the activity log read back and Undo. The results are in [TESTING.md](TESTING.md#content-assistant-09).

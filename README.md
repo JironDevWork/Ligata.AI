@@ -5,7 +5,7 @@ A website chat for **Umbraco 17.6 / .NET 10** with three features that work toge
 - **AI assistant** answered by a self-hosted **Gemma 4 12B** on the Ligata mini PC, or by **Claude Haiku 5.5** through Anthropic's API (no extra server; see [AI engine](#ai-engine-own-gpu-or-claude-api)).
 - **Live chat with your team**: when the AI cannot help, or a visitor asks for a person, the team answers in an **Inbox** inside Umbraco.
 - **Email form**: visitors leave a message that arrives in your mailbox and in the Inbox.
-- **Content assistant** (0.9): a chat in the Umbraco backoffice that finds, reads and changes content with tools. Changes wait for approval or run by permission mode (Manual, Auto, Bypass), are saved as drafts, checked after saving, logged with the person who asked and can be undone. See [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md).
+- **Content assistant** (0.9): a chat in the Umbraco backoffice that finds, reads and changes content with tools. Changes wait for approval or run by permission mode (Read only, Manual, Auto, Bypass), are saved as drafts, checked after saving, logged with the person who asked and can be undone. See [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md).
 
 Built for the GDPR (DSGVO): the AI reads nothing before a visitor agrees, every consent is recorded and can be withdrawn, Cookiebot is supported, and the backoffice writes the matching privacy policy text. See [Privacy](#privacy-gdpr--dsgvo).
 
@@ -42,7 +42,7 @@ A new top-level section, **AI Assistant** (or **Support** when no AI is licensed
   - **How I appear** lets each team member choose what visitors see: name and photo from their Umbraco profile, name only, a nickname, or anonymous (team name only).
 - **AI conversations** (0.7, optional): while the site keeps a history (*Settings → Privacy → Conversation history*, off by default), what visitors asked the AI, what it looked up on the website and what it answered, newest first. Views for unanswered questions (errors, or answers that offered the team), conversations handed to the team (with a link to the Inbox) and kept ones; search over questions and answers; *Keep* exempts a conversation from automatic deletion; delete one or all. Same access as the Inbox.
 - **Header badge**: a chat icon in the Umbraco header counts conversations that need a reply, from anywhere in the backoffice.
-- **Content assistant** (0.9): a bubble at the bottom right of the backoffice for the groups you choose (administrators by default). It finds pages by their text (drafts too, inside blocks), reads them with every field, and changes text, rich text, pickers and blocks per language, creates pages and uploads images. Publishing, moving and deleting are possible when allowed. Each change shows as a card with before and after; **Manual** asks every time, **Auto** makes the safe drafts on its own and asks before risky changes (clearing a field, removing a block, changing what all languages share) and the kinds you did not approve, **Bypass** asks never. Its page under *AI Assistant → Content assistant* has the **Activity** log (who asked, what changed, how it was approved, Undo), the **Settings** (who, modes, what it may do, where, effort, house rules, limits) and **Usage**.
+- **Content assistant** (0.9): a bubble at the bottom right of the backoffice for the groups you choose (administrators by default). It finds pages by their text (drafts too, inside blocks), reads them with every field, and changes text, rich text, pickers and blocks per language, creates pages and uploads images. Publishing, moving and deleting are possible when allowed. Each change shows as a card with before and after; **Read only** finds and reads and changes nothing, **Manual** asks every time, **Auto** makes the safe drafts on its own and asks before risky changes (clearing a field, removing a block, changing what all languages share) and the kinds you did not approve, **Bypass** asks never. Its page under *AI Assistant → Content assistant* has the **Activity** log (who asked, what changed, how it was approved, Undo), the **Settings** (who, modes, what it may do, where, effort, house rules, limits) and **Usage**.
 - **Settings**, organised in tabs:
   - **Overview**: getting-started checklist per feature, team inbox numbers, AI server status and the **context budget**.
   - **Appearance**:
@@ -94,7 +94,7 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.9.1.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+# copy artifacts/Ligata.AI.0.10.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
 dotnet add package Ligata.AI --version 0.8.0 --source C:/path/to/feed
 ```
 
@@ -248,9 +248,9 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 ## Tests
 
 ```powershell
-dotnet run --project tests/Ligata.AI.Tests -c Release                         # 227 domain/security checks
+dotnet run --project tests/Ligata.AI.Tests -c Release                         # 228 domain/security checks
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench              # a big website: 2,000 pages in three languages
-dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 376 checks with the database
+dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/…/.runtime/ai-test.db [--serve --urls http://127.0.0.1:5310]   # 378 checks with the database
 cd tests/e2e; npm ci; node run.mjs                                             # AI assistant browser suite (Microsoft Edge)
 node support.mjs                                                               # team handoff, inbox and email browser suite
 node api.mjs                                                                   # API mode against the strict mock Anthropic API (mock-anthropic.mjs)

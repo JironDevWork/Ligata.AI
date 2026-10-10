@@ -168,7 +168,7 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
             var first = state.Attachments.Count + 1;
             state.Attachments.AddRange(attachments);
             foreach (var image in attachments) run.Context.Attachments.Add((image.Name ?? "image", image.MediaType ?? "image/png", image.Data ?? ""));
-            var blocks = new List<StoredBlock> { StoredBlock.Of(EditorPrompt.Context(user, DateTime.Now, await PageLineAsync(run.Context, request.Page))) };
+            var blocks = new List<StoredBlock> { StoredBlock.Of(EditorPrompt.Context(user, DateTime.Now, await PageLineAsync(run.Context, request.Page), run.Mode)) };
             for (var i = 0; i < attachments.Count; i++)
             {
                 blocks.Add(StoredBlock.Of($"[Image {first + i} attached: {attachments[i].Name}]"));
@@ -191,6 +191,9 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
     {
         var settings = Check(user);
         var chat = store.Chat(request.ChatId, user.Key) ?? throw new EditorException("not_found", "This conversation no longer exists.", 404);
+        // Read only changes nothing, not even a change that waited from before the switch: it can still be declined.
+        if (EditorAccess.Mode(settings, user, request.Mode ?? chat.Mode) == EditorModes.ReadOnly && (request.Decisions ?? []).Any(d => d.Approve))
+            throw new EditorException("read_only", "Read only mode changes nothing. Switch to Manual, Auto or Bypass to approve.", 409);
         if (!running.TryAdd(chat.Id, 0)) throw new EditorException("busy", "The assistant is still working on this conversation.", 409);
         try
         {
@@ -226,17 +229,18 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
         foreach (var image in state.Attachments) context.Attachments.Add((image.Name ?? "image", image.MediaType ?? "image/png", image.Data ?? ""));
         var languages = await content.LanguagesAsync();
         var system = EditorPrompt.System(settings, languages, SiteName(languages));
-        return new Run(chat, state, items, context, new EditorStream(http), mode, system, ToolsFor(settings, state));
+        return new Run(chat, state, items, context, new EditorStream(http), mode, system, ToolsFor(settings, state, mode));
     }
 
     /// <summary>
-    /// The tools declared to the model: those the settings allow, plus any the conversation already used. The API refuses a
-    /// conversation whose earlier tool calls name a tool it does not declare, so an action switched off later stays declared, but
-    /// calling it is refused ("Not allowed") and the instructions say it is not possible.
+    /// The tools declared to the model: those the settings allow (in Read only mode only those that read), plus any the
+    /// conversation already used. The API refuses a conversation whose earlier tool calls name a tool it does not declare, so an
+    /// action switched off later stays declared, but calling it is refused ("Not allowed") and the instructions say it is not possible.
     /// </summary>
-    public static List<EditorTool> ToolsFor(EditorSettings settings, EditorState state)
+    public static List<EditorTool> ToolsFor(EditorSettings settings, EditorState state, string mode = EditorModes.Manual)
     {
         var tools = EditorTools.For(settings);
+        if (mode == EditorModes.ReadOnly) tools = [.. tools.Where(t => t.Action == null)];
         foreach (var name in state.Messages.SelectMany(m => m.Blocks).Where(b => b.Type == "tool_use").Select(b => b.Name).Distinct())
             if (EditorTools.Find(name ?? "") is { } used && !tools.Contains(used)) tools.Add(used);
         return tools;
@@ -314,6 +318,13 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
                         await run.Item(new EditorItem { Id = entry.ItemId = NewId(), Type = "step", At = DateTime.UtcNow, Tool = entry.Name, Text = $"Could not {Verb(entry.Name)}", State = "failed", Detail = tool == null ? "unknown tool" : "not allowed on this site" });
                     }
                     else if (tool.Action == null) await ReadAsync(run, entry);
+                    else if (run.Mode == EditorModes.ReadOnly)
+                    {
+                        // Only reachable through a tool the conversation used before switching to Read only (still declared).
+                        entry.Result = "Not done: the editor chose Read only mode, so nothing can be changed. Say exactly what you would change (page, field, before → after); they can switch to Manual, Auto or Bypass to have it made.";
+                        entry.Error = true;
+                        await run.Item(new EditorItem { Id = entry.ItemId = NewId(), Type = "step", At = DateTime.UtcNow, Tool = entry.Name, Text = $"Could not {Verb(entry.Name)}", State = "failed", Detail = "read only mode" });
+                    }
                     else
                     {
                         var proposal = await PlanAsync(run, entry);
@@ -528,12 +539,22 @@ public sealed class EditorAgent(EditorStore store, EditorModel model, EditorTool
             var decision = decisions.FirstOrDefault(d => d.Id == entry.ItemId || d.Id == entry.Id);
             if (entry.Decision == "ask" && decision is not { Approve: true })
             {
-                var note = decision?.Note?.Trim() is { Length: > 0 } n ? n[..Math.Min(n.Length, 1000)] : declineNote;
+                var own = decision?.Note?.Trim() is { Length: > 0 } n ? n[..Math.Min(n.Length, 1000)] : null;
+                var note = own ?? declineNote;
                 entry.Result = "The editor declined this change." + (note != null ? $" Their note: {note}" : "") + " Do not make it again unless they ask for it.";
                 Log(run, entry, entry.Proposal!, "manual", "declined", note);
-                var card = Card(entry, entry.Proposal!, "declined", null);
-                card.Detail = note;
+                // The panel shows the editor's own note as theirs; a change left open by a new message says why it did not run.
+                var card = Card(entry, entry.Proposal!, "declined", own == null && declineNote != null ? "Not run: you wrote a new message instead." : null);
+                card.Detail = own;
                 await run.Item(card);
+                continue;
+            }
+            if (run.Mode == EditorModes.ReadOnly)
+            {
+                // A change queued behind one that asked (Auto) does not run once the editor switched to Read only.
+                entry.Result = "Not done: the editor switched to Read only mode before this change ran. Do not make it again unless they ask for it.";
+                Log(run, entry, entry.Proposal!, entry.Decision ?? "manual", "declined", "Read only mode");
+                await run.Item(Card(entry, entry.Proposal!, "declined", "Not run: you switched to Read only."));
                 continue;
             }
             var approval = entry.Decision == "ask" ? "manual" : entry.Decision;

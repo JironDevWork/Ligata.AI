@@ -23,17 +23,26 @@ public sealed record EditorUser(IUser User)
 /// </summary>
 public sealed class EditorAccess(IContentPermissionService permissions, IEntityService entities)
 {
-    /// <summary>The modes this user may choose (empty: no access). Groups combine.</summary>
-    public static string[] Modes(EditorSettings settings, EditorUser user) =>
-        settings.Access.Where(a => user.Groups.Contains(a.Group, StringComparer.OrdinalIgnoreCase)).SelectMany(a => a.Modes).Distinct()
-            .OrderBy(m => Array.IndexOf(EditorModes.All, m)).ToArray();
+    /// <summary>
+    /// The modes this user may choose, safest first (empty: no access). Groups combine. Whoever may change content may also
+    /// switch to Read only: it can only do less.
+    /// </summary>
+    public static string[] Modes(EditorSettings settings, EditorUser user)
+    {
+        var modes = settings.Access.Where(a => user.Groups.Contains(a.Group, StringComparer.OrdinalIgnoreCase)).SelectMany(a => a.Modes).Where(EditorModes.All.Contains).ToHashSet();
+        if (modes.Overlaps(EditorModes.Changing)) modes.Add(EditorModes.ReadOnly);
+        return [.. modes.OrderBy(m => Array.IndexOf(EditorModes.All, m))];
+    }
 
-    /// <summary>The requested mode if allowed, else the setting's default if allowed, else the safest allowed mode.</summary>
+    /// <summary>
+    /// The requested mode if allowed, else the setting's default if allowed, else the safest allowed mode that changes content
+    /// (a group allowed only Auto starts in Auto, not in the Read only it gets with it), else Read only.
+    /// </summary>
     public static string Mode(EditorSettings settings, EditorUser user, string? wanted)
     {
         var modes = Modes(settings, user);
         if (wanted != null && modes.Contains(wanted)) return wanted;
-        return modes.Contains(settings.DefaultMode) ? settings.DefaultMode : modes.FirstOrDefault() ?? EditorModes.Manual;
+        return modes.Contains(settings.DefaultMode) ? settings.DefaultMode : modes.FirstOrDefault(m => m != EditorModes.ReadOnly) ?? EditorModes.ReadOnly;
     }
 
     private HashSet<int>? roots;

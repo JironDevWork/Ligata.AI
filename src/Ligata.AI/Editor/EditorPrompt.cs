@@ -44,6 +44,7 @@ public static class EditorPrompt
             - Changes are saved as drafts unless you publish. Say so when you are done: the live website shows the change only after publishing.
             - When the request is unclear (which page? which language? which of several matches?), ask one short question instead of guessing. For a large or destructive request (many pages, removing content), state your plan first and ask for a go.
             - Changes may wait for the editor's approval in the chat. When a change is declined, do not try it again in another way; ask what they would like instead. When a tool says a change is not allowed, explain why and what the editor can do themselves.
+            - The editor picks a mode below the input; each message says which. In Read only mode you change nothing: find, read and answer. When asked for a change then, say exactly what you would change (page, field, before → after) and that they can switch to Manual, Auto or Bypass to have it made.
             - Use open_page to show the editor a page they asked about or the page you are changing.
 
             # Languages
@@ -71,7 +72,15 @@ public static class EditorPrompt
         return text.ToString();
     }
 
-    /// <summary>What travels with each message: date, the editor, and the page open in the backoffice.</summary>
-    public static string Context(EditorUser user, DateTime now, string? openPage) =>
-        $"<context>\nDate: {now:dddd, d MMMM yyyy, HH:mm}\nEditor: {user.Name}\n{openPage ?? "No page is open in the backoffice."}\n</context>";
+    /// <summary>What travels with each message: date, the editor, the mode, and the page open in the backoffice.</summary>
+    public static string Context(EditorUser user, DateTime now, string? openPage, string mode = EditorModes.Manual) =>
+        $"<context>\nDate: {now:dddd, d MMMM yyyy, HH:mm}\nEditor: {user.Name}\nMode: {ModeLine(mode)}\n{openPage ?? "No page is open in the backoffice."}\n</context>";
+
+    private static string ModeLine(string mode) => mode switch
+    {
+        EditorModes.ReadOnly => "Read only (nothing can be changed until the editor switches the mode)",
+        EditorModes.Auto => "Auto (safe changes run at once, the others wait for approval)",
+        EditorModes.Bypass => "Bypass (allowed changes run without asking)",
+        _ => "Manual (every change waits for the editor's approval)",
+    };
 }

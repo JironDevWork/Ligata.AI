@@ -138,6 +138,7 @@ export const panelStyles = css`
   .chooser{position:relative}
   .pill{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:600;color:var(--muted);border:1px solid var(--line);background:var(--surface);white-space:nowrap}
   .pill svg{width:13px;height:13px}.pill:hover{color:var(--ink);background:var(--subtle)}
+  .pill.mode-readonly{border-style:dashed}
   .pill.mode-auto{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,var(--line));background:var(--soft)}
   .pill.mode-bypass{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 9%,var(--surface))}
   .menu{position:absolute;bottom:calc(100% + 6px);left:0;z-index:5;min-width:250px;padding:5px;border-radius:12px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;gap:2px;animation:rise .18s var(--ease)}
