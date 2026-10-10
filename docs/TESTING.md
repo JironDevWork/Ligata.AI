@@ -130,6 +130,7 @@ cd tests/e2e; node guide.mjs                            # 19 checks
 | Another page | *Take me there* opens /contact/; the words are highlighted there. On that page the open chat would cover them, so it steps aside and the bar says so. *Back to chat* returns to the same conversation; the hand-over in session storage is used once |
 | Show again | From the chat, on another scroll position |
 | `LigataAI.show()` | The site's own code highlights words; unknown words resolve to `false` |
+| Title over menu | On /contact/, "Contact" highlights the page title (in a `<header>` inside `<main>`), not the menu link |
 | Phone, another page | *Bring mich hin* closes the full-screen chat, opens the page and highlights the words. The bar (*Back to chat*) stands in for the bubble and does not hide the highlight. Back in the chat the conversation is the same |
 | Phone, footer | The chat steps aside, the page scrolls to the footer, the bar moves to the top, the page can scroll again; closing the bar brings back the bubble |
 | Ask *Never* | Another page opens after a countdown; *Cancel* stops it |

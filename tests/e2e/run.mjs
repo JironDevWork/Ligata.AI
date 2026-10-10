@@ -261,6 +261,18 @@ await check('the assistant shows the way on the GPU too: what is on screen is hi
   assert((await widget().locator('.msg.guide-note').last().innerText()).includes(heading), 'the chat says what it highlighted');
 });
 
+await check('a word-for-word repeat after showing the way is not shown (Gemma writes its answer twice)', async () => {
+  if (real) return;
+  const answers = await widget().locator('.msg.bot:not(.guide-note)').count();
+  const heading = await site.locator('h1').first().innerText();
+  await widget().locator('textarea').fill(`show me ${heading} twice`);
+  await widget().locator('textarea').press('Enter');
+  await widget().locator('.msg.bot:not(.guide-note)').nth(answers).waitFor({ timeout: answerTimeout });
+  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
+  const said = await widget().locator('.msg.bot:not(.guide-note) .bubble').nth(answers).innerText();
+  assert(said.trim() === 'It is right here on this page.', 'said once: ' + JSON.stringify(said));
+});
+
 await check('screenshots can be attached and are sent to the model', async () => {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
   writeFileSync(path.join(out, 'pixel.png'), png);

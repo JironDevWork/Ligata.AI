@@ -52,7 +52,7 @@ export function startMockLlm() {
         // With tools, "look up X" (or "phone") calls search_website, split into pieces like llama-server streams it; a tool result is
         // answered from its text. "look up forever" keeps calling. tool_choice none never calls.
         // "show me X" shows X on the visitor's page (when the website declares show_on_website).
-        const showing = body.tools?.some(t => t.function?.name === 'show_on_website') && body.tool_choice !== 'none' && last?.role === 'user' && /show me (.+)/i.exec(asked);
+        const showing = body.tools?.some(t => t.function?.name === 'show_on_website') && body.tool_choice !== 'none' && last?.role === 'user' && /show me (.+?)( twice)?$/i.exec(asked);
         if (showing) {
           const json = JSON.stringify({ text: showing[1].trim(), label: showing[1].trim() });
           // Some text before the call, as Gemma often writes: the website keeps it apart from the text after the call.
@@ -78,7 +78,10 @@ export function startMockLlm() {
           return;
         }
         const found = last?.role === 'tool' ? body.messages.filter(m => m.role === 'tool').map(m => m.content).join(' | ') : null;
-        const tokens = found != null ? ['Found: ', found] : /person|human|unknown|mensch|weiss nicht/i.test(asked) ? ['Sorry, ', 'I could ', 'not find ', 'that in ', 'my information. ', 'Our team ', 'can help.', '\n[[', 'te', 'am]]'] : state.tokens;
+        // "show me X twice": after the call the model writes its answer again, word for word, as Gemma does.
+        const userAsked = [...body.messages].reverse().find(m => m.role === 'user')?.content;
+        const repeats = last?.role === 'tool' && /show me .+ twice$/i.test(typeof userAsked === 'string' ? userAsked : '');
+        const tokens = repeats ? ['It is right ', 'here on this page.'] : found != null ? ['Found: ', found] : /person|human|unknown|mensch|weiss nicht/i.test(asked) ? ['Sorry, ', 'I could ', 'not find ', 'that in ', 'my information. ', 'Our team ', 'can help.', '\n[[', 'te', 'am]]'] : state.tokens;
         for (const [i, token] of tokens.entries()) {
           await new Promise(r => setTimeout(r, state.delayMs));
           if (closed) return;

@@ -239,9 +239,11 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             http.Response.Headers.CacheControl = "no-store";
             http.Response.Headers["X-Accel-Buffering"] = "no";
             string? currentEvent = null;
-            bool finished = false, looked = false;
-            var tail = '\0';
-            var written = 0;
+            bool finished = false, looked = false, fresh = false;
+            // What the visitor has seen of the answer, and the text after a lookup held back while it repeats that word for word.
+            var shown = new StringBuilder();
+            StringBuilder? held = null;
+            var segment = 0;
             var answer = new StringBuilder();
             var looking = lookups?.Begin();
             try
@@ -254,24 +256,37 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                     if (currentEvent == "tool_calls")
                     {
                         // The model looks something up: answered here, never passed to the browser as is.
-                        if (line.StartsWith("data: ")) { await LookupAsync(http, line[6..], looking, outcome, written >= 20, token); looked = true; }
+                        if (line.StartsWith("data: ")) { await LookupAsync(http, line[6..], looking, outcome, shown.Length >= 20, token); looked = true; }
                         else if (line.Length == 0) currentEvent = null;
                         continue;
                     }
                     if (line.StartsWith("data: ") && currentEvent == "delta")
                     {
                         var piece = Delta(line[6..]);
-                        // Text written after a lookup starts a new paragraph instead of running on from the text before it.
+                        var original = piece;
                         if (looked && piece.Length > 0)
                         {
-                            if (tail != '\0' && !char.IsWhiteSpace(tail) && !char.IsWhiteSpace(piece[0]))
-                            {
-                                piece = "\n\n" + piece;
-                                line = "data: " + JsonSerializer.Serialize(new { text = piece }, AssistantJson.Options);
-                            }
+                            fresh = true;
                             looked = false;
+                            // A smaller model often writes its whole answer again after the lookup: held back while it does.
+                            if (shown.Length >= 20) held = new StringBuilder();
                         }
-                        if (piece.Length > 0) { tail = piece[^1]; written += piece.Length; }
+                        if (held != null && piece.Length > 0)
+                        {
+                            held.Append(piece);
+                            if (Repeats(shown, segment, held)) continue; // the event without data is ignored by the widget
+                            piece = held.ToString();
+                            held = null;
+                        }
+                        // Text written after a lookup starts a new paragraph instead of running on from the text before it.
+                        if (fresh && piece.Length > 0)
+                        {
+                            if (shown.Length > 0 && !char.IsWhiteSpace(shown[^1]) && !char.IsWhiteSpace(piece[0])) piece = "\n\n" + piece;
+                            fresh = false;
+                            segment = shown.Length;
+                        }
+                        if (!ReferenceEquals(piece, original)) line = "data: " + JsonSerializer.Serialize(new { text = piece }, AssistantJson.Options);
+                        shown.Append(piece);
                         if (counting || outcome != null)
                         {
                             if (answer.Length < 200_000) answer.Append(piece);
@@ -335,6 +350,20 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         try { await gateway.ToolResultsAsync(round, calls.Select((c, i) => new { id = c.Id, content = results[i] }).ToList(), token); }
         catch (GatewayException e) { logger.LogWarning("Ligata AI could not return lookup results to the gateway ({Code}).", e.Code); }
     }
+
+    /// <summary>
+    /// The text after a lookup repeats the answer word for word so far: the whole answer, or what was written since the lookup before.
+    /// It is sent as soon as it differs, and dropped if the answer ends while it is still only a repeat.
+    /// </summary>
+    private static bool Repeats(StringBuilder shown, int segment, StringBuilder held)
+    {
+        var again = Squash(held.ToString());
+        if (again.Length == 0) return true;
+        if (Squash(shown.ToString()).StartsWith(again, StringComparison.Ordinal)) return true;
+        return segment > 0 && segment < shown.Length && Squash(shown.ToString(segment, shown.Length - segment)).StartsWith(again, StringComparison.Ordinal);
+    }
+
+    private static string Squash(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private static string Delta(string json)
     {
