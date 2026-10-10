@@ -264,6 +264,60 @@ var claudeReplay = Wire(ClaudeEngine.Messages(history, lookups));
 Assert(ClaudeEngine.Messages(history, lookups).Count == 5 && claudeReplay.Contains("\"type\":\"tool_use\"") && claudeReplay.Contains("\"tool_use_id\":\"l1r0c0\"") && claudeReplay.Contains("werkstatt@ahorn.example"), "API mode: the same lookups as tool_use and tool_result blocks: " + claudeReplay[..Math.Min(500, claudeReplay.Length)]);
 Assert(ClaudeEngine.Tools().Count == 2 && Wire(ClaudeEngine.Tools()).Contains("\"name\":\"read_pages\""), "API mode: the same tools.");
 
+// ---------- showing the way (0.12) ----------
+var guideOn = new GuideSettings();
+var guiding = new Lookups(ahorn, guide: guideOn, page: "/");
+Assert(defaults.Guide.Enabled && defaults.Guide is { Reach: "pages", Ask: "always", Style: "ring", Color: "", Seconds: 5 } && guiding.Definitions.Count == 3 && new Lookups(ahorn, guide: guideOn with { Enabled = false }).Definitions.Count == 2 && new Lookups(ahorn).Definitions.Count == 2,
+    "Showing the way is on by default (asking first, pages too); its tool is declared only when the site allows it.");
+Assert(Wire(ClaudeEngine.Tools(guiding.Definitions)).Contains("\"name\":\"show_on_website\"") && Wire(ClaudeEngine.Tools(guiding.Definitions)).Contains("\"required\":[\"text\",\"label\"]"), "API mode declares it like the lookups.");
+Assert(Wire(Lookups.ShowTool(guideOn with { Reach = "scroll" })).Contains("Other pages cannot be shown") && Wire(Lookups.ShowTool(guideOn with { Reach = "highlight" })).Contains("the page does not scroll"), "The tool says how far it reaches.");
+Assert(Lookups.Valid(Call(Lookups.Show, """{"text":"x","label":"y"}""")), "The browser keeps a shown place with the answer.");
+Lookups.Place Only(Lookups.Answer answer) => answer.TakePlaces() is [var single] ? single : throw new Exception("Expected exactly one place.");
+var showing = guiding.Begin();
+var shownResult = showing.Round([Call(Lookups.Show, """{"page":"/kontakt","text":"+41 44 000 00 00","label":"Telefonnummer"}""")])[0];
+Assert(shownResult.StartsWith("Done: the website offers to show the visitor “Telefonnummer” on Kontakt (/kontakt/)") && shownResult.Contains("Do not ask whether to show it") && Only(showing) == new Lookups.Place("/kontakt/", "Kontakt", "+41 44 000 00 00", "Telefonnummer") && showing.TakePlaces().Count == 0,
+    "Another page of the list with the words on it: the model learns it is offered, the browser gets the checked page once: " + shownResult);
+var otherFormat = guiding.Begin();
+Assert(otherFormat.Round([Call(Lookups.Show, """{"page":"Kontakt","text":"044 000 00 00","label":"Phone"}""")])[0].StartsWith("Done") && Only(otherFormat).Url == "/kontakt/", "A phone number in another format is still found (by its digits), and a page by its title.");
+Assert(guiding.Begin().Round([Call(Lookups.Show, """{"page":"/kontakt/","text":"+41 44 999 99 99","label":"Phone"}""")])[0].Contains("is not on Kontakt (/kontakt/)"), "Words that are not on the other page are refused: the visitor is never taken to a page where nothing can be shown.");
+Assert(guiding.Begin().Round([Call(Lookups.Show, """{"page":"/nirgends/","text":"x","label":"y"}""")])[0].StartsWith("Not found: /nirgends/") && guiding.Begin().Round([Call(Lookups.Show, """{"page":"Pflegeanleitung","text":"nachölen","label":"y"}""")])[0].StartsWith("Not found")
+    && guiding.Begin().Round([Call(Lookups.Show, """{"page":"https://evil.example/elsewhere/","text":"x","label":"y"}""")])[0].StartsWith("Not found"), "Only pages of the list: no unknown pages or documents.");
+var foreign = guiding.Begin();
+foreign.Round([Call(Lookups.Show, """{"page":"https://evil.example/kontakt/","text":"+41 44 000 00 00","label":"y"}""")]);
+Assert(Only(foreign).Url == "/kontakt/", "Another website's address is read as a path of this website: the browser only ever gets this website's own url.");
+var hereAnswer = guiding.Begin();
+Assert(hereAnswer.Round([Call(Lookups.Show, """{"text":"Footer phone 044","label":"Phone"}""")])[0].Contains("on the page the visitor is on") && Only(hereAnswer) is { Url: "", Title: "" }, "On the page the visitor is on, the browser checks the words (headers and footers are not looked up).");
+var samePage = new Lookups(ahorn, guide: guideOn, page: "/kontakt/").Begin();
+samePage.Round([Call(Lookups.Show, """{"page":"https://www.ahorn.example/Kontakt","text":"anything","label":"x"}""")]);
+Assert(Only(samePage).Url == "", "The page the visitor is on, named by its url, needs no page change.");
+Assert(new Lookups(ahorn, guide: guideOn with { Reach = "scroll" }, page: "/").Begin().Round([Call(Lookups.Show, """{"page":"/kontakt/","text":"+41 44 000 00 00","label":"x"}""")])[0].StartsWith("Only things on the page the visitor is on can be shown (/)"), "Without pages, the model is told to link instead.");
+var twice = guiding.Begin();
+Assert(twice.Round([Call(Lookups.Show, """{"text":"a","label":"a"}"""), Call(Lookups.Show, """{"text":"b","label":"b"}""")]) is [var firstShow, var secondShow] && firstShow.StartsWith("Done") && secondShow == "Only one place can be shown per answer." && twice.TakePlaces().Count == 1, "One place per answer.");
+Assert(guiding.Begin().Round([Call(Lookups.Show, """{"label":"x"}""")])[0].StartsWith("Give text") && new Lookups(ahorn, guide: guideOn with { Enabled = false }).Begin().Round([Call(Lookups.Show, """{"text":"a","label":"a"}""")])[0].Contains("no tool called"), "Missing words are explained; switched off, the tool does not exist.");
+Assert(new Lookups(ahorn, guide: guideOn with { Ask = "never" }, page: "/").Begin().Round([Call(Lookups.Show, """{"text":"a","label":"a"}""")])[0].StartsWith("Done: right after your answer"), "Without asking, the model learns it is shown right away.");
+string Replayed(string? outcome) { var again = guiding.Again(outcome); var text = again.Round([Call(Lookups.Show, """{"page":"/kontakt/","text":"+41 44 000 00 00","label":"Telefonnummer"}""")])[0]; return again.TakePlaces().Count == 0 ? text : "PLACE AGAIN"; }
+Assert(Replayed("shown").StartsWith("Shown: the visitor saw “Telefonnummer”") && Replayed("declined").Contains("chose not to be shown") && Replayed("missing").Contains("could not find") && Replayed(null).Contains("has not chosen yet"),
+    "Repeated with the conversation, the result says what became of the place (and the browser is not told again).");
+var guideHistory = new ChatRequest([new("user", "Wo ist die Nummer?", null), new("assistant", "Auf der Kontaktseite.", null, [[Call(Lookups.Show, """{"page":"/kontakt/","text":"+41 44 000 00 00","label":"Telefonnummer"}""")]], "shown"), new("user", "Danke", null)], "Home", "/");
+Assert(Wire(ClaudeEngine.Messages(guideHistory, guiding)).Contains("Shown: the visitor saw") && Wire(ChatRelay.Messages(guideHistory, defaults, "S", guiding)).Contains("Shown: the visitor saw"), "Both engines learn that the visitor saw it.");
+var switchedOff = new Lookups(ahorn, guide: guideOn with { Enabled = false });
+Assert(ClaudeEngine.Messages(guideHistory, switchedOff).Count == 3 && !Wire(ClaudeEngine.Messages(guideHistory, switchedOff)).Contains("show_on_website") && !Wire(ChatRelay.Messages(guideHistory, defaults, "S", switchedOff)).Contains("show_on_website"),
+    "Switched off later, earlier places are not repeated: the API refuses calls to tools it was not given.");
+Rejects<ChatValidationException>(() => ChatRelay.Messages(guideHistory with { Messages = [guideHistory.Messages[0], guideHistory.Messages[1] with { Guide = "clicked" }, guideHistory.Messages[2]] }, defaults, "S", guiding), "Only known outcomes.");
+Rejects<ChatValidationException>(() => ChatRelay.Messages(new ChatRequest([new("user", "x", null, null, "shown")], "H", "/"), defaults, "S", guiding), "Only answers have an outcome.");
+var guidePrompt = PromptBuilder.Guardrails(defaults, lookups: true);
+Assert(guidePrompt.Contains("show_on_website") && guidePrompt.Contains("asks the visitor with a button") && guidePrompt.Contains("opens the page if needed") && !PromptBuilder.Guardrails(defaults with { Guide = guideOn with { Enabled = false } }, lookups: true).Contains("show_on_website") && !PromptBuilder.Guardrails(defaults).Contains("show_on_website"),
+    "The prompt explains when and how to show the way, only with the tool.");
+Assert(PromptBuilder.Guardrails(defaults with { Guide = guideOn with { Ask = "never" } }, lookups: true).Contains("shows it right after your answer") && PromptBuilder.Guardrails(defaults with { Guide = guideOn with { Reach = "highlight" } }, lookups: true).Contains("it does not scroll"), "…as far as the site allows.");
+foreach (var bad in new[] { guideOn with { Reach = "click" }, guideOn with { Ask = "maybe" }, guideOn with { Style = "blink" }, guideOn with { Color = "red" }, guideOn with { Seconds = 1 }, guideOn with { Seconds = 60 } })
+    Rejects<AssistantValidationException>(() => AssistantValidation.Settings(defaults with { Guide = bad }), "Invalid guide settings are refused: " + bad);
+AssistantValidation.Settings(defaults with { Guide = guideOn with { Color = "#ff3366", Style = "spotlight", Seconds = 15 } });
+var publicGuide = AssistantJson.Write(defaults.Public(1000, new { }, 0, new FeatureState(true, false, false), new RecaptchaSettings()));
+Assert(publicGuide.Contains("\"guide\":{\"reach\":\"pages\",\"ask\":\"always\",\"style\":\"ring\",\"color\":\"\",\"seconds\":5}") && AssistantJson.Write((defaults with { Guide = guideOn with { Enabled = false } }).Public(1000, new { }, 0, new FeatureState(true, false, false), new RecaptchaSettings())).Contains("\"guide\":null")
+    && AssistantJson.Write(defaults.Public(1000, new { }, 0, new FeatureState(false, true, false), new RecaptchaSettings())).Contains("\"guide\":null"), "The widget learns how to show the way, never without the AI: " + publicGuide[publicGuide.IndexOf("guide", StringComparison.OrdinalIgnoreCase)..]);
+Assert(Words.SamePath("/Kontakt", "https://www.ahorn.example/kontakt/?x=1") && !Words.SamePath("/kontakt/", "/kontakt/team/") && Words.Contains("Telefon: +41 44 000 00 00", "+41 (0)44 000 00 00") && Words.Contains("„Öffnungszeiten“ – Montag", "\"offnungszeiten\" - montag") && !Words.Contains("Telefon 044 000 00 00", "044 000 00 01"),
+    "Words are compared without spaces, case, accents and typographic quotes; numbers of six digits or more also by their digits.");
+
 // ---------- API mode (Claude) ----------
 Assert(ClaudeEngine.DisplayName("claude-haiku-5-5") == "Claude Haiku 5.5" && ClaudeEngine.DisplayName("claude-opus-5") == "Claude Opus 5", "Model names are readable.");
 Assert(new AssistantOptions { Mode = " API " }.UsesApi && !new AssistantOptions().UsesApi && !new AssistantOptions { Mode = "gpu" }.UsesApi, "The GPU gateway stays the default; api must be chosen.");

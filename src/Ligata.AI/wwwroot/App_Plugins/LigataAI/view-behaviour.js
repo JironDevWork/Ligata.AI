@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact } from './ui.js?v=0.11.0';
+import { number, compact, icon } from './ui.js?v=0.11.0';
 
 const efforts = [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']];
 const effortHelp = {
@@ -11,7 +11,62 @@ const effortHelp = {
   max: 'As much thinking as Claude can do. Only for very complex questions: the slowest and most expensive.',
 };
 
+const reaches = [['highlight', 'Highlight only'], ['scroll', 'Scroll and highlight'], ['pages', 'Open pages too']];
+const reachHelp = {
+  highlight: 'Points at things on the page the visitor is on, where they are: nothing moves. Something further down is highlighted once the visitor scrolls to it.',
+  scroll: 'Also scrolls the page the visitor is on to the right spot. Other pages are linked in the answer.',
+  pages: 'Also opens another page of your website, then scrolls to the spot and highlights it. Only pages the assistant can look up, never addresses from page texts.',
+};
+const askHelp = {
+  always: 'Recommended. A card under the answer offers “Show me” or “Take me there”. Highlighting what is already on screen needs no question.',
+  pages: 'Scrolls on the same page right away and asks before another page opens.',
+  never: 'Goes ahead right after the answer. Another page opens after a short countdown the visitor can cancel.',
+};
+const styleHelp = {
+  ring: 'A coloured ring around the spot that pulses briefly.',
+  spotlight: 'Dims the rest of the page so the spot stands out.',
+  marker: 'Colours the spot like a highlighter pen.',
+};
+
 export const behaviourView = {
+  /** Showing the way: what the assistant may do on the page, when it asks, and how the highlight looks (tried out in the preview). */
+  guideCard() {
+    const g = this.settings.guide;
+    const reach = v => { this.set('guide.reach', v); if (v !== 'pages' && this.settings.guide.ask === 'pages') this.set('guide.ask', 'never'); };
+    const asks = g.reach === 'pages' ? [['always', 'Before scrolling or opening a page'], ['pages', 'Only before opening a page'], ['never', 'Never']] : [['always', 'Before scrolling'], ['never', 'Never']];
+    return html`<section class="card">
+      <header><div><h2>Showing the way</h2><p class="muted">When visitors ask where something is, the assistant can show them: it opens the page, scrolls to the spot and highlights it. It never clicks, fills in or sends anything on your website.</p></div></header>
+      ${this.toggle('guide.enabled', 'Show visitors where things are', 'On phones the chat steps aside while the spot is shown, with a bar to come back to the conversation.')}
+      ${g.enabled ? html`<div class="section">
+          <div class="control"><span>What it may do</span><div class="segmented" role="group" aria-label="What it may do">${reaches.map(([v, l]) => html`<button type="button" aria-pressed=${String(g.reach === v)} @click=${() => reach(v)}>${l}</button>`)}</div><small>${reachHelp[g.reach]}</small>${this.fieldError('guide.reach')}</div>
+          ${g.reach === 'highlight' ? nothing : this.segmented('guide.ask', 'Ask the visitor first', asks, askHelp[g.ask])}
+        </div>
+        <div class="grid two section">
+          ${this.segmented('guide.style', 'Highlight', [['ring', 'Ring'], ['spotlight', 'Spotlight'], ['marker', 'Marker']], styleHelp[g.style])}
+          ${this.range('guide.seconds', 'Highlight for', 2, 15, 1, v => `${v} s`)}
+        </div>
+        <div class="section row">
+          <label class="color"><input type="color" .value=${g.color || this.settings.appearance.accent} @input=${e => this.set('guide.color', e.target.value)}><span>Highlight colour<code>${g.color || 'The accent colour'}</code></span></label>
+          ${g.color ? html`<button type="button" class="btn small" @click=${() => this.set('guide.color', '')}>Use the accent colour</button>` : nothing}
+          <span class="grow"></span>
+          <button type="button" class="btn small" @click=${() => this.previewGuide()}>${icon('pin')}Try it in the preview</button>
+        </div>${this.fieldError('guide.color')}` : nothing}
+    </section>`;
+  },
+
+  /** Highlights the heading of the preview page with the settings shown. The preview reloads after a change: wait for its assistant. */
+  previewGuide() {
+    clearInterval(this.guideTimer);
+    const started = Date.now();
+    setTimeout(() => {
+      this.guideTimer = setInterval(() => {
+        const frame = this.shadowRoot?.querySelector('.preview iframe')?.contentWindow;
+        if (frame?.LigataAI?.show && frame.document.readyState === 'complete') { clearInterval(this.guideTimer); frame.LigataAI.show({ selector: 'h1', label: 'Example' }); }
+        else if (Date.now() - started > 5000) clearInterval(this.guideTimer);
+      }, 100);
+    }, 400);
+  },
+
   /** Gemma on the GPU thinks or does not; Claude has effort levels. With both engines set up, the other engine's setting is one click away. */
   thinkingControls() {
     const gpu = this.toggle('behaviour.thinking', 'Think before answering', 'More careful answers for complex questions, but noticeably slower for everyone sharing the GPU.');
@@ -56,6 +111,8 @@ export const behaviourView = {
           </div>
           <div class="section">${this.thinkingControls()}</div>
         </section>` : nothing}
+
+        ${this.licensedFeatures().assistant ? this.guideCard() : nothing}
 
         ${this.licensedFeatures().assistant ? html`<section class="card">
           <header><div><h2>Memory & limits</h2><p class="muted">Bigger limits allow longer chats and documents, but the first answer takes longer.</p></div></header>

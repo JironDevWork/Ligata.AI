@@ -32,6 +32,8 @@ public sealed record AssistantSettings
     public PrivacySettings Privacy { get; init; } = new();
     /// <summary>Which website pages the assistant may look up.</summary>
     public KnowledgeSettings Knowledge { get; init; } = new();
+    /// <summary>The assistant shows visitors where something is: it opens the page, scrolls to the spot and highlights it (0.12).</summary>
+    public GuideSettings Guide { get; init; } = new();
 
     /// <summary>Licensed (appsettings) and switched on (backoffice).</summary>
     public FeatureState Effective(FeatureOptions licensed) => new(licensed.Assistant && Features.Assistant, licensed.LiveChat && Features.LiveChat, licensed.Email && Features.Email);
@@ -62,7 +64,34 @@ public sealed record AssistantSettings
         History = features.Assistant && Privacy.History ? new { Days = Privacy.HistoryDays, Version = Services.VisitorConsent.HistoryVersion(this) } : null,
         // What the AI needs before it may read messages (null: no consent is asked, see LigataAI:Privacy).
         Consent = consent,
+        // How the widget shows visitors where something is (null: the assistant only answers and links).
+        Guide = features.Assistant && Guide.Enabled ? new { Guide.Reach, Guide.Ask, Guide.Style, Guide.Color, Guide.Seconds } : null,
     };
+}
+
+/// <summary>
+/// The assistant shows visitors where something is on the website. The model proposes a place (a page and words on it); the widget
+/// scrolls there and highlights it, opening the page first when allowed. It never clicks, fills in or sends anything.
+/// </summary>
+public sealed record GuideSettings
+{
+    public bool Enabled { get; init; } = true;
+    /// <summary>highlight (only what is on screen of the page the visitor is on) | scroll (anywhere on that page) | pages (also other pages)</summary>
+    public string Reach { get; init; } = "pages";
+    /// <summary>When the visitor is asked first: always (before scrolling or opening a page) | pages (only before opening another page) | never. Highlighting what is already on screen never asks.</summary>
+    public string Ask { get; init; } = "always";
+    /// <summary>ring | spotlight | marker</summary>
+    public string Style { get; init; } = "ring";
+    /// <summary>Empty uses the accent colour of the chat.</summary>
+    public string Color { get; init; } = "";
+    /// <summary>How long the highlight stays.</summary>
+    public int Seconds { get; init; } = 5;
+
+    public static readonly string[] Reaches = ["highlight", "scroll", "pages"];
+    public static readonly string[] Asks = ["always", "pages", "never"];
+    public static readonly string[] Styles = ["ring", "spotlight", "marker"];
+    /// <summary>The assistant may open another page.</summary>
+    public bool Pages => Enabled && Reach == "pages";
 }
 
 public sealed record FeatureState(bool Assistant, bool LiveChat, bool Email)

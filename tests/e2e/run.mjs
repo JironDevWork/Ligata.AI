@@ -246,6 +246,18 @@ await check('the assistant looks the website up while answering, and keeps what 
   assert(kept.includes('"lookups":[[{"name":"search_website"'), 'the browser keeps what was looked up (the server looks it up again with the next question)');
 });
 
+await check('the assistant shows the way on the GPU too: what is on screen is highlighted and the chat says so', async () => {
+  if (real) return;
+  const answers = await widget().locator('.msg.bot:not(.guide-note)').count();
+  const heading = await site.locator('h1').first().innerText();
+  await widget().locator('textarea').fill('show me ' + heading);
+  await widget().locator('textarea').press('Enter');
+  await widget().locator('.msg.bot:not(.guide-note)').nth(answers).waitFor({ timeout: answerTimeout });
+  await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
+  await site.locator('#ligata-ai-guide .mark').waitFor({ timeout: 5000 });
+  assert((await widget().locator('.msg.guide-note').last().innerText()).includes(heading), 'the chat says what it highlighted');
+});
+
 await check('screenshots can be attached and are sent to the model', async () => {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
   writeFileSync(path.join(out, 'pixel.png'), png);

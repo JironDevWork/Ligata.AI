@@ -255,7 +255,7 @@ public sealed class AssistantManagementController(AssistantStore store, GatewayC
         var (stable, context, lookups) = await relay.PromptAsync(settings, settings.Effective(options.Value.Features), "A page title of typical length here", "/a/typical/page/path/", token);
         // The knowledge that is always known is shown on its own; tools are declared next to the instructions.
         var pinned = PromptBuilder.Knowledge(store.PinnedKnowledge());
-        var instructions = (pinned.Length > 0 ? stable.Replace(pinned, "") : stable) + context + (lookups != null ? JsonSerializer.Serialize(Lookups.Tools) : "");
+        var instructions = (pinned.Length > 0 ? stable.Replace(pinned, "") : stable) + context + (lookups != null ? JsonSerializer.Serialize(lookups.Definitions) : "");
         var (tokens, estimated) = await Count(instructions, token);
         return Ok(new { instructionTokens = tokens + 16, estimated, lookupTokens = lookups != null ? Lookups.Tokens : 0, lookups = lookups != null });
     }

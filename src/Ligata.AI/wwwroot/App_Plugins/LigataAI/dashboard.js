@@ -164,6 +164,7 @@ class LigataAIDashboard extends UmbElementMixin(LitElement) {
       team: f.liveChat || f.email ? { teamName: t.teamName, suggest: t.suggestWhenUnsure && f.assistant, button: t.showTeamButton, nameField: t.nameField, emailField: t.emailField, emailWhenOffline: t.requireEmailWhenOffline, waitingMessage: t.waitingMessage, offlineMessage: t.offlineMessage, privacyNotice: t.privacyNotice, days: t.inactivityDays } : null,
       contact: f.email ? { title: c.title, intro: c.intro, nameField: c.nameField, successMessage: c.successMessage } : null, captcha: null,
       history: f.assistant && s.privacy?.history ? { days: s.privacy.historyDays, version: `${s.privacy.historyDays}.${s.privacy.consentRevision || 1}` } : null,
+      guide: f.assistant && s.guide?.enabled ? { reach: s.guide.reach, ask: s.guide.ask, style: s.guide.style, color: s.guide.color, seconds: s.guide.seconds } : null,
       // The consent request as visitors will see it; "Ask all visitors again" and another period of the history change the version, so the preview asks again too.
       consent: f.assistant && this.privacy?.consent ? { ...this.privacy.consent, text: s.privacy?.consentText || '',
         version: this.privacy.consent.version.replace(/\.h\d+$/, '').replace(/^(\w+)\.\d+\./, `$1.${s.privacy?.consentRevision || 1}.`) + (s.privacy?.history ? `.h${s.privacy.historyDays}` : '') } : null };

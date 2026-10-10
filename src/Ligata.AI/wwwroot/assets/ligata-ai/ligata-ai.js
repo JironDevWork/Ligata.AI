@@ -133,6 +133,22 @@
       privacyAiKept: d => `Le risposte sono generate da un’IA e possono essere sbagliate. Le tue conversazioni vengono conservate per ${d} giorni.`, privacyApiKept: d => `Le risposte sono generate da Claude, un’IA di Anthropic, e possono essere sbagliate. Questo sito conserva le tue conversazioni per ${d} giorni.` },
   };
   Object.assign(t, historyStrings.en, historyStrings[lang]);
+  // Showing the way (settings.guide): the assistant points at a place on the website; scrolling and other pages wait for the visitor's yes.
+  const guideStrings = {
+    en: { guideOnPage: p => `On the page “${p}”`, guideHere: 'On this page', guideBelow: 'Further down this page', guideAbove: 'Further up this page', guideShow: 'Show me', guideGo: 'Take me there', guideNo: 'No thanks',
+      guideOpening: p => `Opening “${p}”…`, guideCancel: 'Cancel', guideShown: l => `I’ve highlighted “${l}” for you.`, guideMissing: l => `I couldn’t find “${l}” on this page.`, guideAgain: 'Show again', guideBack: 'Back to chat',
+      guideWatch: 'I’ll highlight it as soon as it’s on your screen.', guideFinding: 'Finding the spot…', guidePreview: p => `In the preview, visitors would now go to “${p}”.`, guideClose: 'Close', guideIntro: l => `Here’s where to find “${l}”.` },
+    de: { guideOnPage: p => `Auf der Seite «${p}»`, guideHere: 'Auf dieser Seite', guideBelow: 'Weiter unten auf dieser Seite', guideAbove: 'Weiter oben auf dieser Seite', guideShow: 'Zeig es mir', guideGo: 'Bring mich hin', guideNo: 'Nein, danke',
+      guideOpening: p => `«${p}» wird geöffnet …`, guideCancel: 'Abbrechen', guideShown: l => `Ich habe dir «${l}» markiert.`, guideMissing: l => `Ich konnte «${l}» auf dieser Seite nicht finden.`, guideAgain: 'Nochmals zeigen', guideBack: 'Zurück zum Chat',
+      guideWatch: 'Ich markiere es, sobald es auf deinem Bildschirm ist.', guideFinding: 'Sucht die Stelle …', guidePreview: p => `In der Vorschau würden Besucher jetzt zu «${p}» gehen.`, guideClose: 'Schliessen', guideIntro: l => `Hier findest du «${l}».` },
+    fr: { guideOnPage: p => `Sur la page « ${p} »`, guideHere: 'Sur cette page', guideBelow: 'Plus bas sur cette page', guideAbove: 'Plus haut sur cette page', guideShow: 'Montrez-moi', guideGo: 'M’y emmener', guideNo: 'Non merci',
+      guideOpening: p => `Ouverture de « ${p} »…`, guideCancel: 'Annuler', guideShown: l => `J’ai mis en évidence « ${l} ».`, guideMissing: l => `Je n’ai pas trouvé « ${l} » sur cette page.`, guideAgain: 'Montrer à nouveau', guideBack: 'Retour au chat',
+      guideWatch: 'Je le mettrai en évidence dès qu’il sera à l’écran.', guideFinding: 'Je cherche l’endroit…', guidePreview: p => `Dans l’aperçu, les visiteurs iraient maintenant sur « ${p} ».`, guideClose: 'Fermer', guideIntro: l => `Voici où trouver « ${l} ».` },
+    it: { guideOnPage: p => `Nella pagina «${p}»`, guideHere: 'In questa pagina', guideBelow: 'Più in basso in questa pagina', guideAbove: 'Più in alto in questa pagina', guideShow: 'Mostramelo', guideGo: 'Portami lì', guideNo: 'No, grazie',
+      guideOpening: p => `Apro «${p}»…`, guideCancel: 'Annulla', guideShown: l => `Ho evidenziato «${l}».`, guideMissing: l => `Non ho trovato «${l}» in questa pagina.`, guideAgain: 'Mostra di nuovo', guideBack: 'Torna alla chat',
+      guideWatch: 'Lo evidenzio appena è sul tuo schermo.', guideFinding: 'Cerco il punto…', guidePreview: p => `Nell’anteprima, i visitatori andrebbero ora a «${p}».`, guideClose: 'Chiudi', guideIntro: l => `Ecco dove trovare «${l}».` },
+  };
+  Object.assign(t, guideStrings.en, guideStrings[lang]);
   const historyDays = () => settings.history ? Math.max(1, +settings.history.days || 30) : 0;
   t.errors.consent_required = t.consentRequired;
   const categoryName = c => t.categories[c] || c;
@@ -234,6 +250,9 @@
     alert: 'M3 12a9 9 0 1 0 18 0a9 9 0 0 0-18 0 M12 8v4 M12 16h.01',
     door: 'M13 12v.01 M3 21h18 M5 21v-16a2 2 0 0 1 2-2h7.5m2.5 10.5v7.5 M14 7h7m-3-3l3 3l-3 3',
     clock: 'M3 12a9 9 0 1 0 18 0a9 9 0 0 0-18 0 M12 7v5l3 3',
+    pin: 'M9 11a3 3 0 1 0 6 0a3 3 0 0 0-6 0 M17.657 16.657l-4.243 4.243a2 2 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z',
+    focus: 'M12 12m-.5 0a.5 .5 0 1 0 1 0a.5 .5 0 1 0-1 0 M12 12m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0 M12 3l0 2 M3 12l2 0 M12 19l0 2 M19 12l2 0',
+    arrow: 'M5 12l14 0 M13 18l6-6 M13 6l6 6',
   };
   const svg = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" ${extra}><path d="${icons[name] || icons.chat}"/></svg>`;
 
@@ -405,7 +424,22 @@
   .btn.primary{background:var(--lai-accent);color:var(--lai-on-accent)}.btn.primary:hover:not(:disabled){filter:brightness(1.07)}.btn.ghost{color:var(--lai-muted)}.btn.ghost:hover{background:var(--lai-surface);color:var(--lai-text)}
   .btn:disabled{opacity:.7;cursor:progress}.btn svg{width:17px;height:17px}
   .spinner{width:15px;height:15px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .7s linear infinite}
+  .card.guide{padding:12px 12px 12px 13px}
+  .guide-row{display:flex;gap:11px;align-items:center}
+  .guide-row .icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--lai-accent) 13%,var(--lai-bg));color:var(--lai-accent);flex:none}
+  .guide-row b{display:block;font-size:14.5px;line-height:1.3;overflow-wrap:anywhere}.guide-row small{display:block;font-size:12.5px;color:var(--lai-muted);line-height:1.35;overflow-wrap:anywhere}
+  .card.guide .actions{margin-top:11px}.card.guide .actions .chip svg{order:2}
+  .card.guide .going{display:flex;align-items:center;gap:9px;margin-top:11px;font-size:13px;color:var(--lai-muted)}.card.guide .going .chip{margin-left:auto}
+  .msg.guide-note .bubble{display:flex;gap:8px;align-items:flex-start}.msg.guide-note .bubble svg{width:17px;height:17px;margin-top:2px;color:var(--lai-ok)}.msg.guide-note.missing .bubble svg{color:var(--lai-muted)}
+  .msg.guide-note .meta{opacity:1}
+  .guide-bar{position:fixed;${side}:var(--lai-x);bottom:var(--lai-y);width:min(390px,calc(100vw - 2*var(--lai-x)));display:flex;align-items:center;gap:10px;padding:9px 8px 9px 10px;border-radius:18px;background:var(--lai-bg);color:var(--lai-text);border:1px solid var(--lai-line);
+    box-shadow:0 18px 50px -14px color-mix(in srgb,var(--lai-shade) 45%,transparent),0 4px 12px -4px color-mix(in srgb,var(--lai-shade) 18%,transparent);animation:rise .3s var(--lai-ease)}
+  .guide-bar.top{top:max(12px,env(safe-area-inset-top));bottom:auto;animation-name:drop}
+  .guide-bar .avatar{width:32px;height:32px;font-size:12px}.guide-bar .avatar svg{width:17px;height:17px}
+  .guide-bar .gb-text{flex:1;min-width:0;font-size:13.5px;line-height:1.35;cursor:pointer}.guide-bar .chip{flex:none;white-space:nowrap}.guide-bar .tool{width:32px;height:32px}
+  :host([guiding]) .launcher-row{display:none}
   .hidden{display:none!important}
+  @keyframes drop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   @keyframes slide{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}@keyframes fade{from{opacity:0}to{opacity:1}}
   @keyframes bounce{0%,60%,100%{transform:none;opacity:.35}30%{transform:translateY(-4px);opacity:1}}
@@ -416,6 +450,7 @@
     .panel{position:fixed;inset:0;width:100%;height:100%;height:100dvh;border-radius:0;border:0;bottom:0}
     header{padding-top:max(14px,env(safe-area-inset-top))}.composer-wrap{padding-bottom:max(12px,env(safe-area-inset-bottom))}
     textarea,.field input,.field textarea{font-size:16px}.item .del{opacity:1}
+    .guide-bar{left:10px;right:10px;width:auto;bottom:max(10px,env(safe-area-inset-bottom))}.guide-bar.top{top:max(10px,env(safe-area-inset-top))}
   }
   ${look.animations ? '' : '*{animation:none!important;transition:none!important}'}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}`;
@@ -742,7 +777,8 @@
         ${svg('close', 'class="when-open"')}<span class="dot"></span><span class="badge">1</span>
       </button>
       ${look.launcherLabel ? `<span class="label" role="presentation">${escape(look.launcherLabel)}</span>` : ''}
-    </div>`;
+    </div>
+    <div class="guide-bar hidden" role="status" aria-live="polite"></div>`;
   const $ = selector => root.querySelector(selector);
   const panel = $('.panel'), log = $('.log'), list = $('.list'), home = $('.home'), input = $('textarea'), form = $('.composer-form'), fileInput = $('input[type=file]'), launcher = $('.launcher'), sendButton = $('.send'), pendingList = $('.pending'), body = $('.body');
 
@@ -842,12 +878,21 @@
       case 'email-sent': return [t.emailSent(m.content), 'good note', null];
       case 'preview': return [t.previewSent, 'note', null];
       case 'compacted': return [t.compacted, 'note summary', null];
+      case 'guide-shown': return [t.guideShown(m.label), 'good', null];
+      case 'guide-missing': return [t.guideMissing(m.label), '', null];
       default: return [m.content || '', '', null];
     }
   }
 
   function messageNode(message, previous) {
     const node = document.createElement('div');
+    // What the assistant showed on the page: said in the chat, with a way to see it again.
+    if (message.role === 'system' && message.event?.startsWith('guide-')) {
+      const found = message.event === 'guide-shown';
+      node.className = `msg bot guide-note ${found ? '' : 'missing'}`;
+      node.innerHTML = `<div class="bubble">${svg(found ? 'check' : 'focus')}<p>${escape(eventText(message)[0])}</p></div>${found ? `<div class="meta"><button type="button" data-guide="again" data-at="${escape(message.ref)}">${svg('refresh')}<span>${t.guideAgain}</span></button></div>` : ''}`;
+      return node;
+    }
     if (message.role === 'system') {
       const [text, tone, agent] = eventText(message);
       node.className = `event ${tone}`;
@@ -917,7 +962,13 @@
       }
     }
     let previous = null;
-    for (const message of c.messages) { log.append(messageNode(message, previous)); previous = message; }
+    // The place the latest answer shows waits under it until the visitor chooses (or writes on).
+    const latest = c.messages.findLast(m => m.role === 'user' || m.role === 'assistant');
+    for (const message of c.messages) {
+      log.append(messageNode(message, previous)); previous = message;
+      const card = message.guide && message === latest ? guideCard(c, message) : null;
+      if (card) log.append(card);
+    }
     const last = c.messages.at(-1);
     if (last?.role === 'assistant' && last.handoff && !c.team && !c.handoffDismissed && canHandOff() && team.suggest !== false) log.append(handoffCard(c));
     const typing = typingRow(c);
@@ -1286,6 +1337,8 @@
         role: m.role, content: m.role === 'assistant' ? stripMark(m.content) : m.content,
         // What the assistant looked up before this answer: the server looks it up again, so the model keeps the results.
         lookups: m.lookups?.length ? m.lookups : undefined,
+        // What became of the place the answer showed, so the assistant knows whether the visitor saw it.
+        guide: m.role === 'assistant' && m.guide ? (['shown', 'declined', 'missing'].includes(m.guide.state) ? m.guide.state : 'offered') : undefined,
         attachments: (m.files || []).filter(f => !f.gone).map(f => f.kind === 'image' ? { type: 'image', name: f.name, data: f.data } : { type: 'document', name: f.name, text: f.text }),
       })),
     };
@@ -1337,7 +1390,7 @@
     log.append(waiting); scrollDown(true);
     state.waitingRow = waiting;
     const waitText = waiting.querySelector('.wait-text');
-    let answer = null, bubble = null, answerText = '', frame = 0, again = false;
+    let answer = null, bubble = null, answerText = '', frame = 0, again = false, place = null;
     // Try again resends the question, without the part of the answer that broke off.
     const retry = () => { if (answer && c.messages.at(-1) === answer) { c.messages.pop(); if (c.id === state.activeId) renderLog(); } send('', true); };
     const lookups = [];
@@ -1358,6 +1411,13 @@
         if (lookups.length) answer.lookups = lookups;
         if (bubble) bubble.innerHTML = markdown(stripMark(answerText)) || '<p></p>';
         if (answer.handoff && canHandOff() && team.suggest !== false && c.id === state.activeId && !c.team) { log.append(handoffCard(c)); scrollDown(true); }
+        // A place to show (checked by the server): shown at once, offered under the answer, or the visitor is taken there.
+        if (place && guide) {
+          answer.guide = { url: place.url || '', title: place.title || '', text: place.text, label: place.label, state: 'offered' };
+          offerPlace(c, answer);
+          const card = c.id === state.activeId && state.view === 'chat' ? guideCard(c, answer) : null;
+          if (card) { log.append(card); scrollDown(true); }
+        }
       }
       touch(c); updateComposer(); persist(true); renderHeader();
     };
@@ -1400,7 +1460,10 @@
         } else if (eventName === 'lookup') {
           // The assistant looks something up on the website before it answers (kept with the answer, see payload).
           if (data.calls?.length) lookups.push(data.calls);
-          waitText.textContent = data.calls?.some(call => call.name === 'read_pages') ? t.readingPages : t.searching;
+          waitText.textContent = data.calls?.some(call => call.name === 'show_on_website') ? t.guideFinding : data.calls?.some(call => call.name === 'read_pages') ? t.readingPages : t.searching;
+        } else if (eventName === 'guide') {
+          // A place on this website to show the visitor once the answer is complete (never while it is still streaming).
+          place = data;
         } else if (eventName === 'delta') {
           if (!answer) {
             waiting.remove(); state.waitingRow = null;
@@ -1416,6 +1479,7 @@
           c.context = { used: data.context.used, limit: data.context.limit };
           if (!state.open) { state.answerUnread = true; updateBadge(); }
         } else if (eventName === 'error') {
+          place = null;
           finish();
           if (answer && !answerText) c.messages.pop();
           // What the assistant looked up made the conversation too long: summarize the earlier messages and ask again, once.
@@ -1428,11 +1492,20 @@
       });
       if (frame) { cancelAnimationFrame(frame); paint(); }
       if (again) return send('', true, true);
+      // The assistant only pointed at a place and wrote nothing: say it for it, so the card has its answer.
+      if (!answer && !ended && place && guide) {
+        waiting.remove(); state.waitingRow = null;
+        answerText = t.guideIntro(place.label);
+        answer = { role: 'assistant', content: answerText, at: Date.now() };
+        c.messages.push(answer);
+        if (c.id === state.activeId) { const node = messageNode(answer); bubble = node.querySelector('.bubble'); log.append(node); }
+      }
       if (!answer && !ended) { finish(); showError('model_failed', null, retry); return; }
       finish();
     } catch (error) {
       if (frame) { cancelAnimationFrame(frame); paint(); }
       const stopped = controller.signal.aborted;
+      place = null;
       finish();
       if (stopped) { if (answer && !answerText) c.messages.pop(); return; }
       setStatus('offline');
@@ -1806,6 +1879,332 @@
     } catch { }
   }
 
+  // ---------- showing the way ----------
+  // The assistant proposes a place (settings.guide): words on this page or on another page of the website, checked by the server.
+  // The widget finds the words, scrolls there and highlights them for a few seconds, opening the page first when the site allows it.
+  // It never clicks, types or sends anything on the page (it only opens a closed <details> that hides the words). Scrolling and other
+  // pages wait for the visitor's "Show me" unless the site chose otherwise; highlighting what is already on screen needs no question.
+  // A page change is carried over in this tab's session storage for a minute, so the highlight follows the visitor to the new page.
+  const guide = settings.guide || null;
+  const G = () => guide || { reach: 'scroll', ask: 'always', style: 'ring', color: '', seconds: 5 };
+  const guideKey = 'ligata-ai:guide:' + location.host;
+  const small = () => matchMedia('(max-width:520px)').matches;
+  const calm = () => look.animations === false || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bare = url => { try { return decodeURIComponent(new URL(url, location.href).pathname).replace(/\/+$/, '').toLowerCase(); } catch { return String(url || ''); } };
+  const samePath = (a, b) => bare(a) === bare(b);
+  const elsewhere = g => !!g.url && !samePath(g.url, location.pathname);
+  const sameSite = url => { try { return new URL(url, location.href).origin === location.origin; } catch { return false; } };
+  const viewHeight = () => window.visualViewport?.height || window.innerHeight;
+  const onScreen = r => !!r && r.top >= 4 && r.bottom <= viewHeight() - 4 && r.left >= 0 && r.right <= window.innerWidth;
+  const overlaps = (r, b) => !!b && b.width > 0 && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
+  /** The chat (or the bar that stands in for it) hides this part of the page. */
+  const covered = r => overlaps(r, state.open ? panel.getBoundingClientRect() : barShown() ? bar.getBoundingClientRect() : null);
+
+  // Words are compared as the server checks them: without case, accents, spaces and invisible characters; numbers also by their digits.
+  const QUOTES = { '\u2019': "'", '\u2018': "'", '\u201a': "'", '\u2032': "'", '\u201c': '"', '\u201d': '"', '\u201e': '"', '\u00ab': '"', '\u00bb': '"', '\u2033': '"', '\u2013': '-', '\u2014': '-', '\u2010': '-', '\u2011': '-', '\u2212': '-' };
+  const INVISIBLE = /[\s\u200b-\u200d\u00ad\u2060\ufeff]/;
+  const fold = c => INVISIBLE.test(c) ? '' : QUOTES[c] || (c === '\u00df' ? 'ss' : c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  /** The page's text, folded and without spaces, with the text node and offset of every character (and the same for its digits). */
+  function pageText() {
+    const skip = 'script,style,noscript,template,textarea,select,option,[aria-hidden="true"],[hidden]';
+    const nodes = [], at = [], digitsAt = [];
+    let hay = '', digits = '';
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: node => node.nodeValue.trim() && node.parentElement && !node.parentElement.closest(skip) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const value = node.nodeValue, n = nodes.push(node) - 1;
+      for (let i = 0; i < value.length; i++) {
+        const c = value[i];
+        for (const f of fold(c)) { hay += f; at.push(n, i); }
+        if (c >= '0' && c <= '9') { digits += c; digitsAt.push(n, i); }
+      }
+    }
+    return { nodes, hay, at, digits, digitsAt };
+  }
+  /** Every place the words occur, as ranges: exactly, a number in another format, or the start or end of a long quote. */
+  function rangesOf(words) {
+    const index = pageText(), needle = [...String(words || '')].map(fold).join('');
+    if (!needle) return [];
+    const spans = [];
+    const collect = (hay, at, part) => { for (let i = hay.indexOf(part); i >= 0 && spans.length < 40; i = hay.indexOf(part, i + 1)) spans.push([at, i, i + part.length]); };
+    collect(index.hay, index.at, needle);
+    const digits = String(words).replace(/\D/g, '');
+    if (!spans.length && digits.length >= 6 && digits.length * 2 >= needle.length) {
+      collect(index.digits, index.digitsAt, digits);
+      if (!spans.length && digits.length > 9) collect(index.digits, index.digitsAt, digits.slice(-9));
+    }
+    if (!spans.length && needle.length > 30) { collect(index.hay, index.at, needle.slice(0, 24)); if (!spans.length) collect(index.hay, index.at, needle.slice(-24)); }
+    return spans.map(([at, start, end]) => {
+      const range = document.createRange();
+      range.setStart(index.nodes[at[start * 2]], at[start * 2 + 1]);
+      range.setEnd(index.nodes[at[(end - 1) * 2]], at[(end - 1) * 2 + 1] + 1);
+      return range;
+    });
+  }
+  const shown = el => el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, opacityProperty: true, visibilityProperty: true }) : !!el.getClientRects().length;
+  /**
+   * The best place for the words: one already on screen, then one in the main content (not the header, menu or footer), then the
+   * first. Words inside a closed <details> count when nothing else is visible. Null when the words are not on this page.
+   */
+  function findPlace(words) {
+    let best = null;
+    for (const range of rangesOf(words)) {
+      const common = range.commonAncestorContainer, element = common.nodeType === 1 ? common : common.parentElement;
+      if (!element) continue;
+      const closed = element.closest('details:not([open])');
+      const folded = !!closed && !closed.querySelector(':scope > summary')?.contains(element);
+      const visible = !folded && shown(element) && range.getClientRects().length > 0;
+      if (!visible && !folded) continue;
+      const r = visible ? range.getBoundingClientRect() : null;
+      const rank = !visible ? 3 : onScreen(r) && !covered(r) ? 0
+        : element.closest('main,[role=main],article') && !element.closest('header,nav,footer,[role=banner],[role=navigation],[role=contentinfo]') ? 1 : 2;
+      if (!best || rank < best.rank) best = { range, element, folded: folded ? closed : null, rank };
+      if (rank === 0) break;
+    }
+    return best && placeOf(best.element, best.range, best.folded);
+  }
+  const BLOCKY = /^(block|list-item|table-cell|flex|grid|flow-root|table)$/;
+  function placeOf(element, range = null, folded = null) {
+    let block;
+    return {
+      element, range, folded,
+      rect() {
+        const r = range?.getBoundingClientRect();
+        if (!r || !(r.width || r.height)) return element.getBoundingClientRect();
+        // Words that wrap onto another line: their paragraph (when it is not much bigger), so the highlight does not cut through the lines around them.
+        if (block === undefined) {
+          block = null;
+          const lines = [...range.getClientRects()].filter(x => x.width > 1);
+          if (lines.some(x => x.top >= lines[0].bottom - 2)) {
+            let parent = element;
+            while (parent && parent !== document.body && !BLOCKY.test(getComputedStyle(parent).display)) parent = parent.parentElement;
+            const b = parent && parent !== document.body ? parent.getBoundingClientRect() : null;
+            if (b && b.height <= Math.max(r.height * 3, 160) && b.height <= viewHeight() * 0.6) block = parent;
+          }
+        }
+        return block ? block.getBoundingClientRect() : r;
+      },
+    };
+  }
+
+  // The highlight lives in its own layer above the page and below the chat. It never catches clicks: the visitor can tap the phone number.
+  let marks = null, marking = null;
+  function markLayer() {
+    if (marks?.layer.isConnected) return marks;
+    const layer = document.createElement('div');
+    layer.id = 'ligata-ai-guide';
+    const shadow = layer.attachShadow({ mode: 'open' });
+    const color = G().color || look.accent;
+    const hex = color.replace('#', ''), light = hex.length === 6 && (parseInt(hex.slice(0, 2), 16) * 299 + parseInt(hex.slice(2, 4), 16) * 587 + parseInt(hex.slice(4, 6), 16) * 114) / 1000 > 150;
+    shadow.innerHTML = `<style>
+      :host{all:initial;position:fixed;inset:0;pointer-events:none;z-index:${Math.max(1, (Number(look.zIndex) || 2147483000) - 1)};--c:${color};--on:${G().color ? (light ? '#111' : '#fff') : look.accentText}}
+      .mark{position:fixed;left:0;top:0;box-sizing:border-box;border-radius:12px;opacity:0;transition:opacity .35s ease}.mark.on{opacity:1}
+      .ring{border:3px solid var(--c);box-shadow:0 0 0 5px color-mix(in srgb,var(--c) 22%,transparent),0 12px 32px -12px rgba(0,0,0,.4)}
+      .ring::after{content:'';position:absolute;inset:-3px;border-radius:inherit;animation:pulse 1.3s ease-out 3}
+      .spotlight{border:2px solid var(--c);border-radius:14px;box-shadow:0 0 0 200vmax rgba(10,12,20,.55)}
+      .marker{border-radius:7px;background:color-mix(in srgb,var(--c) 30%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 45%,transparent)}
+      .tag{position:absolute;left:-3px;bottom:calc(100% + 7px);max-width:min(280px,80vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 10px;border-radius:999px;background:var(--c);color:var(--on);font:600 12.5px/1.2 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:0 6px 18px -6px rgba(0,0,0,.35)}
+      .below .tag{bottom:auto;top:calc(100% + 7px)}.tag:empty{display:none}
+      @keyframes pulse{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 55%,transparent)}to{box-shadow:0 0 0 18px transparent}}
+      ${calm() ? '.mark{transition:none}.ring::after{animation:none}' : ''}</style>`;
+    document.body.append(layer);
+    return marks = { layer, shadow };
+  }
+  /** Highlights the place for the configured seconds, following it while the page scrolls or moves. */
+  function highlight(place, label) {
+    const { shadow } = markLayer();
+    if (marking) { cancelAnimationFrame(marking.frame); marking.mark.remove(); }
+    const style = G().style, mark = document.createElement('div'), tag = document.createElement('span');
+    mark.className = `mark ${style}`; tag.className = 'tag'; tag.textContent = label || '';
+    mark.append(tag); shadow.append(mark);
+    // Less room above and below than at the sides: the ring stays clear of the lines around the words.
+    const [padX, padY] = style === 'marker' ? [3, 1] : style === 'spotlight' ? [10, 8] : [8, 5];
+    const until = Date.now() + Math.max(2, +G().seconds || 5) * 1000;
+    const current = marking = { mark, frame: 0 };
+    const step = () => {
+      if (marking !== current) return;
+      const r = place.rect();
+      if (r.width || r.height) {
+        const w = Math.max(r.width + padX * 2, 28), h = Math.max(r.height + padY * 2, 24);
+        mark.style.width = `${w}px`; mark.style.height = `${h}px`;
+        mark.style.transform = `translate(${Math.round(r.left + r.width / 2 - w / 2)}px,${Math.round(r.top + r.height / 2 - h / 2)}px)`;
+        mark.classList.toggle('below', r.top < 48);
+      }
+      if (Date.now() < until) { current.frame = requestAnimationFrame(step); return; }
+      mark.classList.remove('on');
+      setTimeout(() => { mark.remove(); if (marking === current) marking = null; }, calm() ? 0 : 400);
+    };
+    step();
+    requestAnimationFrame(() => mark.classList.add('on'));
+  }
+  const settle = async () => { let last = -1, same = 0; for (let i = 0; i < 40 && same < 3; i++) { await sleep(50); same = window.scrollY === last ? same + 1 : 0; last = window.scrollY; } };
+  /** Scrolls the place to the middle of what the visitor sees (above the bar at the bottom). */
+  async function scrollToPlace(place) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = place.rect(), room = viewHeight() - (barShown() && !bar.classList.contains('top') ? bar.getBoundingClientRect().height + 20 : 0);
+      window.scrollTo({ top: Math.max(0, window.scrollY + r.top - Math.max(12, (room - r.height) / 2)), left: window.scrollX, behavior: calm() ? 'instant' : 'smooth' });
+      await settle();
+      if (onScreen(place.rect())) return;
+    }
+    // Inside a scrolling box of the page: let the browser bring it into view.
+    place.element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    await settle();
+  }
+
+  // While the chat steps aside (always on small screens, where it covers the page), a bar says what was shown and leads back.
+  const bar = $('.guide-bar');
+  let barTimer = 0, barFor = null;
+  const barShown = () => !bar.classList.contains('hidden');
+  function showBar(text, c) {
+    barFor = c?.id || null;
+    bar.innerHTML = `<div class="avatar">${botAvatar}</div><span class="gb-text" ${c ? 'data-guide="back"' : ''}>${escape(text)}</span>${c ? `<button type="button" class="chip" data-guide="back">${t.guideBack}</button>` : ''}<button type="button" class="tool" data-guide="close" title="${t.guideClose}" aria-label="${t.guideClose}">${svg('close')}</button>`;
+    bar.classList.remove('hidden', 'top');
+    host.setAttribute('guiding', '');
+    clearTimeout(barTimer);
+    barTimer = setTimeout(hideBar, (Math.max(2, +G().seconds || 5) + 12) * 1000);
+  }
+  function hideBar() { clearTimeout(barTimer); bar.classList.add('hidden'); host.removeAttribute('guiding'); }
+  /** The bar moves to the top when it would hide the place. */
+  function placeBar(place) {
+    if (!barShown()) return;
+    bar.classList.remove('top');
+    if (overlaps(place.rect(), bar.getBoundingClientRect())) bar.classList.add('top');
+  }
+  function stepAside(text, c) { input.blur(); if (state.open) open(false); showBar(text, c); }
+
+  /** The chat says what happened (once per answer); "Show again" repeats it. */
+  function guideNote(c, m, kind) {
+    if (!c || !m || c.messages.some(x => x.ref === m.at && x.event === `guide-${kind}`)) return;
+    c.messages.push({ role: 'system', event: `guide-${kind}`, label: m.guide.label, ref: m.at, at: Date.now() });
+    touch(c); persist(true);
+    if (state.open && state.view === 'chat' && c.id === state.activeId) renderLog();
+  }
+  /** Shows a place on this page: steps the chat aside where it covers the page, scrolls there (unless only highlighting is allowed) and highlights it. */
+  async function present(c, m, place, label = m?.guide?.label || '') {
+    if (m) m.guide.state = 'shown';
+    const text = t.guideShown(label);
+    if (small() && state.open) stepAside(text, c);
+    else if (!state.open && m) showBar(text, c);
+    for (let d = place.folded; d; d = d.parentElement?.closest('details:not([open])')) d.open = true;
+    if (!onScreen(place.rect()) && G().reach !== 'highlight') await scrollToPlace(place);
+    if (state.open && covered(place.rect())) stepAside(text, c);
+    placeBar(place);
+    highlight(place, label);
+    if (m) guideNote(c, m, 'shown');
+    persist(true);
+  }
+  function missing(c, m) {
+    m.guide.state = 'missing';
+    guideNote(c, m, 'missing');
+    if (!state.open) showBar(t.guideMissing(m.guide.label), c);
+  }
+
+  // Highlight only: the place is off screen, so it is highlighted as soon as the visitor scrolls to it (for two minutes).
+  let watching = null;
+  function watchFor(c, m, place) {
+    m.guide.state = 'waiting';
+    clearInterval(watching?.timer);
+    const until = Date.now() + 120000, current = watching = { m };
+    current.timer = setInterval(() => {
+      if (watching !== current || m.guide.state !== 'waiting' || Date.now() > until) { clearInterval(current.timer); if (watching === current) watching = null; return; }
+      const r = place.rect();
+      if (onScreen(r) && !covered(r)) { clearInterval(current.timer); watching = null; present(c, m, place); }
+    }, 500);
+  }
+
+  // Another page: the visitor goes there (now, or after a short countdown when the site asks nobody), and the highlight follows.
+  let travelling = null;
+  function travel(c, m, delay = 0) {
+    const g = m.guide;
+    if (!sameSite(g.url)) { missing(c, m); return; }
+    if (preview) { notice(escape(t.guidePreview(g.title || g.url))); return; }
+    g.state = 'going';
+    clearTimeout(travelling?.timer);
+    const go = () => {
+      if (g.state !== 'going') return;
+      try { sessionStorage.setItem(guideKey, JSON.stringify({ conversation: c?.id, at: m.at, url: g.url, text: g.text, label: g.label, created: Date.now() })); } catch { }
+      if (small() && state.open) open(false);
+      persist(true);
+      location.assign(g.url);
+    };
+    travelling = { m, timer: delay ? setTimeout(go, delay) : 0 };
+    if (c?.id === state.activeId && state.open) renderLog();
+    if (!delay) go();
+  }
+
+  /** After an answer that shows a place: show it at once when nothing moves, otherwise offer it, or go ahead as the site chose. */
+  function offerPlace(c, m) {
+    const g = m.guide, settingsNow = G();
+    if (elsewhere(g)) { if (settingsNow.reach !== 'pages') missing(c, m); else if (settingsNow.ask === 'never') travel(c, m, 2600); return; }
+    const place = findPlace(g.text);
+    if (!place) { missing(c, m); return; }
+    const r = place.folded ? null : place.rect();
+    g.where = !r || onScreen(r) ? 'here' : r.top > 0 ? 'below' : 'above';
+    if (r && onScreen(r) && !covered(r)) { present(c, m, place); return; }
+    if (settingsNow.reach === 'highlight') { watchFor(c, m, place); return; }
+    if (settingsNow.ask === 'always') return;
+    present(c, m, place);
+  }
+  /** The visitor's choice on the card: go there, not now, stop the countdown, or show it again. */
+  function guideChoice(action, at) {
+    if (action === 'back') { hideBar(); const c = state.conversations.find(x => x.id === barFor); if (c) state.activeId = c.id; state.view = 'chat'; open(true); return; }
+    if (action === 'close') { hideBar(); return; }
+    const c = current(), m = c?.messages.find(x => String(x.at) === at && x.guide);
+    if (!m) return;
+    const g = m.guide;
+    if (action === 'no' || action === 'cancel') { clearTimeout(travelling?.timer); travelling = null; g.state = 'declined'; persist(true); renderLog(); return; }
+    if (elsewhere(g)) { travel(c, m); return; }
+    const place = findPlace(g.text);
+    if (place) present(c, m, place); else missing(c, m);
+  }
+  /** Under the latest answer while the visitor has not chosen: what and where, Show me / Take me there and No thanks. */
+  function guideCard(c, m) {
+    const g = m.guide;
+    if (!g || !['offered', 'going', 'waiting'].includes(g.state)) return null;
+    const node = document.createElement('div');
+    if (g.state === 'waiting') {
+      node.className = 'event note';
+      node.innerHTML = `${svg('focus')}<span>${escape(t.guideWatch)}</span>`;
+      return node;
+    }
+    const away = elsewhere(g), going = g.state === 'going' && travelling?.m === m;
+    const where = away ? t.guideOnPage(g.title || g.url) : g.where === 'below' ? t.guideBelow : g.where === 'above' ? t.guideAbove : t.guideHere;
+    node.className = 'card guide';
+    node.innerHTML = `<div class="guide-row"><span class="icon">${svg(away ? 'pin' : 'focus')}</span><div><b>${escape(g.label)}</b><small>${escape(where)}</small></div></div>`
+      + (going ? `<div class="going"><span class="spinner"></span><span>${escape(t.guideOpening(g.title || g.url))}</span>${travelling.timer ? `<button type="button" class="chip ghost" data-guide="cancel" data-at="${m.at}">${t.guideCancel}</button>` : ''}</div>`
+        : `<div class="actions"><button type="button" class="chip" data-guide="go" data-at="${m.at}">${svg('arrow')}${away ? t.guideGo : t.guideShow}</button><button type="button" class="chip quiet" data-guide="no" data-at="${m.at}">${t.guideNo}</button></div>`);
+    return node;
+  }
+  /** After a page change: the place the visitor chose on the previous page, highlighted once the page has loaded. */
+  function resumePlace() {
+    let pending = null;
+    try { pending = JSON.parse(sessionStorage.getItem(guideKey) || 'null'); sessionStorage.removeItem(guideKey); } catch { }
+    if (!pending) return;
+    const c = state.conversations.find(x => x.id === pending.conversation) || null;
+    const m = c?.messages.find(x => x.role === 'assistant' && x.at === pending.at && x.guide) || null;
+    if (Date.now() - pending.created > 60000 || !samePath(pending.url, location.pathname)) { if (m?.guide.state === 'going') { m.guide.state = 'offered'; persist(); } return; }
+    const run = async () => {
+      let place = null;
+      for (let i = 0; i < 12 && !place; i++) { place = findPlace(pending.text); if (!place) await sleep(400); }
+      if (!place) { if (m) missing(c, m); else showBar(t.guideMissing(pending.label), null); return; }
+      await present(c, m, place, pending.label);
+    };
+    if (document.readyState === 'complete') setTimeout(run, 200); else window.addEventListener('load', () => setTimeout(run, 200), { once: true });
+  }
+  /** For the site's own code and the backoffice preview: show words (or an element) on this page, or on another page of this site. */
+  async function showPlace({ text = '', label = '', page = '', selector = '' } = {}) {
+    if (page && !samePath(page, location.pathname)) {
+      if (!sameSite(page)) return false;
+      try { sessionStorage.setItem(guideKey, JSON.stringify({ url: page, text, label, created: Date.now() })); } catch { }
+      location.assign(page);
+      return true;
+    }
+    const element = selector ? document.querySelector(selector) : null;
+    const place = element ? placeOf(element) : text ? findPlace(text) : null;
+    if (!place) return false;
+    await present(current(), null, place, label);
+    return true;
+  }
+
   // ---------- open / close ----------
   function open(value) {
     state.open = value;
@@ -1814,6 +2213,7 @@
     launcher.setAttribute('aria-label', value ? t.close : t.open);
     root.querySelector('.teaser')?.remove();
     if (value) {
+      hideBar();
       state.answerUnread = false;
       const c = current();
       if (c && state.view === 'chat') c.unread = 0;
@@ -1838,6 +2238,8 @@
   root.addEventListener('click', async event => {
     const agreeButton = event.target.closest('[data-agree]');
     if (agreeButton) { agree(agreeButton); return; }
+    const guideButton = event.target.closest('[data-guide]');
+    if (guideButton) { guideChoice(guideButton.dataset.guide, guideButton.dataset.at); return; }
     if (event.target.closest('[data-cookie-settings]') && !event.target.closest('.sheet')) { event.preventDefault(); window.Cookiebot?.renew?.(); return; }
     if (event.target.closest('[data-withdraw-consent]')) {
       if (confirm(t.consentWithdrawConfirm)) { withdrawConsent(); state.view = 'chat'; render(); }
@@ -1888,6 +2290,7 @@
   panel.addEventListener('dragleave', event => { if (!panel.contains(event.relatedTarget)) panel.classList.remove('dragging'); });
   panel.addEventListener('drop', event => { event.preventDefault(); panel.classList.remove('dragging'); addFiles([...event.dataTransfer.files]); });
   root.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && barShown() && !state.open) { hideBar(); return; }
     if (event.key !== 'Escape' || !state.open) return;
     if (state.sheet) { closeSheet(); if (!form.classList.contains('hidden')) input.focus({ preventScroll: true }); return; }
     open(false); launcher.focus();
@@ -1930,6 +2333,7 @@
     if (state.open || script.dataset.open === 'true') open(true);
     else setTimeout(() => refreshConfig(true), 1500); // status dot without delaying the page
     syncLoops();
+    resumePlace();
     const teaserText = look.teaser;
     if (teaserText && !state.open && !state.conversations.some(c => c.messages.length)) {
       setTimeout(() => {
@@ -1947,6 +2351,8 @@
     open: () => open(true), close: () => open(false), toggle: () => open(!state.open), reset: () => newConversation(),
     ask: text => { if (!F.ai) return; open(true); if (current()?.team) startConversation('ai'); show('chat'); if (!aiAllowed()) { state.queuedAsk = String(text || ''); return; } send(text); },
     contact: kind => { open(true); if (F.ai) { if (!current() || current().team) startConversation('ai'); show('chat'); } openSheet(kind === 'email' ? 'email' : 'chat', ''); },
+    // Highlights words (or an element) on this page, or opens another page of this site and highlights them there. Resolves to false when not found.
+    show: options => showPlace(options),
   };
   if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
 })();

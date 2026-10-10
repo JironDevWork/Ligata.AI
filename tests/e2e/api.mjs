@@ -141,7 +141,7 @@ await check('Claude looks the website up while answering, and the lookup is repe
   assert(second.status === 200 && rejected.length === 0, 'the repeated lookup is a valid conversation for the API: ' + rejected.join('; '));
   const wire = JSON.stringify(last.messages);
   assert(wire.includes('"type":"tool_use"') && wire.includes('"type":"tool_result"') && wire.includes('BLUE-HERON-42') && (await mockState()).lookups === before + 1, 'the earlier lookup and its result are sent again, without a new search');
-  assert(last.tools?.map(t => t.name).join() === 'search_website,read_pages', 'the tools are declared: ' + last.tools?.map(t => t.name));
+  assert(last.tools?.map(t => t.name).join() === 'search_website,read_pages,show_on_website', 'the tools are declared (showing the way is on by default): ' + last.tools?.map(t => t.name));
 });
 
 await check('unknown answers offer the team; the marker never shows', async () => {

@@ -88,6 +88,17 @@ public static partial class AssistantValidation
         Check(a.TeaserDelaySeconds is >= 0 and <= 120, "appearance.teaserDelaySeconds", "Teaser delay must be between 0 and 120 seconds.");
         Check(a.ZIndex is >= 1 and <= 2147483647, "appearance.zIndex", "Invalid stacking order.");
 
+        var g = s.Guide;
+        Check(g != null, "guide", "The settings for showing the way are missing.");
+        if (g != null)
+        {
+            Check(GuideSettings.Reaches.Contains(g.Reach), "guide.reach", "Choose what the assistant may do: highlight, scroll or open pages.");
+            Check(GuideSettings.Asks.Contains(g.Ask), "guide.ask", "Choose when visitors are asked first.");
+            Check(GuideSettings.Styles.Contains(g.Style), "guide.style", "Choose a highlight style.");
+            Check(g.Color == "" || Color().IsMatch(g.Color), "guide.color", "The highlight colour must be a hex value like #2f5bff, or empty for the accent colour.");
+            Check(g.Seconds is >= 2 and <= 15, "guide.seconds", "The highlight stays for 2 to 15 seconds.");
+        }
+
         Check(Modes.Contains(d.Mode), "display.mode", "Choose where the assistant appears.");
         Check(d.Paths.Count <= 50 && d.Paths.All(p => p.StartsWith('/') && p.Length <= 300 && !p.Contains("//")), "display.paths", "Paths must start with / (for example /contact/).");
         Check(SafeUrl(s.GatewayUrl, allowRelative: false) && s.GatewayUrl.Length <= 300, "gatewayUrl", "The gateway URL must be an http(s) address.");

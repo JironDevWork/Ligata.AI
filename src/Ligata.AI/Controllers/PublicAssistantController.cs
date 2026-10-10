@@ -77,7 +77,7 @@ public sealed class PublicAssistantController(AssistantStore store, AssistantEng
     public static int BaseTokens(AssistantSettings settings, AssistantStore store, FeatureState features)
     {
         var instructions = PromptBuilder.Guardrails(settings, PromptBuilder.Handoff(settings, features), lookups: true) + (KnowledgeIndex.Latest is { } snapshot ? PromptBuilder.SiteMap(snapshot) : "");
-        return (int)Math.Ceiling(instructions.Length / 3.6) + 120 + 450 + store.Knowledge().Where(k => k.Enabled && k.Pinned).Sum(k => k.Tokens);
+        return (int)Math.Ceiling(instructions.Length / 3.6) + 120 + 450 + (settings.Guide.Enabled ? 250 : 0) + store.Knowledge().Where(k => k.Enabled && k.Pinned).Sum(k => k.Tokens);
     }
 
     public static object Limits(GatewayStatus? status, string engine = "gpu")

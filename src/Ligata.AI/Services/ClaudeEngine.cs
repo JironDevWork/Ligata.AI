@@ -200,7 +200,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
     private static string ImageType(string data) => data.StartsWith("iVBOR") ? "image/png" : data.StartsWith("UklGR") ? "image/webp" : data.StartsWith("R0lGOD") ? "image/gif" : "image/jpeg";
 
     /// <summary>The lookup tools in Claude's format (the same names, descriptions and schemas as on the GPU).</summary>
-    public static List<ToolUnion> Tools() => Lookups.Tools.Select(definition =>
+    public static List<ToolUnion> Tools(IReadOnlyList<object>? definitions = null) => (definitions ?? Lookups.Tools).Select(definition =>
     {
         var json = JsonSerializer.SerializeToElement(definition);
         var parameters = json.GetProperty("parameters");
@@ -278,7 +278,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
         var limit = Math.Min(b.ContextLimit, O.MaxContextTokens);
         var level = Level(b.Effort);
         var conversation = Messages(request, lookups);
-        var tools = lookups != null ? Tools() : null;
+        var tools = lookups != null ? Tools(lookups.Definitions) : null;
         var system = new List<TextBlockParam>
         {
             new() { Text = stable, CacheControl = new CacheControlEphemeral() },
@@ -337,7 +337,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
         EventStream? sse = null;
         long prompt = 0, output = 0, cached = 0, firstToken = 0;
         string? stopReason = null;
-        bool thinking = false, finished = false;
+        bool thinking = false, finished = false, offered = false;
         var answer = new StringBuilder();
         var looking = lookups?.Begin();
         try
@@ -437,6 +437,8 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
                     var results = looking.Round(asked);
                     if (asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).ToList() is { Count: > 0 } kept) outcome?.Lookups.Add(kept);
                     await sse.Send("lookup", new { calls = asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).Select(c => new { name = c.Name, arguments = c.Arguments }) });
+                    // A place to show the visitor, checked against this website's pages.
+                    foreach (var place in looking.TakePlaces()) { await sse.Send("guide", place); offered = true; }
                     conversation.Add(new() { Role = Role.Assistant, Content = blocks });
                     conversation.Add(new() { Role = Role.User, Content = calls.Select((c, i) => (ContentBlockParam)new ToolResultBlockParam { ToolUseID = c.Id, Content = results[i] }).ToList() });
                     continue;
@@ -454,7 +456,8 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
                 return;
             }
             // At high effort Claude sometimes ends with everything in its thinking and nothing for the visitor.
-            if (answer.Length == 0 && stopReason is "end_turn" or "stop_sequence")
+            // An answer that only shows a place is complete: the widget says it for the assistant.
+            if (answer.Length == 0 && stopReason is "end_turn" or "stop_sequence" && !offered)
             {
                 if (countStats) store.Count(s => s.Failed++);
                 if (outcome != null) outcome.Error = "empty_answer";

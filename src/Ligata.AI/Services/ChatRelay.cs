@@ -15,8 +15,9 @@ public sealed record ChatLookup(string Name, JsonElement Arguments);
 /// <summary>
 /// Lookups: the rounds of lookups before this answer. The browser keeps only the calls; their results are looked up
 /// again on this server for every request, so the model sees the same results and the browser cannot change them.
+/// Guide: what became of the place the answer showed (offered, shown, declined or missing; see Lookups.Outcomes).
 /// </summary>
-public sealed record ChatMessage(string Role, string Content, List<ChatAttachment>? Attachments, List<List<ChatLookup>>? Lookups = null);
+public sealed record ChatMessage(string Role, string Content, List<ChatAttachment>? Attachments, List<List<ChatLookup>>? Lookups = null, string? Guide = null);
 /// <summary>
 /// Consent is the id of the visitor's recorded consent (LigataAI:Privacy:RequireConsent). Summary replaces the earlier messages of a long
 /// conversation; Compact asks for that summary instead of an answer (the widget sends it before the conversation would no longer fit).
@@ -61,6 +62,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     /// <summary>The lookups kept with an answer, checked: the browser sends them back with every question.</summary>
     public static void CheckLookups(ChatMessage message)
     {
+        if (message.Guide != null && (message.Role != "assistant" || !Lookups.Outcomes.Contains(message.Guide))) throw new ChatValidationException("invalid_messages", "Invalid conversation.");
         if (message.Lookups is not { Count: > 0 } rounds) return;
         if (message.Role != "assistant" || rounds.Count > Lookups.MaxRecordedRounds || rounds.Any(r => r is not { Count: > 0 and <= Lookups.MaxRecordedCalls } || !r.All(Lookups.Valid)))
             throw new ChatValidationException("invalid_messages", "Invalid conversation.");
@@ -79,10 +81,11 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     public static IEnumerable<(string Id, ChatLookup Call, string Result)[]> Replay(ChatMessage message, int index, Lookups? lookups, ReplayBudget? budget = null)
     {
         if (lookups == null || message.Lookups is not { Count: > 0 } rounds || (message.Content ?? "").Replace(PromptBuilder.TeamMarker, "").Trim().Length == 0) yield break;
-        var answer = lookups.Begin();
+        var answer = lookups.Again(message.Guide);
         for (var r = 0; r < rounds.Count; r++)
         {
-            var round = rounds[r];
+            var round = rounds[r].Where(call => lookups.Declares(call.Name)).ToList();
+            if (round.Count == 0) continue;
             List<string> results;
             if (budget is { Left: <= 0 }) results = round.Select(_ => NotRepeated).ToList();
             else
@@ -161,7 +164,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     {
         var team = PromptBuilder.Handoff(settings, features);
         var snapshot = await index.SnapshotAsync(settings.Knowledge, token);
-        var lookups = engines.For(settings) == EngineSelector.Api || await gateway.SupportsToolsAsync(token) ? new Lookups(snapshot, team, snapshot.CultureOf(pagePath)) : null;
+        var lookups = engines.For(settings) == EngineSelector.Api || await gateway.SupportsToolsAsync(token) ? new Lookups(snapshot, team, snapshot.CultureOf(pagePath), settings.Guide, string.IsNullOrWhiteSpace(pagePath) ? null : pagePath) : null;
         var pinned = store.PinnedKnowledge();
         var stable = lookups != null
             ? PromptBuilder.Guardrails(settings, team, lookups: true) + PromptBuilder.Knowledge(pinned) + PromptBuilder.SiteMap(snapshot)
@@ -214,7 +217,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             // A summary keeps the site's thinking setting and tools (declared, not callable): the prompt then matches the cached conversation exactly.
             messages, visitor, maxTokens = compact ? SummaryTokens + (b.Thinking ? ThinkingRoom : 0) : MaxTokens(b), temperature = compact ? Math.Min(b.Temperature, 0.3) : b.Temperature,
             thinking = b.Thinking, contextLimit = b.ContextLimit,
-            tools = lookups != null ? Lookups.Tools : null, toolChoice = lookups == null ? null : compact ? "none" : lookups.Touches(request.Messages[^1].Content ?? "", request.Messages.SkipLast(1).Select(m => m.Content ?? "").Append(request.Summary ?? "")) ? "required" : null, lookupRounds = Lookups.MaxRounds,
+            tools = lookups?.Definitions, toolChoice = lookups == null ? null : compact ? "none" : lookups.Touches(request.Messages[^1].Content ?? "", request.Messages.SkipLast(1).Select(m => m.Content ?? "").Append(request.Summary ?? "")) ? "required" : null, lookupRounds = Lookups.MaxRounds,
         };
         HttpResponseMessage response;
         try { response = await gateway.ChatAsync(body, token); }
@@ -309,6 +312,8 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
         if (valid.Count > 0) outcome?.Lookups.Add(valid);
         var kept = valid.Select(c => new { name = c.Name, arguments = c.Arguments });
         await http.Response.WriteAsync($"event: lookup\ndata: {JsonSerializer.Serialize(new { calls = kept }, AssistantJson.Options)}\n\n", token);
+        // A place to show the visitor, checked here: the browser shows only pages of this website.
+        foreach (var place in looking?.TakePlaces() ?? []) await http.Response.WriteAsync($"event: guide\ndata: {JsonSerializer.Serialize(place, AssistantJson.Options)}\n\n", token);
         await http.Response.Body.FlushAsync(token);
         try { await gateway.ToolResultsAsync(round, calls.Select((c, i) => new { id = c.Id, content = results[i] }).ToList(), token); }
         catch (GatewayException e) { logger.LogWarning("Ligata AI could not return lookup results to the gateway ({Code}).", e.Code); }

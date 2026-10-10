@@ -264,6 +264,7 @@ class LigataAIHistory extends UmbElementMixin(LitElement) {
     const args = call.arguments || {};
     if (call.name === 'search_website') return html`<span class="lookup" title="The assistant searched your website">${icon('search')}<span>Searched “${args.query || ''}”</span></span>`;
     if (call.name === 'read_pages') return html`<span class="lookup" title="The assistant read these pages or documents">${icon('page')}<span>Read ${(args.pages || []).join(', ')}</span></span>`;
+    if (call.name === 'show_on_website') return html`<span class="lookup" title=${`The assistant showed the visitor where this is: “${args.text || ''}”`}>${icon('pin')}<span>Showed “${args.label || args.text || ''}”${args.page ? ` on ${args.page}` : ''}</span></span>`;
     return html`<span class="lookup">${icon('search')}<span>${call.name}</span></span>`;
   }
 

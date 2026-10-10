@@ -51,6 +51,15 @@ export function startMockLlm() {
         }
         // With tools, "look up X" (or "phone") calls search_website, split into pieces like llama-server streams it; a tool result is
         // answered from its text. "look up forever" keeps calling. tool_choice none never calls.
+        // "show me X" shows X on the visitor's page (when the website declares show_on_website).
+        const showing = body.tools?.some(t => t.function?.name === 'show_on_website') && body.tool_choice !== 'none' && last?.role === 'user' && /show me (.+)/i.exec(asked);
+        if (showing) {
+          const json = JSON.stringify({ text: showing[1].trim(), label: showing[1].trim() });
+          response.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call0s' + state.requests, type: 'function', function: { name: 'show_on_website', arguments: json } }] } }] })}\n\n`);
+          response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 10, completion_tokens: 8 }, timings: { prompt_n: 10, cache_n: 0, predicted_n: 8 } })}\n\n`);
+          response.end('data: [DONE]\n\n');
+          return;
+        }
         const lookup = body.tools && body.tool_choice !== 'none' && last?.role === 'user' && /look up|phone|telefon/i.test(asked);
         if (lookup || (body.tools && body.tool_choice !== 'none' && last?.role === 'tool' && /look up forever/i.test(JSON.stringify(body.messages)))) {
           const query = /look up (.+)/i.exec(asked)?.[1] || 'phone';

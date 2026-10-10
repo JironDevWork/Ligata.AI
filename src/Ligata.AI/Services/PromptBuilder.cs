@@ -54,6 +54,7 @@ public static class PromptBuilder
             text.AppendLine("Base your answer on what you found and on the knowledge below. Never invent prices, dates, availability, contact details, policies or promises. Do not mention searching, tools or results to the visitor; just answer.");
         }
         else text.AppendLine("Use the knowledge below as your source of truth. Never invent prices, dates, availability, contact details, policies or promises.");
+        if (lookups && settings.Guide is { Enabled: true } guide) text.Append(Guide(guide));
         var unknown = lookups ? "neither the knowledge nor your lookups answer it" : "the knowledge does not answer it";
         text.AppendLine(team
             ? $"When a question concerns {site}, its services or the visitor's own business with it, but {unknown} (for example a service, price, policy, person or order that is not listed), or when the visitor asks to talk to a person, say so in one short sentence, offer to connect them with the team, and end your reply with {TeamMarker} on a line of its own. The website turns {TeamMarker} into buttons to reach the team. Use it only in these cases, never mention it, and do not ask for contact details yourself."
@@ -72,6 +73,24 @@ public static class PromptBuilder
         // With lookups and a handoff, the widget shows these as buttons; listed here they kept the model from looking up the contact page.
         if ((i.FallbackEmail != "" || i.FallbackUrl != "") && !(lookups && team)) text.AppendLine($"Contact options to suggest: {string.Join(", ", new[] { i.FallbackEmail, i.FallbackUrl }.Where(x => x != ""))}.");
         if (!string.IsNullOrWhiteSpace(b.Instructions)) text.AppendLine().AppendLine("# Instructions from the website owner").AppendLine(b.Instructions.Trim());
+        return text.ToString();
+    }
+
+    /// <summary>When and how to show visitors where something is (<see cref="Lookups.Show"/>), as far as the site allows.</summary>
+    public static string Guide(GuideSettings guide)
+    {
+        var text = new StringBuilder();
+        var what = guide.Pages ? "the website opens the page if needed, scrolls to the words you give and highlights them for a few seconds"
+            : guide.Reach == "scroll" ? "the website scrolls to the words you give on the page the visitor is on and highlights them for a few seconds (other pages cannot be shown: link to them)"
+            : "the website highlights the words you give for a few seconds, where they are on the page the visitor is on (it does not scroll, and other pages cannot be shown: say where it is or link to the page)";
+        text.AppendLine($"You can also show visitors where something is with {Lookups.Show}: {what}. Use it when the visitor asks where something is, cannot find something, asks you to show or take them there, or wants to see it on the page rather than in the chat; not for every answer.");
+        text.AppendLine("Give text copied exactly from the page, short and distinctive (for example the phone number itself or a heading), and label: what it is, in the visitor's language. " + (guide.Pages
+            ? "Give page as the url from the list of pages, or leave it out for the page the visitor is on. If you do not know the page's exact words yet, look them up first."
+            : "If you do not know the page's exact words yet, read the page first."));
+        text.AppendLine(guide.Ask == "never"
+            ? "The website shows it right after your answer, so just say briefly where it is."
+            : "The website asks the visitor with a button before it changes the page or scrolls, so do not ask yourself whether you should show it and do not tell them to click anything; just say briefly where it is.");
+        text.AppendLine("If the visitor does not want the information in the chat, do not write it there; show it instead.");
         return text.ToString();
     }
 

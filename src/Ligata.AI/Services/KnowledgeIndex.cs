@@ -250,9 +250,11 @@ public sealed class KnowledgeSnapshot
 /// <param name="team">The model may offer the team: every result ends with a reminder, because the results now stand between
 /// the rule in the system prompt and the answer (the model follows a nearby reminder more reliably).</param>
 /// <param name="culture">The language of the page the visitor is on (multilingual websites): its pages win ties in search results.</param>
-public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, string? culture = null)
+/// <param name="guide">The site lets the assistant show visitors where something is (<see cref="Show"/>).</param>
+/// <param name="page">The path of the page the visitor is on: what is shown there needs no other page.</param>
+public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, string? culture = null, GuideSettings? guide = null, string? page = null)
 {
-    public const string Search = "search_website", Read = "read_pages";
+    public const string Search = "search_website", Read = "read_pages", Show = "show_on_website";
     public const int MaxRounds = 3, MaxCalls = 6, Characters = 24_000, SearchCharacters = 6_000, PageCharacters = 12_000;
     /// <summary>What lookups may add to one answer, in tokens. The widget keeps this free before it summarizes.</summary>
     public const int Tokens = 7_000;
@@ -278,10 +280,46 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
         },
     ];
 
-    /// <summary>Calls the browser may keep and send back: known tools with small object arguments.</summary>
-    public static bool Valid(ChatLookup call) => call.Name is Search or Read && call.Arguments.ValueKind == JsonValueKind.Object && call.Arguments.GetRawText().Length <= 1000;
+    /// <summary>
+    /// Shows the visitor a place on the website. Declared only when the site allows it; the description says how far it reaches,
+    /// so the model does not offer other pages where only the current one may be shown.
+    /// </summary>
+    public static object ShowTool(GuideSettings guide) => new
+    {
+        name = Show,
+        description = guide.Pages
+            ? "Shows the visitor where something is on this website: the website opens the page if needed, scrolls to the given words and highlights them for a few seconds. It never clicks or fills in anything."
+            : guide.Reach == "scroll"
+                ? "Shows the visitor where something is on the page they are on: the website scrolls to the given words and highlights them for a few seconds. Other pages cannot be shown; link to them instead."
+                : "Highlights something on the page the visitor is on for a few seconds, where it is (the page does not scroll). Other pages cannot be shown; link to them instead.",
+        parameters = new
+        {
+            type = "object",
+            properties = new
+            {
+                page = new { type = "string", description = guide.Pages ? "Url of the page from the list of pages, for example /contact/. Leave it out for the page the visitor is on." : "Leave it out: only the page the visitor is on can be shown." },
+                text = new { type = "string", description = "Words exactly as they appear on that page, short and distinctive, for example the phone number itself or a heading (at most about 80 characters)." },
+                label = new { type = "string", description = "What it is, in the visitor's language, in one to four words, for example: Phone number" },
+            },
+            required = new[] { "text", "label" },
+        },
+    };
 
-    public Answer Begin() => new(snapshot, team, culture);
+    /// <summary>The tools of this site: the lookups, and showing the way when the site allows it.</summary>
+    public IReadOnlyList<object> Definitions => guide is { Enabled: true } shown ? [.. Tools, ShowTool(shown)] : Tools;
+
+    /// <summary>The tool is declared to the model now. Earlier calls to a tool the site has since switched off are not repeated: the API refuses calls to undeclared tools.</summary>
+    public bool Declares(string name) => name is Search or Read || (name == Show && guide is { Enabled: true });
+
+    /// <summary>Calls the browser may keep and send back: known tools with small object arguments.</summary>
+    public static bool Valid(ChatLookup call) => call.Name is Search or Read or Show && call.Arguments.ValueKind == JsonValueKind.Object && call.Arguments.GetRawText().Length <= 1000;
+
+    /// <summary>What became of a place shown with an earlier answer, as the browser reports it.</summary>
+    public static readonly string[] Outcomes = ["offered", "shown", "declined", "missing"];
+
+    public Answer Begin() => new(snapshot, team, culture, guide, page);
+    /// <summary>An earlier answer's lookups, repeated. <paramref name="outcome"/> is what became of the place it showed (see <see cref="Outcomes"/>).</summary>
+    public Answer Again(string? outcome) => new(snapshot, team, culture, guide, page, outcome ?? "offered");
 
     /// <summary>
     /// The question touches the website's content (its words occur in it): the GPU model must then look something up
@@ -307,10 +345,18 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
     /// <summary>Added to every result when the model may offer the team.</summary>
     public const string TeamReminder = "\n\n(If this does not answer the visitor's question, say so in one short sentence, offer the team and end your reply with " + PromptBuilder.TeamMarker + ".)";
 
+    /// <summary>A place the widget shows the visitor: Url and Title are empty for the page the visitor is on.</summary>
+    public sealed record Place(string Url, string Title, string Text, string Label);
+
     /// <summary>The lookups of one answer, in order. Repeating the same calls on the same content gives the same results.</summary>
-    public sealed class Answer(KnowledgeSnapshot snapshot, bool team, string? culture = null)
+    /// <param name="outcome">Set when an earlier answer is repeated: what became of the place it showed (the browser reports it).</param>
+    public sealed class Answer(KnowledgeSnapshot snapshot, bool team, string? culture = null, GuideSettings? guide = null, string? page = null, string? outcome = null)
     {
-        private int used, rounds;
+        private int used, rounds, places;
+        private readonly List<Place> shown = [];
+
+        /// <summary>The places this answer shows that the browser has not been told about yet (at most one per answer).</summary>
+        public List<Place> TakePlaces() { var taken = shown.ToList(); shown.Clear(); return taken; }
 
         public List<string> Round(IReadOnlyList<ChatLookup> calls)
         {
@@ -322,6 +368,7 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
         {
             if (rounds > MaxRounds || used >= Characters) return "No more lookups are possible for this question. Answer with what you found, or say that you could not find it.";
             if (index >= MaxCalls) return $"Too many lookups at once; use at most {MaxCalls}.";
+            if (call.Name == Show && guide is { Enabled: true }) return Guide(call.Arguments);
             var text = call.Name switch
             {
                 Search => Remember("s" + culture + "\u0001" + Text(call.Arguments, "query"), () => SearchText(Text(call.Arguments, "query"))),
@@ -388,6 +435,95 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
             }
             return text.ToString().TrimEnd();
         }
+
+        /// <summary>
+        /// Checks a place the model wants to show and tells it what happens. Another page must be a page of the list (never a url
+        /// from a page's text) and contain the words, so visitors are not taken to a page where nothing can be highlighted. On the
+        /// page the visitor is on the words may also be in the header or footer, which are not looked up: the browser checks them.
+        /// </summary>
+        private string Guide(JsonElement arguments)
+        {
+            var words = Words.Clean(Text(arguments, "text"), 200);
+            var label = Words.Clean(Text(arguments, "label"), 60);
+            var target = Text(arguments, "page");
+            if (words.Length == 0) return "Give text: the words on the page to point at, exactly as they appear there.";
+            if (label.Length == 0) label = words.Length > 40 ? words[..40].TrimEnd() + "…" : words;
+            KnowledgeDocument? document = null;
+            var here = target.Length == 0 || (page != null && Words.SamePath(target, page));
+            if (!here)
+            {
+                document = snapshot.Find(target);
+                if (document == null || document.Url == "") return $"Not found: {target}. Use a page url from the list of pages, or leave page out for the page the visitor is on.";
+                here = page != null && Words.SamePath(document.Url, page);
+            }
+            if (!here && !guide!.Pages) return $"Only things on the page the visitor is on can be shown{(page != null ? $" ({page})" : "")}. Link to other pages instead.";
+            if (!here && !Words.Contains(document!.Text, words)) return $"“{words}” is not on {document.Title} ({document.Url}). Copy a short piece exactly as it appears in your lookup results (read the page first if needed) and try again.";
+            if (places++ > 0) return "Only one place can be shown per answer.";
+            var where = here ? "the page the visitor is on" : $"{document!.Title} ({document.Url})";
+            if (outcome != null) return outcome switch
+            {
+                "shown" => $"Shown: the visitor saw “{label}” highlighted on {where}.",
+                "declined" => $"The visitor chose not to be shown “{label}”.",
+                "missing" => $"The website could not find “{words}” on {where}; nothing was highlighted.",
+                _ => $"Offered to show “{label}” on {where}; the visitor has not chosen yet.",
+            };
+            shown.Add(new Place(here ? "" : document!.Url, here ? "" : document!.Title, words, label));
+            return (guide!.Ask == "never"
+                ? $"Done: right after your answer the website shows the visitor “{label}” on {where} and highlights it."
+                : $"Done: the website offers to show the visitor “{label}” on {where} and highlights it there.")
+                + " Now answer briefly, saying where it is. Do not ask whether to show it and do not mention buttons or tools.";
+        }
+    }
+}
+
+/// <summary>Words to show on a page, compared as the widget finds them: without case, accents and spaces; numbers by their digits.</summary>
+public static class Words
+{
+    /// <summary>Lower case, without accents, spaces and invisible characters; typographic quotes and dashes as plain ones.</summary>
+    public static string Squeeze(string text)
+    {
+        var folded = KnowledgeSnapshot.Fold(text);
+        var squeezed = new StringBuilder(folded.Length);
+        foreach (var c in folded)
+        {
+            if (char.IsWhiteSpace(c) || c is '​' or '‌' or '‍' or '­' or '⁠' or '﻿') continue;
+            squeezed.Append(c switch { '’' or '‘' or '‚' or '′' => '\'', '“' or '”' or '„' or '«' or '»' or '″' => '"', '–' or '—' or '‐' or '‑' or '−' => '-', _ => c });
+        }
+        return squeezed.ToString();
+    }
+
+    public static string Digits(string text) => new([.. text.Where(char.IsAsciiDigit)]);
+
+    /// <summary>
+    /// The words occur in the text. A number with at least six digits also matches in another format (+41 44 … for 044 …): its
+    /// digits, or its last nine digits when the country code or trunk zero differ.
+    /// </summary>
+    public static bool Contains(string text, string words)
+    {
+        var needle = Squeeze(words);
+        if (needle.Length == 0) return false;
+        if (Squeeze(text).Contains(needle, StringComparison.Ordinal)) return true;
+        var digits = Digits(words);
+        if (digits.Length < 6 || digits.Length * 2 < needle.Length) return false;
+        var all = Digits(text);
+        return all.Contains(digits, StringComparison.Ordinal) || (digits.Length > 9 && all.Contains(digits[^9..], StringComparison.Ordinal));
+    }
+
+    /// <summary>Two paths of the same page: without domain, query, case and trailing slash.</summary>
+    public static bool SamePath(string a, string b)
+    {
+        static string Bare(string url)
+        {
+            var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.AbsolutePath : url.Split('?', '#')[0];
+            return Uri.UnescapeDataString(path).Trim().TrimEnd('/').ToLowerInvariant();
+        }
+        return Bare(a) == Bare(b);
+    }
+
+    public static string Clean(string value, int max)
+    {
+        var text = new string([.. value.Where(c => !char.IsControl(c))]).Trim();
+        return text.Length > max ? text[..max].TrimEnd() : text;
     }
 }
 
