@@ -436,7 +436,7 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
                 if (stopReason == "tool_use" && calls.Count > 0 && looking != null && round + 1 < Lookups.MaxRecordedRounds)
                 {
                     var asked = calls.Select(c => new ChatLookup(c.Name, Parse(c.Json))).ToList();
-                    var results = looking.Round(asked);
+                    var results = looking.Round(asked, answered: answer.Length >= 20);
                     if (asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).ToList() is { Count: > 0 } kept) outcome?.Lookups.Add(kept);
                     await sse.Send("lookup", new { calls = asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).Select(c => new { name = c.Name, arguments = c.Arguments }) });
                     // A place to show the visitor, checked against this website's pages.

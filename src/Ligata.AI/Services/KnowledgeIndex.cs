@@ -353,14 +353,18 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
     public sealed class Answer(KnowledgeSnapshot snapshot, bool team, string? culture = null, GuideSettings? guide = null, string? page = null, string? outcome = null)
     {
         private int used, rounds, places;
+        private bool complete;
         private readonly List<Place> shown = [];
 
         /// <summary>The places this answer shows that the browser has not been told about yet (at most one per answer).</summary>
         public List<Place> TakePlaces() { var taken = shown.ToList(); shown.Clear(); return taken; }
 
-        public List<string> Round(IReadOnlyList<ChatLookup> calls)
+        /// <param name="answered">The model already wrote an answer before these calls. When they only show a place, the answer is complete:
+        /// told to finish it, a smaller model wrote the same answer a second time.</param>
+        public List<string> Round(IReadOnlyList<ChatLookup> calls, bool answered = false)
         {
             rounds++;
+            complete = answered && calls.Count > 0 && calls.All(c => c.Name == Show);
             return calls.Select((call, i) => Run(call, i)).ToList();
         }
 
@@ -471,7 +475,9 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
             return (guide!.Ask == "never"
                 ? $"Done: right after your answer the website shows the visitor “{label}” on {where} and highlights it."
                 : $"Offered: under your answer the visitor gets a button to be shown “{label}” on {where}. Nothing has moved or been highlighted yet.")
-                + " Finish your answer briefly, saying where it is, without repeating what you already wrote. Do not ask whether to show it and do not mention buttons or tools.";
+                + (complete
+                    ? " Your answer above is complete: do not write anything more."
+                    : " Finish your answer briefly, saying where it is, without repeating what you already wrote. Do not ask whether to show it and do not mention buttons or tools.");
         }
     }
 }

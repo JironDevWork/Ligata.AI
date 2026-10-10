@@ -256,7 +256,8 @@ await check('the assistant shows the way on the GPU too: what is on screen is hi
   await widget().locator('.bubble.streaming').waitFor({ state: 'detached', timeout: answerTimeout });
   await site.locator('#ligata-ai-guide .mark').waitFor({ timeout: 5000 });
   const parts = await widget().locator('.msg.bot:not(.guide-note) .bubble').nth(answers).locator('p').allInnerTexts();
-  assert(parts.length >= 2 && parts[0] === 'It is on this page.', 'the text before and after the lookup are separate paragraphs: ' + JSON.stringify(parts));
+  assert(parts.length >= 2 && parts[0] === 'It is right here on this page.', 'the text before and after the lookup are separate paragraphs: ' + JSON.stringify(parts));
+  assert(parts.slice(1).join(' ').includes('Your answer above is complete'), 'after a written answer, showing the place ends it: ' + parts.slice(1).join(' ').slice(-300));
   assert((await widget().locator('.msg.guide-note').last().innerText()).includes(heading), 'the chat says what it highlighted');
 });
 

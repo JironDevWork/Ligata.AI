@@ -228,6 +228,12 @@ await check('the site\'s own code can show the way: LigataAI.show()', async () =
   assert(await desktop.evaluate(() => window.LigataAI.show({ text: 'nowhere at all 123' })) === false, 'not found is false');
 });
 
+await check('the page\'s own title wins over the menu item of the same name', async () => {
+  assert(new URL(desktop.url()).pathname.startsWith('/contact'), 'on the contact page');
+  assert(await desktop.evaluate(() => window.LigataAI.show({ text: 'Contact', label: 'Title' })) === true, 'found');
+  await d.marks('Contact');
+});
+
 // ---------- a visitor on a phone ----------
 const phoneContext = await browser.newContext({ ...devices['iPhone 13'], defaultBrowserType: undefined });
 const phone = await phoneContext.newPage();

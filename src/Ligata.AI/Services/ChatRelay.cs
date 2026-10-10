@@ -241,6 +241,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
             string? currentEvent = null;
             bool finished = false, looked = false;
             var tail = '\0';
+            var written = 0;
             var answer = new StringBuilder();
             var looking = lookups?.Begin();
             try
@@ -253,7 +254,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                     if (currentEvent == "tool_calls")
                     {
                         // The model looks something up: answered here, never passed to the browser as is.
-                        if (line.StartsWith("data: ")) { await LookupAsync(http, line[6..], looking, outcome, token); looked = true; }
+                        if (line.StartsWith("data: ")) { await LookupAsync(http, line[6..], looking, outcome, written >= 20, token); looked = true; }
                         else if (line.Length == 0) currentEvent = null;
                         continue;
                     }
@@ -270,7 +271,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                             }
                             looked = false;
                         }
-                        if (piece.Length > 0) tail = piece[^1];
+                        if (piece.Length > 0) { tail = piece[^1]; written += piece.Length; }
                         if (counting || outcome != null)
                         {
                             if (answer.Length < 200_000) answer.Append(piece);
@@ -311,7 +312,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
     /// which continues the answer; the browser learns what was looked up ("lookup" event), keeps the calls and sends them back
     /// with the next question.
     /// </summary>
-    private async Task LookupAsync(HttpContext http, string json, Lookups.Answer? looking, ChatOutcome? outcome, CancellationToken token)
+    private async Task LookupAsync(HttpContext http, string json, Lookups.Answer? looking, ChatOutcome? outcome, bool answered, CancellationToken token)
     {
         string round;
         List<(string Id, ChatLookup Call)> calls;
@@ -323,7 +324,7 @@ public sealed class ChatRelay(AssistantStore store, GatewayClient gateway, Claud
                 .Select(c => (c.GetProperty("id").GetString() ?? "", new ChatLookup(c.GetProperty("name").GetString() ?? "", c.GetProperty("arguments").Clone()))).ToList();
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException) { logger.LogWarning("Ligata AI received a malformed lookup from the gateway."); return; }
-        var results = looking?.Round(calls.Select(c => c.Call).ToList()) ?? calls.Select(_ => "Lookups are not available.").ToList();
+        var results = looking?.Round(calls.Select(c => c.Call).ToList(), answered) ?? calls.Select(_ => "Lookups are not available.").ToList();
         var valid = calls.Select(c => c.Call).Where(Lookups.Valid).ToList();
         if (valid.Count > 0) outcome?.Lookups.Add(valid);
         var kept = valid.Select(c => new { name = c.Name, arguments = c.Arguments });

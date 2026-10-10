@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 261 assertions
+# Package domain and security checks (no database): 262 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 411 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 412 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -114,7 +114,7 @@ The website assistant points at places: the strict mock Anthropic API plays a sc
 node tests/e2e/mock-anthropic.mjs                       # → :1230
 $env:CONFIG_KEY='0'; $env:LigataAI__Mode='api'; $env:LigataAI__Claude__ApiKey='sk-ant-mock-0000000000000000'; $env:LigataAI__Claude__BaseUrl='http://127.0.0.1:1230'
 bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e; node guide.mjs                            # 18 checks
+cd tests/e2e; node guide.mjs                            # 19 checks
 ```
 
 | Check | What is verified |

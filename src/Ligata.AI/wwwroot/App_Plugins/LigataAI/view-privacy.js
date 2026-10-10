@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number } from './ui.js?v=0.12.1';
+import { icon, number } from './ui.js?v=0.12.2';
 
 const categories = { preferences: 'Preferences', statistics: 'Statistics', marketing: 'Marketing' };
 const regionName = code => { try { return /^[a-z]{2}$/i.test(code) ? new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) : code; } catch { return code; } };

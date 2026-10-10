@@ -1958,7 +1958,9 @@
       const visible = !folded && shown(element) && range.getClientRects().length > 0;
       if (!visible && !folded) continue;
       const r = visible ? range.getBoundingClientRect() : null;
-      const chrome = !!element.closest('header,nav,footer,[role=banner],[role=navigation],[role=contentinfo]') || !element.closest('main,[role=main],article');
+      // The page's header, menu and footer; a header inside the content (the page's own title block) is content, a menu never is.
+      const content = element.closest('main,[role=main],article'), frame = element.closest('header,footer,nav,[role=banner],[role=navigation],[role=contentinfo]');
+      const chrome = !content || (!!frame && (!content.contains(frame) || frame.matches('nav,[role=navigation]')));
       const seen = visible && onScreen(r) && !covered(r);
       const rank = !visible ? 4 : !chrome ? (seen ? 0 : 1) : seen ? 2 : 3;
       if (!best || rank < best.rank) best = { range, element, folded: folded ? closed : null, rank };

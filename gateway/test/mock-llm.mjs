@@ -56,7 +56,7 @@ export function startMockLlm() {
         if (showing) {
           const json = JSON.stringify({ text: showing[1].trim(), label: showing[1].trim() });
           // Some text before the call, as Gemma often writes: the website keeps it apart from the text after the call.
-          response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'It is on this page.' } }] })}\n\n`);
+          response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: 'It is right here on this page.' } }] })}\n\n`);
           response.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call0s' + state.requests, type: 'function', function: { name: 'show_on_website', arguments: json } }] } }] })}\n\n`);
           response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 10, completion_tokens: 8 }, timings: { prompt_n: 10, cache_n: 0, predicted_n: 8 } })}\n\n`);
           response.end('data: [DONE]\n\n');
