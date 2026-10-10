@@ -141,6 +141,9 @@ The chat sets no cookies. So that your conversations remain when you move betwee
 <!-- if historyany -->
 - **`ligata-ai:forget:` followed by our domain name:** only if you delete a conversation while our server cannot be reached: its key, so the deletion is sent again. Removed as soon as our server has deleted the conversation.
 <!-- endif -->
+<!-- if guidepages -->
+- **`ligata-ai:guide:` followed by our domain name** (this tab's session storage): only when you let the assistant take you to another page: that page, the words to highlight there and the conversation they belong to, so the place can be shown once the page has loaded. Read once and removed on the next page; never used after one minute.
+<!-- endif -->
 
 This storage is strictly necessary for the chat you expressly want to use (section 25(2) no. 2 TDDDG).<!-- if historyany --> This includes the key of a conversation we keep: it is only created when you ask a question, connects your questions to that conversation and lets you delete our copy in the chat. After an objection, no new keys are created.<!-- endif --> You can delete the data at any time, in the chat with <!-- if history -->"Delete conversation" or <!-- endif -->"Remove from this device" or in your browser settings.
 

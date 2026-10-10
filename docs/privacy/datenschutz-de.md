@@ -142,6 +142,9 @@ Der Chat setzt keine Cookies. Damit Ihre Gespräche beim Wechsel zwischen Seiten
 <!-- if historyany -->
 - **`ligata-ai:forget:` und der Name unserer Domain:** nur wenn Sie ein Gespräch löschen, während unser Server nicht erreichbar ist: dessen Schlüssel, damit die Löschung erneut gesendet wird. Wird entfernt, sobald unser Server das Gespräch gelöscht hat.
 <!-- endif -->
+<!-- if guidepages -->
+- **`ligata-ai:guide:` und der Name unserer Domain** (Sitzungsspeicher dieses Tabs, Session Storage): nur wenn Sie sich vom Assistenten auf eine andere Seite bringen lassen: diese Seite, die dort zu markierenden Wörter und das Gespräch, zu dem sie gehören, damit die Stelle nach dem Laden gezeigt wird. Wird auf der nächsten Seite einmal gelesen und entfernt; nach einer Minute nicht mehr verwendet.
+<!-- endif -->
 
 Diese Speicherung ist unbedingt erforderlich, damit der Chat funktioniert, den Sie ausdrücklich nutzen möchten (§ 25 Abs. 2 Nr. 2 TDDDG).<!-- if historyany --> Dazu gehört der Schlüssel eines Gesprächs, das wir aufbewahren: Er entsteht erst mit Ihrer Frage, ordnet Ihre Fragen diesem Gespräch zu und ermöglicht es Ihnen, unsere Kopie im Chat zu löschen. Nach einem Widerspruch entstehen keine neuen Schlüssel.<!-- endif --> Sie können die Daten jederzeit löschen, im Chat über <!-- if history -->„Gespräch löschen“ oder <!-- endif -->„Von diesem Gerät entfernen“ oder in den Einstellungen Ihres Browsers.
 

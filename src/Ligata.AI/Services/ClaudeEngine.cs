@@ -399,10 +399,12 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
                             if (delta.Delta.TryPickText(out var piece) && piece.Text.Length > 0)
                             {
                                 if (firstToken == 0) firstToken = clock.ElapsedMilliseconds;
-                                if (answer.Length < 200_000) answer.Append(piece.Text);
-                                outcome?.Append(piece.Text);
+                                // Text written after a lookup starts a new paragraph instead of running on from the text before it.
+                                var visible = text.Length == 0 && answer.Length > 0 && !char.IsWhiteSpace(answer[^1]) && !char.IsWhiteSpace(piece.Text[0]) ? "\n\n" + piece.Text : piece.Text;
+                                if (answer.Length < 200_000) answer.Append(visible);
+                                outcome?.Append(visible);
                                 text.Append(piece.Text);
-                                await sse.Send("delta", new { text = piece.Text });
+                                await sse.Send("delta", new { text = visible });
                             }
                             else if (delta.Delta.TryPickThinking(out var thought)) reasoning.Append(thought.Thinking);
                             else if (delta.Delta.TryPickSignature(out var signed)) signature += signed.Signature;

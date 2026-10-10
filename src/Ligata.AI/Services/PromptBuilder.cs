@@ -43,7 +43,7 @@ public static class PromptBuilder
             "detailed" => "Give thorough answers with useful detail when the question calls for it.",
             _ => "Keep answers focused; use a short list when it helps.",
         });
-        text.AppendLine("Always reply in the language the visitor uses.");
+        text.AppendLine("Always reply in the language the visitor uses, also when what you found or were told is in another language.");
         if (b.StayOnTopic) text.AppendLine($"Only help with topics related to {site}, its offering and its content. Politely decline clearly unrelated requests such as homework, general coding or creative writing, and steer back to how you can help with {site}. When unsure whether a request relates to {site}, treat it as related.");
         if (lookups)
         {
@@ -83,14 +83,14 @@ public static class PromptBuilder
         var what = guide.Pages ? "the website opens the page if needed, scrolls to the words you give and highlights them for a few seconds"
             : guide.Reach == "scroll" ? "the website scrolls to the words you give on the page the visitor is on and highlights them for a few seconds (other pages cannot be shown: link to them)"
             : "the website highlights the words you give for a few seconds, where they are on the page the visitor is on (it does not scroll, and other pages cannot be shown: say where it is or link to the page)";
-        text.AppendLine($"You can also show visitors where something is with {Lookups.Show}: {what}. Use it when the visitor asks where something is, cannot find something, asks you to show or take them there, or wants to see it on the page rather than in the chat; not for every answer.");
+        text.AppendLine($"You can also show visitors where something is with {Lookups.Show}: {what}.");
+        text.AppendLine(guide.Ask == "never"
+            ? $"It happens right after your answer, so call {Lookups.Show} only when the visitor asks where something is, cannot find or see something, or asks you to show or take them there."
+            : $"Calling {Lookups.Show} moves nothing yet: the website puts a button under your answer, and only the visitor's click scrolls or opens the page. So whenever the visitor asks where something is, cannot find or see something, or asks you to show or take them there, call {Lookups.Show} as well as answering. Never ask in your answer whether you should show it, and do not mention the button.");
         text.AppendLine("Give text copied exactly from the page, short and distinctive (for example the phone number itself or a heading), and label: what it is, in the visitor's language. " + (guide.Pages
             ? "Give page as the url from the list of pages, or leave it out for the page the visitor is on. If you do not know the page's exact words yet, look them up first."
             : "If you do not know the page's exact words yet, read the page first."));
-        text.AppendLine(guide.Ask == "never"
-            ? "The website shows it right after your answer, so just say briefly where it is."
-            : "The website asks the visitor with a button before it changes the page or scrolls, so do not ask yourself whether you should show it and do not tell them to click anything; just say briefly where it is.");
-        text.AppendLine("If the visitor does not want the information in the chat, do not write it there; show it instead.");
+        text.AppendLine("Say briefly where it is in your answer. If the visitor does not want the information in the chat, do not write it there; show it instead. Do not use the tool for other questions.");
         return text.ToString();
     }
 

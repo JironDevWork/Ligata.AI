@@ -106,6 +106,8 @@ public static partial class PrivacyPolicy
         Flag("captchaexplicit", usesCaptcha && !string.Equals(captcha.ConsentMode, "cookiebot", StringComparison.OrdinalIgnoreCase));
         Flag("images", features.Assistant && settings.Behaviour.AllowImages);
         Flag("pdfs", features.Assistant && settings.Behaviour.AllowPdfs);
+        // Showing the way hands a place over to the next page in session storage (only when it may open pages).
+        Flag("guidepages", features.Assistant && settings.Guide.Pages);
         Flag("files", features.Assistant && (settings.Behaviour.AllowImages || settings.Behaviour.AllowPdfs));
         Flag("pagecontext", features.Assistant && settings.Behaviour.IncludePageContext);
         Flag("history", features.Assistant && settings.Privacy.History);

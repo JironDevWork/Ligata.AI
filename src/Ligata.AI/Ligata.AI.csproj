@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
     <PackageId>Ligata.AI</PackageId>
-    <Version>0.11.0</Version>
+    <Version>0.12.0</Version>
     <Authors>Ligata</Authors>
     <Description>Website chat for Umbraco 17: AI assistant (self-hosted Ligata AI gateway or Claude through the Anthropic API), live chat with your team in an Umbraco inbox, and an email form. GDPR-ready: consent before the AI reads a message (with Cookiebot support) and privacy policy templates. Each feature can be licensed on its own.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>

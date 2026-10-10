@@ -5,6 +5,7 @@ A website chat for **Umbraco 17.6 / .NET 10** with three features that work toge
 - **AI assistant** answered by a self-hosted **Gemma 4 12B** on the Ligata mini PC, or by **Claude Haiku 5.5** through Anthropic's API (no extra server; see [AI engine](#ai-engine-own-gpu-or-claude-api)).
 - **Live chat with your team**: when the AI cannot help, or a visitor asks for a person, the team answers in an **Inbox** inside Umbraco.
 - **Email form**: visitors leave a message that arrives in your mailbox and in the Inbox.
+- **Showing the way** (0.12): when visitors ask where something is, the website assistant takes them there. It opens the page, scrolls to the spot and highlights it, asking first; on phones the chat steps aside meanwhile. It never clicks or fills in anything. See [Showing the way](#showing-the-way).
 - **Content assistant** (0.9): a chat in the Umbraco backoffice that finds, reads and changes content with tools. Changes wait for approval or run by permission mode (Read only, Manual, Auto, Bypass), are saved as drafts, checked after saving, logged with the person who asked and can be undone. See [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md).
 
 Built for the GDPR (DSGVO): the AI reads nothing before a visitor agrees, every consent is recorded and can be withdrawn, Cookiebot is supported, and the backoffice writes the matching privacy policy text. See [Privacy](#privacy-gdpr--dsgvo).
@@ -53,6 +54,7 @@ A new top-level section, **AI Assistant** (or **Support** when no AI is licensed
   - **Behaviour**:
     - name, avatar, greeting, suggested questions, language;
     - AI instructions, tone, answer length and limits;
+    - **Showing the way**: on or off, what the assistant may do (highlight only, scroll too, open pages too), when visitors are asked first, the highlight (ring, spotlight or marker, colour, seconds), tried out in the live preview;
     - uploads, fallback contacts, and where the bubble appears.
   - **Team & email**:
     - feature switches for AI, live chat and the email form;
@@ -82,6 +84,7 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
   - a **memory bar** (off by default, *Appearance*) that shows how full the assistant’s memory is, in percent rather than tokens (the backoffice preview also shows the tokens); long conversations are counted and summarized either way;
   - **long conversations keep going**: before a question would no longer fit, the earlier messages are summarized automatically (with a progress bar) and the conversation continues with the summary and the latest exchange. The visitor still sees every message;
   - their **place in line** while the shared GPU is busy, and *Reading…* while a long conversation or document is read (GPU mode).
+- **Shown the way** (0.12): "Where is your phone number? I can't see it." The answer says where it is, and a card under it offers *Take me there* (another page) or *Show me* (further down this page). One click opens the page, scrolls to the number and highlights it for a few seconds. The chat then says *I've highlighted "Phone number" for you*, with *Show again*. Something already on screen is highlighted at once, without asking. On phones the full-screen chat steps aside while the spot is shown; a bar says what was shown and leads back to the conversation, and it moves to the top when it would hide the spot.
 - **Talk to a person**: when the AI cannot answer, a card offers *Chat with our team* or *Send us an email*; without live chat and the email form, it offers the contact email and contact page from the settings. A person icon in the header does the same at any time.
   - **The form**: name and email per the settings, the message prefilled with their question, and a storage notice. Spam protection only after consent.
   - **The live chat**: it continues in the same thread. The visitor sees who joins (name/photo as the team member chose), typing indicators, replies live, and when someone leaves or closes.
@@ -94,7 +97,7 @@ A chat bubble (bottom right by default, clear of Cookiebot's button bottom left)
 
 ```powershell
 dotnet pack src/Ligata.AI -c Release -o artifacts
-# copy artifacts/Ligata.AI.0.11.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
+# copy artifacts/Ligata.AI.0.12.0.nupkg into the site's local feed (e.g. the Ligata site's packages/ folder)
 dotnet add package Ligata.AI --version 0.8.0 --source C:/path/to/feed
 ```
 
@@ -115,6 +118,7 @@ The assistant does not read the whole website with every question. It gets its i
 
 - **`search_website`** searches every page and document and returns the best passages with their page url. It is a keyword index on the website's own server (BM25 over passages of about a paragraph): words match without accents and by prefix, so *kontakt* finds *Kontaktformular* and *preise* finds *Preis*.
 - **`read_pages`** reads up to three pages (by url) or documents (by title) in full.
+- **`show_on_website`** (0.12) shows the visitor where something is; see [Showing the way](#showing-the-way).
 
 The model may search several topics at once, in up to three rounds per answer (about 7,000 tokens of results); then it answers with what it found. The visitor sees *Searching the website…* meanwhile. Looking things up is the model's choice: greetings, small talk and follow-ups the conversation already answers are answered at once, but every fact about the website must come from a lookup, the knowledge or the conversation, never from memory. On the GPU, a question that asks for website facts the conversation does not contain yet must be looked up first: a 12B model otherwise too often answers from the prompt alone.
 
@@ -127,6 +131,30 @@ The model may search several topics at once, in up to three rounds per answer (a
 - **An AI server without lookups** (a gateway older than 0.6) still works: pages and documents then go into the prompt, in order, as far as the knowledge budget allows.
 
 Until 0.6, pages were imported as copies. On upgrade, the copies are replaced by the live pages; a copy that was switched off becomes a left-out page.
+
+## Showing the way
+
+Since 0.12 the assistant can show visitors where something is, not only say it. A third tool, **`show_on_website(page, text, label)`**, names a place: words exactly as they stand on a page, and what they are ("Phone number"). The model uses it when a visitor asks where something is, cannot find or see something, or wants to be shown or taken there. If the visitor does not want something in the chat, the assistant shows it instead.
+
+- **The website checks every place.** Another page must be in the list of pages (never an address from a page's text, a document or another website), and the words must be on it. Otherwise the model is told why and links instead. On the page the visitor is on, the browser checks the words, because headers and footers are not looked up.
+- **Only looking, never acting.** The widget finds the words, scrolls there and highlights them, opening the page first when allowed. It never clicks, types or sends anything. The one exception: words hidden in a closed `<details>` block (FAQ accordions) are revealed. The highlight sits in its own layer above the page and never catches clicks, so a highlighted phone number can still be tapped.
+- **Asks first.** Calling the tool moves nothing. The visitor gets a card under the answer: *Take me there* for another page, *Show me* further down the page, or *No thanks*. Something already on screen and not covered by the chat is highlighted at once. What the visitor chose (shown, declined, not found) goes back with the conversation, so the assistant knows.
+- **Follows the visitor to the next page.** Before the page changes, the place is kept in this tab's session storage for one minute. After loading, the widget waits for the words (up to 5 s), scrolls them to the middle of the screen and highlights them. The conversation continues on the new page.
+- **Phones first.** The chat covers the whole screen on phones, so it steps aside while the spot is shown. A bar says *I've highlighted "Opening hours" for you* with *Back to chat*. It moves to the top when it would hide the spot and leaves after a few seconds (the bubble brings the conversation back as well). On computers the chat stays open and steps aside only when it covers the spot. Words that wrap onto another line get their whole paragraph highlighted, so the ring never cuts through the text around them. Reduced motion is respected (no pulsing, no gliding).
+- **Settings** (*Behaviour → Showing the way*):
+  - on or off (on by default);
+  - what it may do: *Highlight only* (on the page the visitor is on, nothing moves, and something further down is highlighted once the visitor scrolls there), *Scroll and highlight* (the same page), or *Open pages too*;
+  - when visitors are asked first: before scrolling or opening a page (default), only before opening a page, or never (another page then opens after a 2.6 s countdown the visitor can cancel);
+  - the highlight: *Ring*, *Spotlight* (dims the rest of the page) or *Marker*, its colour (the chat's accent by default) and 2 to 15 seconds. *Try it in the preview* shows it.
+- **Both engines.** Claude and the GPU get the same tool. With the feature switched off, the tool is not declared, and earlier calls in a conversation are no longer repeated (the API refuses calls to undeclared tools).
+- **Measured with Claude Haiku 5.5** on Umbraco.BaselineV2 (10 October 2026, 42 real requests). With the final prompt, Haiku showed the right words on the right page every time. The questions:
+  - the phone number, asked from the home page;
+  - the opening hours "on the website, not in the chat";
+  - the services page;
+  - the address, on a phone;
+  - something on the current page.
+
+  A price question used no tool. After *No thanks*, the next answer knew the visitor had declined. Before the prompt said that calling the tool moves nothing, Haiku once asked in its answer whether to show the place instead of offering it. See [docs/TESTING.md](docs/TESTING.md).
 
 ## AI engine: own GPU or Claude API
 
@@ -203,7 +231,7 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 - `LigataAI:GatewayUrl` / `LigataAI:ApiKey` (better: environment variable `LigataAI__ApiKey`) override the backoffice values (GPU mode).
 - **Manual placement**: set *Where it appears* to **Manual** and add `@await Component.InvokeAsync("LigataAssistant")` to a template.
 - **Privacy** decides how visitors agree before the AI reads their messages; see [Privacy](#privacy-gdpr--dsgvo) and [docs/PRIVACY.md](docs/PRIVACY.md).
-- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")` (waits in the input until the visitor agreed), `reset()`, `contact("chat" | "email")`.
+- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")` (waits in the input until the visitor agreed), `reset()`, `contact("chat" | "email")`, and `show({ text, label, page })` or `show({ selector, label })`. `show` highlights words or an element on this page, or opens another page of this site and highlights them there; it resolves to `false` when they are not found.
 
 ## Security and privacy
 

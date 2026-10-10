@@ -32,6 +32,7 @@ The backoffice fills it in under **AI Assistant → Content assistant → Privac
 | IP addresses | Used for the connection and rate limits only. A pseudonymous id (HMAC with a per-site secret) is kept in memory; for team conversations it is stored with the conversation to enforce per-visitor limits. |
 | Team conversations | Stored in the CMS database, closed after the inactivity period and deleted after the retention period (Team & email tab). Notification emails in the outgoing queue are deleted 7 days after sending. |
 | reCAPTCHA | Loaded only when a visitor sends a request to the team, and only after consent (checkbox or Cookiebot category). |
+| Showing the way (0.12) | Sends nothing new: the AI already gets the page the visitor is on, and the place it names is checked on the website's server. The widget only scrolls, highlights and opens pages of the same website, never clicks or fills in anything, and asks first unless the site chose otherwise. When the visitor is taken to another page, the place (page, words, label) and the conversation it belongs to are kept in the tab's `sessionStorage` for one minute and read once on the next page. This is storage on the device that the service the visitor just asked for strictly needs (section 25(2) no. 2 TDDDG). It holds no personal data beyond the conversation the chat already keeps on the device. |
 | AI disclosure (EU AI Act, Art. 50) | The consent request starts with "This assistant is an AI". The notice under the input says that answers are AI-generated. |
 
 ## Configuration

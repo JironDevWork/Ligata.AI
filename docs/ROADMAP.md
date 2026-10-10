@@ -70,12 +70,19 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
 4. **Claude Haiku 5.5 (API) for now.** The module is built engine-agnostic, as the website assistant is. About 20 fixed editor tasks (finding pages, pointing at properties, proposing edits in blocks and per language) are kept as a test set. They are run on the GPU later, to decide whether it is good enough for edits.
 5. **(10 October 2026)** Permission modes like Claude Code's, which editors choose per conversation: Manual, Auto and Bypass. There are settings for who may use which mode, what may be done and where, plus a separate usage limit and an activity log.
 
-## 2. The website assistant takes visitors to the right place (future)
+## 2. The website assistant takes visitors to the right place (built in 0.12)
 
-Today the assistant answers and links pages. Next, it should offer to go there: "Shall I take you to the contact page, where the phone number is?" On *Yes*, the page opens and scrolls to the right spot.
+**The request (owner, 10 October 2026).** The website assistant moves visitors around the website, but never fills anything in or clicks anything. It opens pages, scrolls and briefly highlights things: "Where is the phone number? I can't see it." It asks before it changes the page or scrolls. A short highlight needs no question. It can combine the steps: open the contact page, scroll to the number, highlight it, then say so in the chat. It survives the page change, works very well on phones (where the chat covers the screen), was tested with Claude Haiku 5.5, and has settings to switch it off or limit it (highlight only, scroll and highlight, open pages).
 
-- **Always asks first.** The model proposes, the widget shows the proposal with *Yes* / *No*, and only a click navigates. A new tool, `show_page(url, section)`, returns a proposal, never a navigation.
-- **Only this website.** Targets must be pages in the knowledge index (same site, published, not left out), never a URL from a page's text.
-- **Lands on the spot.** The chat stays open across the page change (it already keeps its state). After loading, it scrolls to the section and highlights it briefly. The section is found by the heading the index stored with the passage, or by its text (a text fragment `#:~:text=` as a fallback). It respects *reduced motion*.
-- **Both engines.** It is the same tool syntax as the lookups (`search_website`, `read_pages`), so it works on the GPU and with Claude.
-- **Later: guided tours.** For example "Show me how to book a call": a few steps, each confirmed by the visitor.
+**Built in 0.12** as planned below, with one change: the place is given by words on the page, not by a section. See [Showing the way](../README.md#showing-the-way) and the decisions in [DECISIONS.md](DECISIONS.md#showing-the-way-012).
+
+- **Always asks first.** The model proposes with `show_on_website(page, text, label)`, the widget shows the proposal (*Take me there* / *Show me* / *No thanks*), and only a click navigates or scrolls. Highlighting what is already on screen needs no question. Sites can ask only before another page, or never (with a countdown that can be cancelled).
+- **Only this website.** Targets are pages in the knowledge index (same site, published, not left out), never a URL from a page's text. The words must be on that page.
+- **Lands on the spot.** The conversation continues on the new page. After loading, the widget finds the words, scrolls to them and highlights them. It respects *reduced motion*.
+- **Both engines.** The same tool syntax as the lookups, so it works on the GPU and with Claude.
+
+### Still open
+
+- **Gemma on the GPU** is tested with the mock model only. A few real questions through the gateway need a valid gateway test key, since the old test key `key-a` is no longer accepted.
+- **Guided tours.** For example "Show me how to book a call": a few steps, each confirmed by the visitor.
+- **Things that are not text**: a map, a picture or a button without words. Today the assistant can only point at words.

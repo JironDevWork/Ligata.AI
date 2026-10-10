@@ -287,11 +287,11 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
     public static object ShowTool(GuideSettings guide) => new
     {
         name = Show,
-        description = guide.Pages
-            ? "Shows the visitor where something is on this website: the website opens the page if needed, scrolls to the given words and highlights them for a few seconds. It never clicks or fills in anything."
+        description = (guide.Ask == "never" ? "Shows the visitor" : "Offers to show the visitor (with a button under your answer)") + (guide.Pages
+            ? " where something is on this website: the website opens the page if needed, scrolls to the given words and highlights them for a few seconds. Use it when the visitor asks where something is or cannot find it. It never clicks or fills in anything."
             : guide.Reach == "scroll"
-                ? "Shows the visitor where something is on the page they are on: the website scrolls to the given words and highlights them for a few seconds. Other pages cannot be shown; link to them instead."
-                : "Highlights something on the page the visitor is on for a few seconds, where it is (the page does not scroll). Other pages cannot be shown; link to them instead.",
+                ? " where something is on the page they are on: the website scrolls to the given words and highlights them for a few seconds. Use it when the visitor asks where something is or cannot find it. Other pages cannot be shown; link to them instead."
+                : " where something is on the page they are on: the website highlights the given words for a few seconds, where they are (the page does not scroll). Other pages cannot be shown; link to them instead."),
         parameters = new
         {
             type = "object",
@@ -470,8 +470,8 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
             shown.Add(new Place(here ? "" : document!.Url, here ? "" : document!.Title, words, label));
             return (guide!.Ask == "never"
                 ? $"Done: right after your answer the website shows the visitor “{label}” on {where} and highlights it."
-                : $"Done: the website offers to show the visitor “{label}” on {where} and highlights it there.")
-                + " Now answer briefly, saying where it is. Do not ask whether to show it and do not mention buttons or tools.";
+                : $"Offered: under your answer the visitor gets a button to be shown “{label}” on {where}. Nothing has moved or been highlighted yet.")
+                + " Finish your answer briefly, saying where it is, without repeating what you already wrote. Do not ask whether to show it and do not mention buttons or tools.";
         }
     }
 }

@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 229 assertions
+# Package domain and security checks (no database): 260 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,11 +18,11 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 379 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 410 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
-# Browser suite in Microsoft Edge (headless): 24 checks, needs the host above and a gateway
+# Browser suite in Microsoft Edge (headless): 25 checks, needs the host above and a gateway
 node gateway/test/mock-server.mjs 1298                                    # or a real llama-server
 $env:LIGATA_AI_DATA='C:/Code/Ligata.AI/.runtime/gateway-dev'; $env:LIGATA_AI_UPSTREAM='http://127.0.0.1:1298'; $env:LIGATA_AI_PORT=1220; $env:LIGATA_AI_ADMIN_PORT=1222; $env:LIGATA_AI_MEMORY_PROBE=0; node gateway/src/main.mjs
 node gateway/cli.mjs keys create "Test host" > .runtime/gateway-dev/created.txt    # with the same LIGATA_AI_DATA
@@ -105,6 +105,54 @@ cd tests/e2e && node editor.mjs          # 26 checks, screenshots in .runtime/e2
 - **Bypass:** the Impressum introduction was set without asking.
 
 The activity log, read back through its API, listed all four with the person, time, request, before and after, and *manual*, *manual / declined* with the note, *auto*, and *bypass*. Undo then put the three changes back.
+
+### Showing the way (0.12)
+
+The website assistant points at places: the strict mock Anthropic API plays a scripted assistant ("do: show_on_website {...} then: text"). The test page template has a closed `<details>`, a section 1,400 px further down and a footer with a phone number, none of which the knowledge index reads. The browser finds them on the page itself.
+
+```powershell
+node tests/e2e/mock-anthropic.mjs                       # → :1230
+$env:CONFIG_KEY='0'; $env:LigataAI__Mode='api'; $env:LigataAI__Claude__ApiKey='sk-ant-mock-0000000000000000'; $env:LigataAI__Claude__BaseUrl='http://127.0.0.1:1230'
+bash tests/e2e/restart-host.sh --clear-keys
+cd tests/e2e; node guide.mjs                            # 18 checks
+```
+
+| Check | What is verified |
+| --- | --- |
+| Backoffice | *Showing the way* under Behaviour: on, *Open pages too*, asks first; the choices are explained; *Try it in the preview* shows a spotlight in the live preview |
+| On screen | Words already on screen are highlighted at once, with no card and no scrolling; the chat says *I've highlighted "Studio name" for you* with *Show again* |
+| Further down | A card (*Further down this page*, *Show me*, *No thanks*); nothing moves before the click; then the page scrolls, the highlight surrounds the words and the open chat never covers them |
+| Hidden in `<details>` | The closed block is opened and the words are highlighted |
+| Not on the page | The chat says *I couldn't find "Nothing" on this page*; nothing moves |
+| Only a place | An answer with no text gets *Here's where to find "Entrance"* above its card; *No thanks* removes the card |
+| Outcomes | The next request tells the model "chose not to be shown", "Shown: the visitor saw" and "could not find" for the earlier answers |
+| Refused by the server | Words that are not on the other page: no card, and the model is told why |
+| Another page | *Take me there* opens /contact/; the words are highlighted there. On that page the open chat would cover them, so it steps aside and the bar says so. *Back to chat* returns to the same conversation; the hand-over in session storage is used once |
+| Show again | From the chat, on another scroll position |
+| `LigataAI.show()` | The site's own code highlights words; unknown words resolve to `false` |
+| Phone, another page | *Bring mich hin* closes the full-screen chat, opens the page and highlights the words. The bar (*Back to chat*) stands in for the bubble and does not hide the highlight. Back in the chat the conversation is the same |
+| Phone, footer | The chat steps aside, the page scrolls to the footer, the bar moves to the top, the page can scroll again; closing the bar brings back the bubble |
+| Ask *Never* | Another page opens after a countdown; *Cancel* stops it |
+| *Highlight only* | Another page is refused to the model; further down nothing scrolls, the chat says it waits, and the words are highlighted once the visitor scrolls there |
+| Switched off | No guide settings for the widget, no tool for the model; switched on again |
+| Reduced motion | No pulsing |
+| Page errors | None |
+
+On the GPU path (`run.mjs`, mock llama-server): "show me ‹heading›" calls the tool through the gateway, and the widget highlights the heading and says so.
+
+**Live, with the real Claude Haiku 5.5** (10 October 2026, Umbraco.BaselineV2 with Ligata.AI 0.12.0, through the counting proxy). 42 requests:
+
+- "Wo finde ich eure Telefonnummer? Ich sehe sie nirgends." (home page, computer). In the first run Haiku answered correctly but asked "Soll ich Ihnen die Stelle auf der Seite zeigen?" instead of calling the tool. After the prompt explained that calling it only adds a button: `show_on_website(/kontakt/, "+41 52 000 00 00", "Telefonnummer")`, the card *Bring mich hin*, then /kontakt/ opened. The number was first at the screen's lower edge; it is now scrolled to the middle, with the chat open beside it.
+- "Zeig mir eure Öffnungszeiten bitte direkt auf der Website, nicht hier im Chat." The hours were not written in the chat. /kontakt/ opened and scrolled, the hours block was highlighted, and the chat stepped aside because it covered them.
+- "Can you take me to the page about your services?" (/en/). With the text "Services", the menu item was highlighted first; content now wins over the menu. With a descriptive sentence, the services page opened with it highlighted. Text before and after the tool call ran together ("…(/en/services/)The services page"); it is now a new paragraph.
+- "Was kostet ungefähr ein Esstisch aus Eiche bei euch?" No tool, a normal answer.
+- "Where on this page is the address of the workshop?" (/kontakt/). Highlighted at once, no card.
+- Phone: "Wo ist eure Adresse? Zeig sie mir." *Bring mich hin*: the chat stepped aside, /kontakt/ scrolled, the address was highlighted, and the bar offered *Zurück zum Chat*, which led back. The follow-up about visiting on Saturday was answered in the same conversation.
+- Phone, same page: "Wo stehen hier die Öffnungszeiten? Ich finde sie nicht." The card said *Weiter unten auf dieser Seite*; tapping it scrolled the page and highlighted the hours, with the bar at the bottom. The label tag covered the page's own heading above the hours; it now fades after about two seconds.
+- "Where is the imprint of this website?" then *No thanks*. The first run claimed "I've also highlighted the heading" and repeated its first sentence. The tool result now says that nothing has moved yet. In the next run the answer said where it is, and the follow-up knew the visitor had declined.
+- The prompt's English date line leaked into a German answer ("Today is Saturday, 10 October 2026, so…"). The language rule now says to reply in the visitor's language also when what was found is in another one; the next run wrote "Heute ist Samstag, der 10. Oktober 2026".
+
+Not run: real questions to Gemma 4 12B through the production gateway. The old test key is no longer accepted, and a new one is the owner's to create.
 
 ### Privacy: consent, withdrawal, Cookiebot (browser)
 

@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { bearer, managementBase } from '../api.js?v=0.11.0';
+import { bearer, managementBase } from '../api.js?v=0.12.0';
 
 // Tabler Icons 3.35.0 (MIT, https://tabler.io/icons), outline set: the same family as the rest of the package.
 const paths = {

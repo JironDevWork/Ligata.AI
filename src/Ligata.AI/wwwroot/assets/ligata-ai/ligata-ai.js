@@ -1896,6 +1896,8 @@
   const sameSite = url => { try { return new URL(url, location.href).origin === location.origin; } catch { return false; } };
   const viewHeight = () => window.visualViewport?.height || window.innerHeight;
   const onScreen = r => !!r && r.top >= 4 && r.bottom <= viewHeight() - 4 && r.left >= 0 && r.right <= window.innerWidth;
+  /** On screen and away from the edges, where the eye finds it (or too tall to be anywhere else). */
+  const comfortable = r => onScreen(r) && (r.height > viewHeight() * 0.6 || (r.top >= viewHeight() * 0.12 && r.bottom <= viewHeight() * 0.85));
   const overlaps = (r, b) => !!b && b.width > 0 && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
   /** The chat (or the bar that stands in for it) hides this part of the page. */
   const covered = r => overlaps(r, state.open ? panel.getBoundingClientRect() : barShown() ? bar.getBoundingClientRect() : null);
@@ -1942,8 +1944,9 @@
   }
   const shown = el => el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, opacityProperty: true, visibilityProperty: true }) : !!el.getClientRects().length;
   /**
-   * The best place for the words: one already on screen, then one in the main content (not the header, menu or footer), then the
-   * first. Words inside a closed <details> count when nothing else is visible. Null when the words are not on this page.
+   * The best place for the words: in the page's content and on screen, then in the content further away, then on screen in the
+   * header, menu or footer (a menu item named like the page is rarely what was meant), then anywhere. Words inside a closed
+   * <details> count when nothing else is visible. Null when the words are not on this page.
    */
   function findPlace(words) {
     let best = null;
@@ -1955,8 +1958,9 @@
       const visible = !folded && shown(element) && range.getClientRects().length > 0;
       if (!visible && !folded) continue;
       const r = visible ? range.getBoundingClientRect() : null;
-      const rank = !visible ? 3 : onScreen(r) && !covered(r) ? 0
-        : element.closest('main,[role=main],article') && !element.closest('header,nav,footer,[role=banner],[role=navigation],[role=contentinfo]') ? 1 : 2;
+      const chrome = !!element.closest('header,nav,footer,[role=banner],[role=navigation],[role=contentinfo]') || !element.closest('main,[role=main],article');
+      const seen = visible && onScreen(r) && !covered(r);
+      const rank = !visible ? 4 : !chrome ? (seen ? 0 : 1) : seen ? 2 : 3;
       if (!best || rank < best.rank) best = { range, element, folded: folded ? closed : null, rank };
       if (rank === 0) break;
     }
@@ -2003,7 +2007,7 @@
       .spotlight{border:2px solid var(--c);border-radius:14px;box-shadow:0 0 0 200vmax rgba(10,12,20,.55)}
       .marker{border-radius:7px;background:color-mix(in srgb,var(--c) 30%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 45%,transparent)}
       .tag{position:absolute;left:-3px;bottom:calc(100% + 7px);max-width:min(280px,80vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 10px;border-radius:999px;background:var(--c);color:var(--on);font:600 12.5px/1.2 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:0 6px 18px -6px rgba(0,0,0,.35)}
-      .below .tag{bottom:auto;top:calc(100% + 7px)}.tag:empty{display:none}
+      .below .tag{bottom:auto;top:calc(100% + 7px)}.tag:empty{display:none}.tag{transition:opacity .4s ease}.tag.gone{opacity:0}
       @keyframes pulse{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 55%,transparent)}to{box-shadow:0 0 0 18px transparent}}
       ${calm() ? '.mark{transition:none}.ring::after{animation:none}' : ''}</style>`;
     document.body.append(layer);
@@ -2035,6 +2039,8 @@
     };
     step();
     requestAnimationFrame(() => mark.classList.add('on'));
+    // The label says what it is at first glance, then gets out of the way of the page's own text.
+    setTimeout(() => tag.classList.add('gone'), Math.min(2400, (until - Date.now()) / 2));
   }
   const settle = async () => { let last = -1, same = 0; for (let i = 0; i < 40 && same < 3; i++) { await sleep(50); same = window.scrollY === last ? same + 1 : 0; last = window.scrollY; } };
   /** Scrolls the place to the middle of what the visitor sees (above the bar at the bottom). */
@@ -2078,14 +2084,17 @@
     touch(c); persist(true);
     if (state.open && state.view === 'chat' && c.id === state.activeId) renderLog();
   }
-  /** Shows a place on this page: steps the chat aside where it covers the page, scrolls there (unless only highlighting is allowed) and highlights it. */
-  async function present(c, m, place, label = m?.guide?.label || '') {
+  /**
+   * Shows a place on this page: steps the chat aside where it covers the page, scrolls there (unless only highlighting is allowed)
+   * and highlights it. Once the visitor agreed, a place at the edge of the screen comes to the middle; still: nothing scrolls that is on screen.
+   */
+  async function present(c, m, place, label = m?.guide?.label || '', still = false) {
     if (m) m.guide.state = 'shown';
     const text = t.guideShown(label);
     if (small() && state.open) stepAside(text, c);
     else if (!state.open && m) showBar(text, c);
     for (let d = place.folded; d; d = d.parentElement?.closest('details:not([open])')) d.open = true;
-    if (!onScreen(place.rect()) && G().reach !== 'highlight') await scrollToPlace(place);
+    if (G().reach !== 'highlight' && !(still ? onScreen : comfortable)(place.rect())) await scrollToPlace(place);
     if (state.open && covered(place.rect())) stepAside(text, c);
     placeBar(place);
     highlight(place, label);
@@ -2107,7 +2116,7 @@
     current.timer = setInterval(() => {
       if (watching !== current || m.guide.state !== 'waiting' || Date.now() > until) { clearInterval(current.timer); if (watching === current) watching = null; return; }
       const r = place.rect();
-      if (onScreen(r) && !covered(r)) { clearInterval(current.timer); watching = null; present(c, m, place); }
+      if (onScreen(r) && !covered(r)) { clearInterval(current.timer); watching = null; present(c, m, place, undefined, true); }
     }, 500);
   }
 
@@ -2139,7 +2148,7 @@
     if (!place) { missing(c, m); return; }
     const r = place.folded ? null : place.rect();
     g.where = !r || onScreen(r) ? 'here' : r.top > 0 ? 'below' : 'above';
-    if (r && onScreen(r) && !covered(r)) { present(c, m, place); return; }
+    if (r && onScreen(r) && !covered(r)) { present(c, m, place, undefined, true); return; }
     if (settingsNow.reach === 'highlight') { watchFor(c, m, place); return; }
     if (settingsNow.ask === 'always') return;
     present(c, m, place);
