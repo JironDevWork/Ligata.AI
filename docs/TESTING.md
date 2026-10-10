@@ -114,7 +114,7 @@ The website assistant points at places: the strict mock Anthropic API plays a sc
 node tests/e2e/mock-anthropic.mjs                       # → :1230
 $env:CONFIG_KEY='0'; $env:LigataAI__Mode='api'; $env:LigataAI__Claude__ApiKey='sk-ant-mock-0000000000000000'; $env:LigataAI__Claude__BaseUrl='http://127.0.0.1:1230'
 bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e; node guide.mjs                            # 19 checks
+cd tests/e2e; node guide.mjs                            # 21 checks
 ```
 
 | Check | What is verified |
@@ -133,6 +133,8 @@ cd tests/e2e; node guide.mjs                            # 19 checks
 | Title over menu | On /contact/, "Contact" highlights the page title (in a `<header>` inside `<main>`), not the menu link |
 | Phone, another page | *Bring mich hin* closes the full-screen chat, opens the page and highlights the words. The bar (*Back to chat*) stands in for the bubble and does not hide the highlight. Back in the chat the conversation is the same |
 | Phone, footer | The chat steps aside, the page scrolls to the footer, the bar moves to the top, the page can scroll again; closing the bar brings back the bubble |
+| Phone, the keyboard | Reopening a conversation (with the bubble or after a reload) leaves the field unfocused, so the visitor's tap brings up the keyboard and the page lifts the field above it. A field focused another way is let go on the tap and focused afresh |
+| Computer, the cursor | Opening the chat still puts the cursor in the field |
 | Ask *Never* | Another page opens after a countdown; *Cancel* stops it |
 | *Highlight only* | Another page is refused to the model; further down nothing scrolls, the chat says it waits, and the words are highlighted once the visitor scrolls there |
 | Switched off | No guide settings for the widget, no tool for the model; switched on again |

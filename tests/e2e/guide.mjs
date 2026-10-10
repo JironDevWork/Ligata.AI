@@ -275,6 +275,33 @@ await check('phone: further down the same page, the chat steps aside, the page s
   assert(await m.widget.locator('.guide-bar').isHidden() && await m.widget.locator('.launcher').isVisible(), 'closing the bar brings the bubble back');
 });
 
+// On a phone the keyboard comes up, and the page moves up above it, only when the visitor's tap focuses the field. A field focused
+// from code has no keyboard, and the tap that follows lifts nothing until a letter is typed (seen when reopening a conversation).
+await check('phone: an open conversation never focuses the field by itself, so the visitor\'s tap lifts it above the keyboard', async () => {
+  const focused = () => m.widget.evaluate(el => el.shadowRoot.activeElement?.tagName || null);
+  await m.widget.locator('.launcher').tap();
+  await sleep(400);
+  assert(await m.widget.getAttribute('open') !== null && await m.widget.locator('.msg.bot').count() > 0, 'a conversation with messages is open');
+  assert(await focused() === null, 'opened with the bubble, the field is focused: ' + await focused());
+  await phone.reload();
+  await m.widget.locator('.composer textarea').waitFor();
+  await sleep(400);
+  assert(await m.widget.getAttribute('open') !== null, 'still open after the reload');
+  assert(await focused() === null, 'after a reload, the field is focused: ' + await focused());
+  // Focus that came another way (a browser can bring it back) is let go on the tap, so that the tap focuses the field afresh.
+  await m.widget.evaluate(el => { const field = el.shadowRoot.querySelector('.composer textarea'); window.focuses = 0; field.addEventListener('focus', () => window.focuses++); field.focus(); });
+  await m.widget.locator('.composer textarea').tap();
+  assert(await focused() === 'TEXTAREA' && await phone.evaluate(() => window.focuses) === 2, 'the tap focused the field afresh: ' + await phone.evaluate(() => window.focuses));
+  await m.widget.locator('.composer textarea').tap();
+  assert(await phone.evaluate(() => window.focuses) === 2, 'a tap into a field the visitor focused leaves it be');
+});
+
+await check('computer: opening the chat still puts the cursor in the field', async () => {
+  await desktop.evaluate(() => { window.LigataAI.close(); window.LigataAI.open(); });
+  await sleep(300);
+  assert(await d.widget.evaluate(el => el.shadowRoot.activeElement?.tagName) === 'TEXTAREA', 'the field has the cursor');
+});
+
 // ---------- the site's choices ----------
 await check('"Never" ask: another page opens after a short countdown the visitor can cancel', async () => {
   await pick('Ask the visitor first', 'Never');

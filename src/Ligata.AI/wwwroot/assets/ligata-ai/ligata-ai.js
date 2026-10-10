@@ -725,7 +725,7 @@
     state.consentNotice = '';
     render();
     if (state.queuedAsk) { input.value = state.queuedAsk; state.queuedAsk = ''; autosize(); updateComposer(); }
-    input.focus({ preventScroll: true });
+    focusInput();
   }
   function consentRow() {
     if (!consentConfig || !F.ai) return '';
@@ -1128,7 +1128,7 @@
     const c = current();
     if (view === 'chat' && c) { c.unread = 0; if (c.team && !isWatched(c)) refreshOnce(c); }
     closeSheet(); render(); persist(); syncLoops();
-    if (view === 'chat') setTimeout(() => { if (!matchMedia('(max-width:520px)').matches && !form.classList.contains('hidden')) input.focus({ preventScroll: true }); }, 30);
+    if (view === 'chat') setTimeout(focusInput, 30);
   }
 
   function newConversation() {
@@ -1586,14 +1586,14 @@
     if (formEl.email) formEl.email.value = values.email || '';
     formEl.message.value = values.message || '';
     sheet.addEventListener('click', event => {
-      if (event.target === sheet || event.target.closest('[data-sheet-close]')) { closeSheet(); if (!form.classList.contains('hidden')) input.focus({ preventScroll: true }); }
+      if (event.target === sheet || event.target.closest('[data-sheet-close]')) { closeSheet(); focusInput(); }
       const switchTo = event.target.closest('[data-sheet-kind]')?.dataset.sheetKind;
       if (switchTo && switchTo !== kind) openSheet(switchTo);
       if (event.target.closest('[data-cookie-settings]')) { event.preventDefault(); window.Cookiebot?.renew?.(); }
     });
     formEl.addEventListener('submit', event => { event.preventDefault(); submitSheet(kind, formEl); });
     formEl.addEventListener('input', event => event.target.closest('.field')?.classList.remove('invalid'));
-    setTimeout(() => (formEl.querySelector('input:not([type=checkbox])') || formEl.message).focus({ preventScroll: true }), 60);
+    if (!touchFirst()) setTimeout(() => (formEl.querySelector('input:not([type=checkbox])') || formEl.message).focus({ preventScroll: true }), 60);
   }
 
   function sheetError(formEl, text) {
@@ -2231,7 +2231,7 @@
       render();
       refreshConfig(true);
       syncLoops();
-      setTimeout(() => { if (state.view === 'chat' && !form.classList.contains('hidden') && (!matchMedia('(max-width:520px)').matches || current()?.messages.length)) input.focus({ preventScroll: true }); }, 50);
+      setTimeout(() => { if (state.view === 'chat') focusInput(); }, 50);
       if (matchMedia('(max-width:520px)').matches) document.documentElement.style.setProperty('overflow', 'hidden');
     } else {
       closeSheet();
@@ -2241,6 +2241,12 @@
     }
     persist();
   }
+
+  // On a phone or tablet the keyboard comes up, and the page moves up above it, only when the visitor's own tap focuses the field.
+  // Focused from code it has no keyboard, and the tap that follows lifts nothing until a letter is typed. So only computers get the
+  // cursor put in the field for them.
+  function touchFirst() { return matchMedia('(hover:none) and (pointer:coarse)').matches; }
+  function focusInput() { if (!touchFirst() && !form.classList.contains('hidden')) input.focus({ preventScroll: true }); }
 
   function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; }
 
@@ -2294,6 +2300,11 @@
   input.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!state.busy || isTeamChat(current())) send(); } });
   input.addEventListener('input', () => { autosize(); updateComposer(); if (isTeamChat(current())) typingSignal(!!input.value.trim()); });
   input.addEventListener('blur', () => typingSignal(false));
+  // Focus that did not come from a tap (a browser can bring it back after a tab switch) is let go when the field is tapped, so that
+  // the tap focuses it afresh and the keyboard lifts it as on a first tap.
+  let touchedAt = 0, tappedIn = false;
+  input.addEventListener('pointerdown', event => { if (event.pointerType !== 'touch') return; if (root.activeElement === input && !tappedIn) input.blur(); touchedAt = Date.now(); });
+  input.addEventListener('focus', () => { tappedIn = Date.now() - touchedAt < 1500; });
   input.addEventListener('paste', event => { const files = [...(event.clipboardData?.files || [])]; if (files.length && !isTeamChat(current())) { event.preventDefault(); addFiles(files); } });
   $('.attach').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
@@ -2303,7 +2314,7 @@
   root.addEventListener('keydown', event => {
     if (event.key === 'Escape' && barShown() && !state.open) { hideBar(); return; }
     if (event.key !== 'Escape' || !state.open) return;
-    if (state.sheet) { closeSheet(); if (!form.classList.contains('hidden')) input.focus({ preventScroll: true }); return; }
+    if (state.sheet) { closeSheet(); focusInput(); return; }
     open(false); launcher.focus();
   });
   document.addEventListener('visibilitychange', () => {

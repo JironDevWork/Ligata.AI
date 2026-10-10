@@ -141,6 +141,7 @@ The request: see what visitors ask the AI, not only the chats handed to the team
 
 - **Vanilla JS in a Shadow DOM, no framework**, so it works on any site, including static exports, without CSS clashes. Bottom right by default (consent banners sit bottom left).
 - **Live preview with unsaved settings** in the backoffice answers real questions.
+- **On phones and tablets only the visitor's tap focuses the field (0.12.4).** The keyboard comes up, and the page moves the field above it, only when a tap gives the field focus. Focused from code (as it was when a conversation was reopened, also after a reload), the field had no keyboard, and the tap that followed lifted nothing until a letter was typed. Computers still get the cursor put in the field. A field focused some other way is let go when tapped, so that the tap focuses it afresh.
 - **Icons from Tabler, one stroke width; every theme passes WCAG AA** for message text.
 - **The memory bar is off by default (0.7.3).** Most visitors do not need to know how full the memory is: long conversations are summarized automatically. Editors switch it on under *Appearance* (*Show the memory bar*). The tokens are counted and conversations summarized either way. It was on before 0.7.3, and a saved "on" cannot be told apart from the old default, so it is switched off once on existing sites (key `Ligata.AI.MeterOff`); switching it on again stays.
 
