@@ -2115,9 +2115,11 @@
   /** Scrolls the place to the middle of what the visitor sees (above the bar at the bottom). */
   async function scrollToPlace(place) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      // Below the site's sticky header, if it has one, and above the bar at the bottom.
+      // Below the site's sticky header, if it has one, and above the bar at the bottom, with room above for the highlight's
+      // label unless only that would push the place off the screen.
       const r = place.rect(), top = topInset(), room = viewHeight() - top - (barShown() && !bar.classList.contains('top') ? bar.getBoundingClientRect().height + 20 : 0);
-      window.scrollTo({ top: Math.max(0, window.scrollY + r.top - top - Math.max(12, (room - r.height) / 2)), left: window.scrollX, behavior: calm() ? 'instant' : 'smooth' });
+      const lead = r.height > room - 52 && r.height <= room ? 12 : 52;
+      window.scrollTo({ top: Math.max(0, window.scrollY + r.top - top - Math.max(lead, (room - r.height) / 2)), left: window.scrollX, behavior: calm() ? 'instant' : 'smooth' });
       await settle();
       if (onScreen(place.rect())) return;
     }
