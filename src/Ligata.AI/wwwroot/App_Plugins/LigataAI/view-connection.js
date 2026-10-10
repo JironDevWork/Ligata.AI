@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { icon, number, compact } from './ui.js?v=0.13.1';
+import { icon, number, compact } from './ui.js?v=0.13.2';
 
 const names = { gpu: 'Ligata GPU', api: 'Claude API' };
 

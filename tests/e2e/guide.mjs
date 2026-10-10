@@ -374,6 +374,8 @@ await check('phone: a place is scrolled below the site\'s sticky header, not und
   await marksElement(phone, '.booking form');
   const { form, header } = await phone.evaluate(() => ({ form: document.querySelector('.booking form').getBoundingClientRect().top, header: document.querySelector('header.site').getBoundingClientRect().bottom }));
   assert(form >= header + 4, `the form starts below the header: ${JSON.stringify({ form, header })}`);
+  const tag = await phone.evaluate(() => { const r = document.querySelector('#ligata-ai-guide').shadowRoot.querySelector('.mark .tag').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, vh: innerHeight }; });
+  assert(tag.top >= header && tag.bottom <= tag.vh, `the label is on screen, below the header: ${JSON.stringify({ tag, header })}`);
   await phone.screenshot({ path: path.join(out, '11-phone-sticky.png') });
 });
 

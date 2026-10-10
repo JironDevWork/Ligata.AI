@@ -2071,7 +2071,7 @@
       .spotlight{border:2px solid var(--c);border-radius:14px;box-shadow:0 0 0 200vmax rgba(10,12,20,.55)}
       .marker{border-radius:7px;background:color-mix(in srgb,var(--c) 30%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 45%,transparent)}
       .tag{position:absolute;left:-3px;bottom:calc(100% + 7px);max-width:min(280px,80vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 10px;border-radius:999px;background:var(--c);color:var(--on);font:600 12.5px/1.2 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:0 6px 18px -6px rgba(0,0,0,.35)}
-      .below .tag{bottom:auto;top:calc(100% + 7px)}.tag:empty{display:none}.tag{transition:opacity .4s ease}.tag.gone{opacity:0}
+      .below .tag{bottom:auto;top:calc(100% + 7px)}.inside .tag{bottom:auto;top:7px;left:auto;right:7px}.tag:empty{display:none}.tag{transition:opacity .4s ease}.tag.gone{opacity:0}
       @keyframes pulse{from{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 55%,transparent)}to{box-shadow:0 0 0 18px transparent}}
       ${calm() ? '.mark{transition:none}.ring::after{animation:none}' : ''}</style>`;
     document.body.append(layer);
@@ -2087,7 +2087,8 @@
     // Less room above and below than at the sides: the ring stays clear of the lines around the words.
     const [padX, padY] = style === 'marker' ? [3, 1] : style === 'spotlight' ? [10, 8] : [8, 5];
     const until = Date.now() + Math.max(2, +G().seconds || 5) * 1000;
-    // The tag goes inside the ring near the top of the screen, also below a sticky header.
+    // No room above the ring (the top of the screen, or a sticky header): the tag goes below it, or inside it when the ring
+    // reaches past the screen (a whole form).
     const inset = topInset();
     const current = marking = { mark, frame: 0 };
     const step = () => {
@@ -2097,7 +2098,9 @@
         const w = Math.max(r.width + padX * 2, 28), h = Math.max(r.height + padY * 2, 24);
         mark.style.width = `${w}px`; mark.style.height = `${h}px`;
         mark.style.transform = `translate(${Math.round(r.left + r.width / 2 - w / 2)}px,${Math.round(r.top + r.height / 2 - h / 2)}px)`;
-        mark.classList.toggle('below', r.top < inset + 48);
+        const cramped = r.top < inset + 48, tall = r.bottom + 48 > viewHeight();
+        mark.classList.toggle('below', cramped && !tall);
+        mark.classList.toggle('inside', cramped && tall);
       }
       if (Date.now() < until) { current.frame = requestAnimationFrame(step); return; }
       mark.classList.remove('on');
