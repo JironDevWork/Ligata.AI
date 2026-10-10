@@ -95,7 +95,8 @@ export function startMockAnthropic(port = 1230) {
 
   /**
    * The website assistant, scripted by the visitor's message like the editor: "do: show_on_website {...}; search_website {...} then: Text."
-   * One step per round; "then:" with nothing after it ends without any text (an answer that only shows a place).
+   * One step per round; "then:" with nothing after it ends without any text (an answer that only shows a place). "say: Text do: …"
+   * writes Text before the first step, in the same round (as models often answer first and then show the place).
    */
   function websiteScript(body) {
     const texts = m => typeof m.content === 'string' ? [m.content] : m.content.filter(b => b.type === 'text').map(b => b.text);
@@ -103,12 +104,13 @@ export function startMockAnthropic(port = 1230) {
     while (at > 0 && !(body.messages[at].role === 'user' && texts(body.messages[at]).some(t => t.trim()))) at--;
     const script = /do:\s*([\s\S]*?)(?:\s+then:\s*([\s\S]*))?$/.exec(texts(body.messages[at]).join(' '));
     if (!script) return null;
+    const said = /^\s*say:\s*([\s\S]*?)\s+do:/.exec(texts(body.messages[at]).join(' '))?.[1];
     const steps = script[1].split(/;\s*(?=[a-z_]+\s*\{)/).map(s => s.trim()).filter(Boolean);
     const done = body.messages.slice(at + 1).filter(m => m.role === 'assistant' && typeof m.content !== 'string' && m.content.some(b => b.type === 'tool_use')).length;
     state.websiteResults = body.messages.slice(at + 1).flatMap(m => typeof m.content === 'string' ? [] : m.content.filter(b => b.type === 'tool_result').map(b => typeof b.content === 'string' ? b.content : (b.content || []).map(c => c.text).join('')));
     if (done < steps.length && body.tool_choice?.type !== 'none') {
       const step = /^([a-z_]+)\s*(\{[\s\S]*\})?$/.exec(steps[done]);
-      return { lookup: { name: step[1], input: JSON.parse(step[2] || '{}') }, parts: [] };
+      return { lookup: { name: step[1], input: JSON.parse(step[2] || '{}') }, parts: said && done === 0 ? [said] : [] };
     }
     const text = (script[2] ?? 'Done.').trim();
     return { parts: text ? [text] : [] };
@@ -198,7 +200,7 @@ export function startMockAnthropic(port = 1230) {
         if (closed) return;
         send('content_block_delta', { index, delta: { type: 'text_delta', text: part } });
       }
-      send('content_block_stop', { index });
+      send('content_block_stop', { index }); index++;
     }
     if (lookup) {
       // The arguments arrive as JSON text in pieces, like the real API streams them.

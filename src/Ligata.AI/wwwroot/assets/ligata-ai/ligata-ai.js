@@ -1895,9 +1895,25 @@
   const elsewhere = g => !!g.url && !samePath(g.url, location.pathname);
   const sameSite = url => { try { return new URL(url, location.href).origin === location.origin; } catch { return false; } };
   const viewHeight = () => window.visualViewport?.height || window.innerHeight;
-  const onScreen = r => !!r && r.top >= 4 && r.bottom <= viewHeight() - 4 && r.left >= 0 && r.right <= window.innerWidth;
+  /** What the site keeps fixed at the top of the screen (a sticky header): a place under it is not seen, and scrolling stops below it. */
+  function topInset() {
+    let inset = 0;
+    for (const x of [8, window.innerWidth / 2, window.innerWidth - 8]) {
+      for (let el = document.elementFromPoint(x, 2); el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+        if (el === host) break;
+        const position = getComputedStyle(el).position;
+        if (position !== 'fixed' && position !== 'sticky') continue;
+        const r = el.getBoundingClientRect();
+        if (r.top <= 2 && r.bottom < viewHeight() * 0.4) inset = Math.max(inset, r.bottom);
+        break;
+      }
+    }
+    return inset;
+  }
+  // A place taller than the screen (a whole form) is on screen when its start is, near the top.
+  const onScreen = (r, top = topInset()) => !!r && r.top >= top + 4 && r.left >= 0 && r.right <= window.innerWidth && (r.bottom <= viewHeight() - 4 || (r.height > viewHeight() * 0.7 && r.top <= top + viewHeight() * 0.35));
   /** On screen and away from the edges, where the eye finds it (or too tall to be anywhere else). */
-  const comfortable = r => onScreen(r) && (r.height > viewHeight() * 0.6 || (r.top >= viewHeight() * 0.12 && r.bottom <= viewHeight() * 0.85));
+  const comfortable = r => { const top = topInset(); return onScreen(r, top) && (r.height > viewHeight() * 0.6 || (r.top >= top + (viewHeight() - top) * 0.12 && r.bottom <= viewHeight() * 0.85)); };
   const overlaps = (r, b) => !!b && b.width > 0 && r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top;
   /** The chat (or the bar that stands in for it) hides this part of the page. */
   const covered = r => overlaps(r, state.open ? panel.getBoundingClientRect() : barShown() ? bar.getBoundingClientRect() : null);
@@ -1943,12 +1959,56 @@
     });
   }
   const shown = el => el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, opacityProperty: true, visibilityProperty: true }) : !!el.getClientRects().length;
+  // Forms and other parts of a page. The knowledge index names them by kind and name (Form "Book a visit", see PageParts.cs):
+  // pointing at the name, or at the kind when the page's content has such a part, highlights the whole part. A form in the
+  // header, menu or footer (search, newsletter) counts only by its name.
+  const KINDS = { form: ['form', 'formular', 'formulaire', 'modulo'], embed: ['embedded', 'eingebettet', 'integre', 'incorporato'] };
+  const letters = text => [...String(text || '')].map(fold).join('').replace(/[^\p{L}\p{N}]/gu, '');
+  const named = text => String(text || '').replace(/\s+/g, ' ').trim().replace(/(\s*\*)+$/, '');
+  /** The name the knowledge index gives a part: what the site marked, its aria-label or title, else its first heading or legend. */
+  function partName(el) {
+    if (el.tagName === 'IFRAME') return named(el.title);
+    const given = named(el.getAttribute('data-ligata-ai-part')) || named(el.getAttribute('aria-label'));
+    if (given) return given;
+    const heading = [...el.querySelectorAll('legend,h1,h2,h3,h4,h5,h6')].find(h => !h.closest('[hidden],[aria-hidden="true"]') && named(h.textContent));
+    return heading ? named(heading.textContent) : '';
+  }
+  function partsOnPage() {
+    return [...document.querySelectorAll('form,iframe[title],[data-ligata-ai-part]')].filter(el => !el.closest('#ligata-ai,#ligata-ai-guide') && shown(el)).map(el => {
+      const marked = el.hasAttribute('data-ligata-ai-part');
+      const frame = el.closest('header,footer,nav,[role=banner],[role=navigation],[role=contentinfo],[role=search]'), content = el.closest('main,[role=main],article');
+      const chrome = !marked && (el.matches('[role=search]') || !!el.querySelector('input[type=search]') || (!!frame && (frame.matches('nav,[role=navigation],[role=search]') || !content || !content.contains(frame))));
+      return { element: el, kind: marked ? '' : el.tagName === 'FORM' ? 'form' : 'embed', name: partName(el), chrome };
+    });
+  }
+  /** The part the words name: by its name (also with its kind before it), or by its kind alone. */
+  function findPart(words) {
+    const wanted = letters(words);
+    if (!wanted) return null;
+    const parts = partsOnPage();
+    const match = parts.find(p => p.name && [letters(p.name), ...(KINDS[p.kind] || []).map(k => k + letters(p.name))].includes(wanted));
+    if (match) return match;
+    const kind = Object.keys(KINDS).find(k => KINDS[k].includes(wanted));
+    return kind ? parts.find(p => p.kind === kind && !p.chrome) || null : null;
+  }
+  /** A form field's label or question: the label and its field together when they sit close, where the visitor types. */
+  function fieldOf(element) {
+    const legend = element.closest('legend'), label = element.closest('label');
+    let box = legend?.parentElement?.tagName === 'FIELDSET' ? legend.parentElement : null;
+    if (!box && label?.control) for (box = label; box && !box.contains(label.control); box = box.parentElement);
+    if (!box || box === document.body || box.tagName === 'FORM') return null;
+    const r = box.getBoundingClientRect();
+    return r.height <= 240 && r.width <= window.innerWidth ? box : null;
+  }
   /**
-   * The best place for the words: in the page's content and on screen, then in the content further away, then on screen in the
-   * header, menu or footer (a menu item named like the page is rarely what was meant), then anywhere. Words inside a closed
-   * <details> count when nothing else is visible. Null when the words are not on this page.
+   * The best place for the words: a form or other part they name. Else where they are in the page's content and on screen, then
+   * in the content further away, then on screen in the header, menu or footer (a menu item named like the page is rarely what
+   * was meant), then anywhere; a field's label comes with its field. Words inside a closed <details> count when nothing else
+   * is visible. Null when the words are not on this page.
    */
   function findPlace(words) {
+    const part = findPart(words);
+    if (part) return placeOf(part.element);
     let best = null;
     for (const range of rangesOf(words)) {
       const common = range.commonAncestorContainer, element = common.nodeType === 1 ? common : common.parentElement;
@@ -1966,7 +2026,9 @@
       if (!best || rank < best.rank) best = { range, element, folded: folded ? closed : null, rank };
       if (rank === 0) break;
     }
-    return best && placeOf(best.element, best.range, best.folded);
+    if (!best) return null;
+    const field = !best.folded && fieldOf(best.element);
+    return field ? placeOf(field) : placeOf(best.element, best.range, best.folded);
   }
   const BLOCKY = /^(block|list-item|table-cell|flex|grid|flow-root|table)$/;
   function placeOf(element, range = null, folded = null) {
@@ -2048,8 +2110,9 @@
   /** Scrolls the place to the middle of what the visitor sees (above the bar at the bottom). */
   async function scrollToPlace(place) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const r = place.rect(), room = viewHeight() - (barShown() && !bar.classList.contains('top') ? bar.getBoundingClientRect().height + 20 : 0);
-      window.scrollTo({ top: Math.max(0, window.scrollY + r.top - Math.max(12, (room - r.height) / 2)), left: window.scrollX, behavior: calm() ? 'instant' : 'smooth' });
+      // Below the site's sticky header, if it has one, and above the bar at the bottom.
+      const r = place.rect(), top = topInset(), room = viewHeight() - top - (barShown() && !bar.classList.contains('top') ? bar.getBoundingClientRect().height + 20 : 0);
+      window.scrollTo({ top: Math.max(0, window.scrollY + r.top - top - Math.max(12, (room - r.height) / 2)), left: window.scrollX, behavior: calm() ? 'instant' : 'smooth' });
       await settle();
       if (onScreen(place.rect())) return;
     }
@@ -2075,7 +2138,8 @@
   function placeBar(place) {
     if (!barShown()) return;
     bar.classList.remove('top');
-    if (overlaps(place.rect(), bar.getBoundingClientRect())) bar.classList.add('top');
+    const r = place.rect(), b = bar.getBoundingClientRect();
+    if (overlaps(r, b) && r.top > b.height + 24) bar.classList.add('top');
   }
   function stepAside(text, c) { input.blur(); if (state.open) open(false); showBar(text, c); }
 

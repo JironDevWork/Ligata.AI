@@ -8,7 +8,7 @@ All checks use disposable data: a fixture Umbraco database under `.runtime/`, a 
 # Gateway: 62 tests against a mock llama-server (no GPU needed)
 cd gateway; npm test
 
-# Package domain and security checks (no database): 262 assertions
+# Package domain and security checks (no database): 270 assertions
 dotnet run --project tests/Ligata.AI.Tests -c Release
 
 # A big website (2,000 pages in three languages, 100 documents): index build, page list, search, the worst replay a request may ask for
@@ -18,7 +18,7 @@ dotnet run --project tests/Ligata.AI.Tests -c Release -- --bench
 # live pages in every language (left-out pages, publishing, the 0.6 migration of imported copies), counters, team conversations,
 # limits, spam check, lifecycle, SMTP delivery, backoffice manifest, API-mode ceiling, consent records, the conversation history,
 # which engine answers (keys from the configuration or the backoffice, the editor's choice), the content assistant's tools on a fresh
-# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 412 assertions in total.
+# multilingual fixture (read, search, change in blocks per language, create, publish, sort, recycle bin, risks, Undo, activity, usage): 420 assertions in total.
 # --clear-keys removes the keys earlier runs stored and the engine choice (suites that need exactly one engine start from it).
 dotnet run --project tests/Ligata.AI.Tests -c Release -- --database C:/Code/Ligata.AI/.runtime/ai-test.db --serve --urls http://127.0.0.1:5310
 
@@ -114,7 +114,7 @@ The website assistant points at places: the strict mock Anthropic API plays a sc
 node tests/e2e/mock-anthropic.mjs                       # → :1230
 $env:CONFIG_KEY='0'; $env:LigataAI__Mode='api'; $env:LigataAI__Claude__ApiKey='sk-ant-mock-0000000000000000'; $env:LigataAI__Claude__BaseUrl='http://127.0.0.1:1230'
 bash tests/e2e/restart-host.sh --clear-keys
-cd tests/e2e; node guide.mjs                            # 21 checks
+cd tests/e2e; node guide.mjs                            # 27 checks
 ```
 
 | Check | What is verified |
@@ -135,6 +135,12 @@ cd tests/e2e; node guide.mjs                            # 21 checks
 | Phone, footer | The chat steps aside, the page scrolls to the footer, the bar moves to the top, the page can scroll again; closing the bar brings back the bubble |
 | Phone, the keyboard | Reopening a conversation (with the bubble or after a reload) leaves the field unfocused, so the visitor's tap brings up the keyboard and the page lifts the field above it. A field focused another way is let go on the tap and focused afresh |
 | Computer, the cursor | Opening the chat still puts the cursor in the field |
+| Forms read from the page (0.13) | /contact/ is read as visitors get it: `Form “Book a visit”: … · Your name * · Preferred day · Monday · Friday · …` and `Embedded “Map to the studio”`. Not read: the footer's newsletter form, typed text, the status message, the trap field, the placeholder option, a hidden button. The list of pages names the parts |
+| To a form | *Take me there* with the form's name opens /contact/ and highlights the whole form |
+| Kind and map | `Form` alone points at the content's form, not the newsletter form; the map is found by its title |
+| Field label | "Preferred day" highlights the label with its field |
+| One answer | Text written before the place is offered ends the answer: one request to the model, the answer once, the card; the next question repeats the round |
+| Phone, sticky header | With the site's header made sticky, the form starts below it |
 | Ask *Never* | Another page opens after a countdown; *Cancel* stops it |
 | *Highlight only* | Another page is refused to the model; further down nothing scrolls, the chat says it waits, and the words are highlighted once the visitor scrolls there |
 | Switched off | No guide settings for the widget, no tool for the model; switched on again |
@@ -165,6 +171,13 @@ On the GPU path (`run.mjs`, mock llama-server): "show me ‹heading›" calls th
 - Gemma repeated its first paragraph after the tool call: in other words with 0.12.1, word for word with 0.12.2 (which tells it the answer is complete), and once it also called the tool twice (the second call was refused: one place per answer). 0.12.3 holds back text after a lookup while it repeats the answer and drops it if it stays a repeat. On 0.12.3 the phone-number and opening-hours questions were each answered once, with the card, the page change or scroll and the highlight. The first answer after a deploy took about 64 s once, because the changed instructions had to be read into the GPU's cache; later answers took 7 to 15 s.
 
 The gateway test key `.runtime/key-a.txt` is no longer accepted by the production gateway, so these checks ran through the demo's own connection.
+
+**Forms, live with the real Claude Haiku 5.5** (10 October 2026, Umbraco.BaselineV2 with Ligata.Forms and Ligata.AI 0.13.0, through the counting proxy). 21 requests:
+
+- „Wo kann ich euch ein Formular schicken? Ich finde keins.“ (home page, computer). Before 0.13 the assistant did not know the form. Now Haiku took it from the list of pages without a lookup: `show_on_website(/kontakt/, "Anfrage senden", "Formular „Anfrage senden“")`. *Bring mich hin* opened /kontakt/ with the whole form highlighted and the chat open beside it. In the first run Haiku then wrote its answer a second time and mentioned the button; the Claude engine now ends the answer after the offer (one request instead of two).
+- Phone, on /kontakt/: „Wo ist hier das Formular? Ich sehe es nicht.“ *Zeig es mir* scrolled to the form, highlighted it and showed the bar. The form's heading was first hidden under the site's sticky header; places now stop below it (the highlight at y = 80 instead of 7). One run claimed „Ich habe es für Sie markiert“ before the tap; with the prompt sentence added, the next three runs said „Ich zeige es Ihnen gleich“.
+- "Is there a contact form? What do I have to fill in?" (/en/). Haiku read /en/contact/ and listed the form „Send an enquiry“ with its fields. In the first run it marked *Topic* as required, because the asterisks had been left out; with them kept, the required fields are right.
+- Regression: the phone number from the home page and the opening hours on a phone worked as before. A follow-up question about Saturday now pointed to the *Kontaktformular* as well.
 
 ### Privacy: consent, withdrawal, Cookiebot (browser)
 

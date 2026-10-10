@@ -440,7 +440,11 @@ public sealed class ClaudeEngine(ClaudeGate gate, AssistantStore store, EngineSe
                     if (asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).ToList() is { Count: > 0 } kept) outcome?.Lookups.Add(kept);
                     await sse.Send("lookup", new { calls = asked.Where(Lookups.Valid).Take(Lookups.MaxRecordedCalls).Select(c => new { name = c.Name, arguments = c.Arguments }) });
                     // A place to show the visitor, checked against this website's pages.
-                    foreach (var place in looking.TakePlaces()) { await sse.Send("guide", place); offered = true; }
+                    var places = looking.TakePlaces();
+                    foreach (var place in places) { await sse.Send("guide", place); offered = true; }
+                    // The answer was written before it showed the place. Told it was complete, Claude still wrote it a second time
+                    // and mentioned the button: the website ends the answer here (the next question repeats this round, as usual).
+                    if (looking.Complete && places.Count > 0) { stopReason = "end_turn"; break; }
                     conversation.Add(new() { Role = Role.Assistant, Content = blocks });
                     conversation.Add(new() { Role = Role.User, Content = calls.Select((c, i) => (ContentBlockParam)new ToolResultBlockParam { ToolUseID = c.Id, Content = results[i] }).ToList() });
                     continue;

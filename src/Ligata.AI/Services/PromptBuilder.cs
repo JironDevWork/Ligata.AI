@@ -86,10 +86,11 @@ public static class PromptBuilder
         text.AppendLine($"You can also show visitors where something is with {Lookups.Show}: {what}.");
         text.AppendLine(guide.Ask == "never"
             ? $"It happens right after your answer, so call {Lookups.Show} only when the visitor asks where something is, cannot find or see something, or asks you to show or take them there."
-            : $"Calling {Lookups.Show} moves nothing yet: the website puts a button under your answer, and only the visitor's click scrolls or opens the page. So whenever the visitor asks where something is, cannot find or see something, or asks you to show or take them there, call {Lookups.Show} as well as answering. Never ask in your answer whether you should show it, and do not mention the button.");
+            : $"Calling {Lookups.Show} moves nothing yet: the website puts a button under your answer, and only the visitor's click scrolls or opens the page. So whenever the visitor asks where something is, cannot find or see something, or asks you to show or take them there, call {Lookups.Show} as well as answering. Never ask in your answer whether you should show it, do not mention the button, and do not say that you have shown, highlighted or marked it: that happens only when the visitor clicks.");
         text.AppendLine("Give text copied exactly from the page, short and distinctive (for example the phone number itself or a heading), and label: what it is, in the visitor's language. " + (guide.Pages
             ? "Give page as the url from the list of pages, or leave it out for the page the visitor is on. If you do not know the page's exact words yet, look them up first."
             : "If you do not know the page's exact words yet, read the page first."));
+        text.AppendLine("A form, map or other part of a page is named after the page's url in the list of pages, for example Form “Book a visit”: to show it, give its name as text (Book a visit), and the website highlights the whole form.");
         text.AppendLine("Say briefly where it is in your answer. If the visitor does not want the information in the chat, do not write it there; show it instead. Do not use the tool for other questions.");
         return text.ToString();
     }
@@ -123,7 +124,8 @@ public static class PromptBuilder
         var documents = snapshot.Documents.Where(d => d.Kind != "page").ToList();
         if (pages.Count == 0 && documents.Count == 0) return "";
         var top = pages.Count == 0 ? 1 : pages.Min(p => p.Level);
-        string Line(KnowledgeDocument page) => new string(' ', Math.Min(6, page.Level - top) * 2) + "- " + Clean(page.Title, 120) + ": " + page.Url;
+        // A page's forms and other parts follow its url (Form “Book a visit”), so the assistant knows where the form is without a lookup.
+        string Line(KnowledgeDocument page) => new string(' ', Math.Min(6, page.Level - top) * 2) + "- " + Clean(page.Title, 120) + ": " + page.Url + (page.Parts.Length > 0 ? " · " + Clean(page.Parts, 200) : "");
         var lines = pages.Select(Line).ToList();
         var room = (long)(maxTokens * 3.6);
         long Length(IEnumerable<int> shown) => shown.Sum(i => (long)lines[i].Length + 1);

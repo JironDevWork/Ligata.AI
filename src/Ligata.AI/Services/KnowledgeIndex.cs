@@ -11,7 +11,8 @@ namespace Ligata.AI.Services;
 
 /// <summary>A website page in one language (Culture, empty when pages do not vary) or a knowledge item (text or file, without url) the assistant can look up.</summary>
 /// <param name="Page">The same for every language version of a page (empty for items).</param>
-public sealed record KnowledgeDocument(string Kind, string Title, string Url, int Level, string Text, string Culture = "", string Page = "");
+/// <param name="Parts">The page's forms and other parts by kind and name (Form “Book a visit”), for the list of pages (see <see cref="PageParts"/>).</param>
+public sealed record KnowledgeDocument(string Kind, string Title, string Url, int Level, string Text, string Culture = "", string Page = "", string Parts = "");
 
 /// <summary>One matching passage: about a paragraph of a document, Order is its place in the document.</summary>
 public sealed record KnowledgeHit(KnowledgeDocument Document, int Order, string Text, double Score);
@@ -356,6 +357,9 @@ public sealed class Lookups(KnowledgeSnapshot snapshot, bool team = false, strin
         private bool complete;
         private readonly List<Place> shown = [];
 
+        /// <summary>The last round only showed a place after the answer was written: nothing more is needed from the model.</summary>
+        public bool Complete => complete;
+
         /// <summary>The places this answer shows that the browser has not been told about yet (at most one per answer).</summary>
         public List<Place> TakePlaces() { var taken = shown.ToList(); shown.Clear(); return taken; }
 
@@ -535,7 +539,8 @@ public static class Words
 
 /// <summary>
 /// Keeps the snapshot of what the assistant can look up. It is rebuilt when pages are published or unpublished (on any server)
-/// and when knowledge items or the left-out pages change; pages that did not change keep their text. Snapshots for settings an
+/// and when knowledge items or the left-out pages change; pages that did not change keep their text. What the page reader found
+/// on a page as visitors get it (forms and other parts, see <see cref="PageParts"/>) is added to its text. Snapshots for settings an
 /// editor has not saved yet (the budget meter, the test chat) are kept apart, so visitors never lose theirs to a preview.
 /// </summary>
 public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore store, ILogger<KnowledgeIndex> logger)
@@ -548,12 +553,18 @@ public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore stor
     /// <summary>The latest snapshot, if one was built (for estimates that must not wait).</summary>
     public static KnowledgeSnapshot? Latest => cache?.Snapshot;
 
+    /// <summary>The pages of the latest snapshot for the saved settings (the page reader reads these), or null before the first one.</summary>
+    public static IReadOnlyList<LivePage>? LatestPages => cache?.Pages.Values.ToList();
+
+    /// <summary>Counts publications: the page reader reads changed pages again when it moves.</summary>
+    public static int ContentVersion => Volatile.Read(ref contentVersion);
+
     public static void ContentChanged() => Interlocked.Increment(ref contentVersion);
 
     public async Task<KnowledgeSnapshot> SnapshotAsync(KnowledgeSettings settings, CancellationToken token = default)
     {
         var json = JsonSerializer.Serialize(settings, AssistantJson.Options);
-        string Key() => string.Join('|', Volatile.Read(ref contentVersion), AssistantStore.KnowledgeVersion, json);
+        string Key() => string.Join('|', Volatile.Read(ref contentVersion), AssistantStore.KnowledgeVersion, PageParts.Version, json);
         var saved = json == JsonSerializer.Serialize(store.Settings().Settings.Knowledge, AssistantJson.Options);
         if ((saved ? cache : preview) is { } hit && hit.Key == Key()) return hit.Snapshot;
         await Gate.WaitAsync(token);
@@ -564,7 +575,7 @@ public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore stor
             if ((saved ? cache : preview) is { } again && again.Key == key) return again.Snapshot;
             var pages = await content.LivePagesAsync(settings.Includes, (saved ? cache : preview ?? cache)?.Pages ?? new Dictionary<string, LivePage>());
             var items = store.KnowledgeRows().Where(k => k.Enabled && !k.Pinned && k.Kind != "page");
-            var snapshot = new KnowledgeSnapshot([.. pages.Select(p => new KnowledgeDocument("page", p.Name, p.Url, p.Level, p.Text, p.Culture, p.Key.ToString("N"))), .. items.Select(i => new KnowledgeDocument(i.Kind, i.Title, "", 0, i.Text))])
+            var snapshot = new KnowledgeSnapshot([.. pages.Select(Page), .. items.Select(i => new KnowledgeDocument(i.Kind, i.Title, "", 0, i.Text))])
             {
                 Truncated = content.Truncated,
             };
@@ -575,6 +586,13 @@ public sealed class KnowledgeIndex(ContentKnowledge content, AssistantStore stor
             return snapshot;
         }
         finally { Gate.Release(); }
+    }
+
+    private static KnowledgeDocument Page(LivePage page)
+    {
+        var read = PageParts.For(page.Id);
+        var text = read is { Text.Length: > 0 } ? (page.Text + "\n\n" + read.Text).Trim() : page.Text;
+        return new KnowledgeDocument("page", page.Name, page.Url, page.Level, text, page.Culture, page.Key.ToString("N"), read?.Names ?? "");
     }
 }
 

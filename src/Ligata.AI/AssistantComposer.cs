@@ -2,6 +2,7 @@ using Ligata.AI.Controllers;
 using Ligata.AI.Data;
 using Ligata.AI.Rendering;
 using Ligata.AI.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,10 @@ public sealed class AssistantComposer : IComposer
         builder.Services.AddScoped<ContentKnowledge>();
         builder.Services.AddScoped<KnowledgeIndex>();
         builder.AddNotificationHandler<ContentCacheRefresherNotification, KnowledgeIndexRefresher>();
+        // Pages as visitors get them, for the forms and other parts their text properties do not hold (0.13).
+        builder.Services.AddTransient<IStartupFilter, PageReaderStartup>();
+        builder.Services.AddSingleton<PageReader>();
+        builder.Services.AddHostedService<PageReading>();
         builder.Services.AddSingleton<RequestGuard>();
         builder.Services.AddSingleton<ApiKeyVault>();
         builder.Services.AddSingleton<SupportHub>();

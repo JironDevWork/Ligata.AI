@@ -5,7 +5,7 @@ A website chat for **Umbraco 17.6 / .NET 10** with three features that work toge
 - **AI assistant** answered by a self-hosted **Gemma 4 12B** on the Ligata mini PC, or by **Claude Haiku 5.5** through Anthropic's API (no extra server; see [AI engine](#ai-engine-own-gpu-or-claude-api)).
 - **Live chat with your team**: when the AI cannot help, or a visitor asks for a person, the team answers in an **Inbox** inside Umbraco.
 - **Email form**: visitors leave a message that arrives in your mailbox and in the Inbox.
-- **Showing the way** (0.12): when visitors ask where something is, the website assistant takes them there. It opens the page, scrolls to the spot and highlights it, asking first; on phones the chat steps aside meanwhile. It never clicks or fills in anything. See [Showing the way](#showing-the-way).
+- **Showing the way** (0.12): when visitors ask where something is, the website assistant takes them there. It opens the page, scrolls to the spot and highlights it, asking first; on phones the chat steps aside meanwhile. It never clicks or fills in anything. Since 0.13 it also knows the forms on a page, whatever module renders them, and highlights the whole form. See [Showing the way](#showing-the-way).
 - **Content assistant** (0.9): a chat in the Umbraco backoffice that finds, reads and changes content with tools. Changes wait for approval or run by permission mode (Read only, Manual, Auto, Bypass), are saved as drafts, checked after saving, logged with the person who asked and can be undone. See [docs/CONTENT-ASSISTANT.md](docs/CONTENT-ASSISTANT.md).
 
 Built for the GDPR (DSGVO): the AI reads nothing before a visitor agrees, every consent is recorded and can be withdrawn, Cookiebot is supported, and the backoffice writes the matching privacy policy text. See [Privacy](#privacy-gdpr--dsgvo).
@@ -124,6 +124,11 @@ The model may search several topics at once, in up to three rounds per answer (a
 
 - **Big websites fit**: knowledge no longer grows with the website. The list of pages takes at most about 3,000 tokens; a bigger website lists its upper levels and is found by search.
 - **Always current**: pages are read live from Umbraco's published content. Publishing, unpublishing or moving a page updates what the assistant finds at once (on every server of a load-balanced site). New pages are included automatically; editors leave out single pages or whole sections under **Knowledge**.
+- **Pages as visitors get them (0.13)**: a page's text properties do not hold everything visitors see. A form module such as Ligata.Forms stores only the form's id, and an embedded map only its address. In the background, the website reads every page as visitors get it, in memory through its own request pipeline. There is no network request, so proxies, Cloudflare and firewalls play no part. It adds three kinds of parts to the page's text: forms, embedded maps and videos (an `<iframe>` with a title), and parts a module marks with `data-ligata-ai-part="Name"`. A form reads like this: `Form “Book a visit”: Tell us when you would like to come by. · Your name * · Preferred day · …`. The list of pages names the parts too (`Contact: /contact/ · Form “Book a visit”`), so the assistant knows where the form is without a lookup.
+  - Forms in the header, menu or footer (search, newsletter) are on every page and are left out.
+  - Hidden text, status messages, trap fields and anything typed into a field are never read.
+  - Pages are read shortly after the site starts, after every publication (only the changed pages), and all again every six hours, because changing a form in its module publishes no page.
+  - `LigataAI:ReadRenderedPages: false` switches it off.
 - **Multilingual websites**: every language of a page is searched on its own, with its own name, url and text. The list of pages is grouped by language, results name the language, the language of the page the visitor is on wins a tie, and answers link to the page in the visitor's language.
 - **Earlier lookups stay in the conversation**: the browser keeps only what was looked up (for example `search_website("opening hours")`); the website looks it up again for every follow-up question. The model sees the same results, the browser cannot change them, and on the GPU the cached conversation stays valid.
 - **When nothing is found**, the assistant says so and offers the team (or the contact email and page). It never invents prices, dates or contact details.
@@ -140,6 +145,8 @@ Since 0.12 the assistant can show visitors where something is, not only say it. 
 - **Only looking, never acting.** The widget finds the words, scrolls there and highlights them, opening the page first when allowed. It never clicks, types or sends anything. The one exception: words hidden in a closed `<details>` block (FAQ accordions) are revealed. The highlight sits in its own layer above the page and never catches clicks, so a highlighted phone number can still be tapped.
 - **Asks first.** Calling the tool moves nothing. The visitor gets a card under the answer: *Take me there* for another page, *Show me* further down the page, or *No thanks*. Something already on screen and not covered by the chat is highlighted at once. What the visitor chose (shown, declined, not found) goes back with the conversation, so the assistant knows.
 - **Follows the visitor to the next page.** Before the page changes, the place is kept in this tab's session storage for one minute. After loading, the widget waits for the words (up to 5 s), scrolls them to the middle of the screen and highlights them. The conversation continues on the new page.
+- **Forms and other parts (0.13).** The model can point at a form by its name (*Anfrage senden*), by its kind (*Formular*), or by both, and the whole form is highlighted. A field's label is highlighted together with its field. Embedded maps and videos are found by their title, marked parts by their name. A place taller than the screen is scrolled to its start. Every place stops below the site's sticky header, if it has one.
+- **One answer (0.13).** When the answer is already written and the model then only shows a place, the website ends the answer itself. Even when told the answer was complete, Haiku wrote it a second time and mentioned the button.
 - **Phones first.** The chat covers the whole screen on phones, so it steps aside while the spot is shown. A bar says *I've highlighted "Opening hours" for you* with *Back to chat*. It moves to the top when it would hide the spot and leaves after a few seconds (the bubble brings the conversation back as well). On computers the chat stays open and steps aside only when it covers the spot. Words that wrap onto another line get their whole paragraph highlighted, so the ring never cuts through the text around them. Reduced motion is respected (no pulsing, no gliding).
 - **Settings** (*Behaviour → Showing the way*):
   - on or off (on by default);
@@ -156,6 +163,13 @@ Since 0.12 the assistant can show visitors where something is, not only say it. 
 
   A price question used no tool. After *No thanks*, the next answer knew the visitor had declined. Before the prompt said that calling the tool moves nothing, Haiku once asked in its answer whether to show the place instead of offering it.
 - **Checked with Gemma 4 12B** on demo.ligata.ch (16 visitor questions): it offers the right place on a computer and on a phone and uses no tool for a price question. A reminder next to the conversation (0.12.1) fixed the one case where it wrote the opening hours into the chat without offering them. Its habit of writing the answer a second time after the tool call is caught: since 0.12.3 the website drops a word-for-word repeat. See [docs/TESTING.md](docs/TESTING.md).
+
+- **Forms, measured with Claude Haiku 5.5** on Umbraco.BaselineV2 with Ligata.Forms (10 October 2026, 21 real requests).
+  - „Wo kann ich euch ein Formular schicken? Ich finde keins.“ (home page): Haiku knew from the list of pages that the contact page has the form „Anfrage senden“ and offered *Bring mich hin*. There the whole form was highlighted, below the site's sticky header.
+  - On a phone, on the contact page: the same with *Zeig es mir*.
+  - Asked what to fill in, Haiku listed the fields and which ones are required.
+
+  Before 0.13 the assistant did not know the form existed.
 
 ## AI engine: own GPU or Claude API
 
@@ -230,9 +244,10 @@ Answers come from the Ligata GPU or from Claude. Everything else (settings, know
 - **Pages rendered by this Umbraco** need no configuration: the bubble is added before `</body>` automatically, and same-host requests are accepted.
 - **Static exports** (e.g. Ligata.Cloudflare on Pages): set `PublicApiBase` to the CMS's public URL and list the public site in `AllowedOrigins`. Add `/assets/ligata-ai/ligata-ai.js` to the exporter's additional assets, and allow the widget's `data-api` CMS endpoint in its origin-leak check.
 - `LigataAI:GatewayUrl` / `LigataAI:ApiKey` (better: environment variable `LigataAI__ApiKey`) override the backoffice values (GPU mode).
+- **`ReadRenderedPages`** (default `true`) reads every page as visitors get it, in memory, for its forms and other parts; see [How the assistant knows your website](#how-the-assistant-knows-your-website). A module's own part (a booking widget, a calculator) is found once its element is marked with `data-ligata-ai-part="Name"`.
 - **Manual placement**: set *Where it appears* to **Manual** and add `@await Component.InvokeAsync("LigataAssistant")` to a template.
 - **Privacy** decides how visitors agree before the AI reads their messages; see [Privacy](#privacy-gdpr--dsgvo) and [docs/PRIVACY.md](docs/PRIVACY.md).
-- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")` (waits in the input until the visitor agreed), `reset()`, `contact("chat" | "email")`, and `show({ text, label, page })` or `show({ selector, label })`. `show` highlights words or an element on this page, or opens another page of this site and highlights them there; it resolves to `false` when they are not found.
+- **JavaScript API**: `LigataAI.open()`, `close()`, `ask("…")` (waits in the input until the visitor agreed), `reset()`, `contact("chat" | "email")`, and `show({ text, label, page })` or `show({ selector, label })`. `show` highlights words or an element on this page, or opens another page of this site and highlights them there; it resolves to `false` when they are not found. `text` can also name a form or other part: its name, or `Form` for the page's form.
 
 ## Security and privacy
 

@@ -324,6 +324,55 @@ Assert(publicGuide.Contains("\"guide\":{\"reach\":\"pages\",\"ask\":\"always\",\
 Assert(Words.SamePath("/Kontakt", "https://www.ahorn.example/kontakt/?x=1") && !Words.SamePath("/kontakt/", "/kontakt/team/") && Words.Contains("Telefon: +41 44 000 00 00", "+41 (0)44 000 00 00") && Words.Contains("„Öffnungszeiten“ – Montag", "\"offnungszeiten\" - montag") && !Words.Contains("Telefon 044 000 00 00", "044 000 00 01"),
     "Words are compared without spaces, case, accents and typographic quotes; numbers of six digits or more also by their digits.");
 
+// ---------- forms and other parts of a page, read as visitors get it (0.13) ----------
+var formsPage = """
+<html lang="de"><body>
+<header><form role="search"><input type="search" name="q"><button>Suchen</button></form></header>
+<script>var x = '<form><h2>Not a form</h2></form>';</script>
+<main><header><h1>Kontakt</h1></header><p>Telefon 044 000 00 00</p>
+<div class="ligata-form" data-definition="{&quot;id&quot;:1}"><form novalidate>
+  <h2>Anfrage senden</h2><p>Beschreiben Sie Ihr Vorhaben. Felder mit * sind Pflicht.</p>
+  <div class="lf-status" role="status" aria-live="polite">Verbindung wird geprüft …</div>
+  <button type="button" data-retry-connection hidden>Verbindung erneut prüfen</button>
+  <div class="lf-trap" aria-hidden="true"><label>Bitte leer lassen<input name="website" tabindex="-1" /></label></div>
+  <fieldset class="lf-group"><legend></legend>
+    <div class="lf-field"><label for="a">Name *</label><input id="a" name="name" required /></div>
+    <div class="lf-field"><label for="b">E-Mail *</label><input id="b" type="email" /></div>
+    <div class="lf-field"><label for="c">Thema</label><select id="c"><option value="">Bitte auswählen</option><option value="m">Massmöbel</option><option value="r">Reparatur</option></select></div>
+    <div class="lf-field"><label for="d">Nachricht *</label><textarea id="d">Vorausgefüllt</textarea></div>
+    <div class="lf-field"><label class="lf-choice" for="e"><input id="e" type="checkbox" /><span>Ich habe die <a href="/datenschutz/">Datenschutzhinweise</a> gelesen. *</span></label></div>
+  </fieldset>
+  <div class="lf-actions"><button type="button" data-back hidden>Zurück</button><button type="submit" disabled>Anfrage senden</button></div>
+  <noscript>Für das Formular brauchst du JavaScript.</noscript>
+</form></div>
+<iframe title="Karte der Werkstatt" src="https://maps.example/embed"></iframe>
+<section data-ligata-ai-part="Terminbuchung"><p>Termin wählen</p><button>Weiter</button></section>
+<form><label>Gutscheincode<input name="code"></label><button>Einlösen</button></form>
+<div style="display: none"><form aria-label="Versteckt"><button>Nie</button></form></div>
+</main>
+<footer><form class="newsletter"><label>Newsletter</label><input type="email"><button>Abonnieren</button></form></footer>
+</body></html>
+""";
+var formParts = PageParts.Read(formsPage);
+Assert(formParts.Count == 4 && formParts[0] is { Kind: "form", Name: "Anfrage senden" } && formParts[1] is { Kind: "embed", Name: "Karte der Werkstatt" } && formParts[2] is { Kind: "", Name: "Terminbuchung" } && formParts[3] is { Kind: "form", Name: "" },
+    "A page's forms, embedded maps and marked parts are read by kind and name, in order; search, newsletter and hidden forms are not: " + string.Join(" | ", formParts.Select(p => p.Kind + ":" + p.Name)));
+Assert(formParts[0].Text.SequenceEqual(["Beschreiben Sie Ihr Vorhaben. Felder mit * sind Pflicht.", "Name *", "E-Mail *", "Thema", "Massmöbel", "Reparatur", "Nachricht *", "Ich habe die Datenschutzhinweise gelesen. *"]),
+    "A form is read as the visitor sees it, required fields with their asterisk: no status text, hidden buttons, trap fields, placeholder options, typed text or noscript: " + string.Join(" · ", formParts[0].Text));
+var (formsText, formsNames) = PageParts.Describe(formsPage, "de-CH");
+Assert(formsText.StartsWith("Formular „Anfrage senden“: Beschreiben Sie Ihr Vorhaben.") && formsText.Contains("\nEingebettet „Karte der Werkstatt“\n") && formsText.Contains("„Terminbuchung“: Termin wählen · Weiter") && formsText.Contains("\nFormular: Gutscheincode · Einlösen")
+    && formsNames == "Formular „Anfrage senden“, Eingebettet „Karte der Werkstatt“, „Terminbuchung“, Formular", "Parts are described in the page's language: " + formsText.Replace('\n', '|'));
+Assert(PageParts.Describe(formsPage.Replace("lang=\"de\"", "lang=\"fr\""), "").Names.StartsWith("Formulaire « Anfrage senden »") && PageParts.Describe(formsPage, "en-US").Names.StartsWith("Form “Anfrage senden”") && PageParts.Describe("<p>No forms</p>", "en") == ("", ""),
+    "Without a culture the html lang decides; a page without parts adds nothing.");
+var longForm = "<form><h2>Long</h2>" + string.Concat(Enumerable.Range(1, 80).Select(i => $"<label>Question number {i}</label><input>")) + "</form>";
+Assert(PageParts.Describe(longForm, "en").Text.Length <= PageParts.MaxLine + 2 && PageParts.Describe(longForm, "en").Text.EndsWith(" …"), "A long form is shortened.");
+var withParts = new KnowledgeSnapshot([new KnowledgeDocument("page", "Kontakt", "/kontakt/", 2, "Telefon 044 000 00 00\n\n" + formsText, "de", "k", formsNames), new KnowledgeDocument("page", "Start", "/", 1, "Willkommen", "de", "s")]);
+Assert(PromptBuilder.SiteMap(withParts).Contains("- Kontakt: /kontakt/ · Formular „Anfrage senden“") && withParts.Search("Formular").FirstOrDefault()?.Document.Url == "/kontakt/",
+    "The list of pages names a page's forms, and a search for the form finds its page.");
+var formGuide = new Lookups(withParts, false, "de", new GuideSettings(), "/").Begin();
+Assert(formGuide.Round([new ChatLookup(Lookups.Show, JsonDocument.Parse("""{"page":"/kontakt/","text":"Anfrage senden","label":"Formular"}""").RootElement)])[0].StartsWith("Offered")
+    && formGuide.TakePlaces().Single() is { Url: "/kontakt/", Text: "Anfrage senden" }, "The assistant can take the visitor to a form by its name.");
+Assert(PromptBuilder.Guide(new GuideSettings()).Contains("give its name as text"), "The assistant is told how to show a form.");
+
 // ---------- API mode (Claude) ----------
 Assert(ClaudeEngine.DisplayName("claude-haiku-5-5") == "Claude Haiku 5.5" && ClaudeEngine.DisplayName("claude-opus-5") == "Claude Opus 5", "Model names are readable.");
 Assert(new AssistantOptions { Mode = " API " }.UsesApi && !new AssistantOptions().UsesApi && !new AssistantOptions { Mode = "gpu" }.UsesApi, "The GPU gateway stays the default; api must be chosen.");

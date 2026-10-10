@@ -234,6 +234,71 @@ await check('the page\'s own title wins over the menu item of the same name', as
   await d.marks('Contact');
 });
 
+// ---------- forms and other parts the page's text does not hold (0.13) ----------
+/** The highlight surrounds the element (its start on screen, when it is taller than the screen). */
+async function marksElement(p, selector) {
+  const mark = p.locator('#ligata-ai-guide .mark').first();
+  await mark.waitFor({ timeout: 8000 });
+  await sleep(300);
+  const box = await mark.boundingBox(), target = await p.locator(selector).first().boundingBox(), vh = await p.evaluate(() => innerHeight);
+  assert(box && target, 'highlight and element found');
+  assert(target.y >= 0 && target.y < vh * 0.6, `the element's start is on screen: ${JSON.stringify(target)}`);
+  assert(box.x <= target.x + 1 && box.y <= target.y + 1 && box.x + box.width >= target.x + target.width - 1 && box.y + box.height >= target.y + target.height - 1, `the highlight surrounds the element: ${JSON.stringify({ box, target })}`);
+  return { box, target };
+}
+
+await check('a form the page\'s text does not hold is read from the page as visitors get it, and listed with its page', async () => {
+  await d.start('/');
+  let result = '';
+  // The pages are read in the background shortly after the site starts.
+  for (let i = 0; i < 15 && !result.includes('Book a visit'); i++) {
+    if (i) await sleep(2000);
+    await d.ask('do: read_pages {"pages":["/contact/"]} then: Read it.');
+    result = (await mockState()).websiteResults.join('\n');
+  }
+  assert(result.includes('Form “Book a visit”: Tell us when you would like to come by. · Your name * · Preferred day · Monday · Friday · Anything we should know? · Request a visit'), 'the form, as the visitor sees it: ' + result.slice(result.indexOf('Form')));
+  assert(result.includes('Embedded “Map to the studio”'), 'the embedded map');
+  assert(!/Newsletter|PREFILLED-NOTE|Checking connection|Leave empty|Please choose|Try again/.test(result), 'no footer form, typed text, status, trap field, placeholder or hidden button');
+  const system = JSON.stringify((await mockState()).last.system);
+  assert(system.includes('/contact/ · Form “Book a visit”, Embedded “Map to the studio”'), 'the list of pages names the form');
+});
+
+await check('"Take me there" to a form by its name: the other page opens and the whole form is highlighted', async () => {
+  await d.start('/');
+  await d.ask(show({ page: '/contact/', text: 'Book a visit', label: 'Booking form' }, 'The booking form is on the contact page.'));
+  assert((await d.card().innerText()).includes('Take me there'), 'offered');
+  await d.card().locator('[data-guide=go]').click();
+  await desktop.waitForURL(/\/contact\/?$/, { timeout: 15000 });
+  await marksElement(desktop, '.booking form');
+  await desktop.screenshot({ path: path.join(out, '10-form.png') });
+});
+
+await check('the kind alone points at the content\'s form, not the newsletter in the footer; a map by its title', async () => {
+  assert(await desktop.evaluate(() => window.LigataAI.show({ text: 'Form', label: 'Form' })) === true, 'found');
+  await marksElement(desktop, '.booking form');
+  assert(await desktop.evaluate(() => window.LigataAI.show({ text: 'Map to the studio', label: 'Map' })) === true, 'map found');
+  await marksElement(desktop, 'iframe[title="Map to the studio"]');
+});
+
+await check('a field\'s label is highlighted together with its field', async () => {
+  assert(await desktop.evaluate(() => window.LigataAI.show({ text: 'Preferred day', label: 'Day' })) === true, 'found');
+  await marksElement(desktop, '#visit-day');
+  await marksElement(desktop, 'label[for=visit-day]');
+});
+
+await check('an answer written before it shows a place ends there: the model is not asked again (it wrote the answer twice)', async () => {
+  await d.start('/');
+  const before = (await mockState()).requests;
+  await d.ask('say: The booking form is on the contact page. do: show_on_website {"page":"/contact/","text":"Book a visit","label":"Booking form"} then: The booking form is on the contact page. A button below takes you there.');
+  assert((await mockState()).requests - before === 1, 'one request to the model: ' + ((await mockState()).requests - before));
+  const answer = await d.widget.locator('.msg.bot:not(.guide-note)').last().innerText();
+  assert(answer.includes('The booking form is on the contact page.') && !answer.includes('A button below'), 'the answer, once: ' + answer);
+  assert((await d.card().innerText()).includes('Take me there'), 'with the card');
+  await d.ask('Thanks, that is all.');
+  const replayed = JSON.stringify((await mockState()).last.messages);
+  assert(replayed.includes('"name":"show_on_website"') && replayed.includes('Offered to show “Booking form”'), 'the next question repeats the round with its result');
+});
+
 // ---------- a visitor on a phone ----------
 const phoneContext = await browser.newContext({ ...devices['iPhone 13'], defaultBrowserType: undefined });
 const phone = await phoneContext.newPage();
@@ -294,6 +359,18 @@ await check('phone: an open conversation never focuses the field by itself, so t
   assert(await focused() === 'TEXTAREA' && await phone.evaluate(() => window.focuses) === 2, 'the tap focused the field afresh: ' + await phone.evaluate(() => window.focuses));
   await m.widget.locator('.composer textarea').tap();
   assert(await phone.evaluate(() => window.focuses) === 2, 'a tap into a field the visitor focused leaves it be');
+});
+
+await check('phone: a place is scrolled below the site\'s sticky header, not under it', async () => {
+  await phone.goto(base + '/contact/');
+  await m.widget.locator('.panel').waitFor({ state: 'attached' });
+  await phone.evaluate(() => window.LigataAI.close());
+  await phone.evaluate(() => { const h = document.querySelector('header.site'); h.style.cssText = 'position:sticky;top:0;z-index:5;height:140px;background:#fff'; });
+  assert(await phone.evaluate(() => window.LigataAI.show({ text: 'Form', label: 'Form' })) === true, 'found');
+  await marksElement(phone, '.booking form');
+  const { form, header } = await phone.evaluate(() => ({ form: document.querySelector('.booking form').getBoundingClientRect().top, header: document.querySelector('header.site').getBoundingClientRect().bottom }));
+  assert(form >= header + 4, `the form starts below the header: ${JSON.stringify({ form, header })}`);
+  await phone.screenshot({ path: path.join(out, '11-phone-sticky.png') });
 });
 
 await check('computer: opening the chat still puts the cursor in the field', async () => {

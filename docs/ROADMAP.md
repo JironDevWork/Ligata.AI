@@ -85,4 +85,4 @@ Umbraco.AI is MIT-licensed: its path-addressed block editing and its approval fl
 
 - **Answers that say the same in other words.** Since 0.12.3 the website drops Gemma's word-for-word repeat after showing the way (checked on demo.ligata.ch, see [TESTING.md](TESTING.md#showing-the-way-012)). A repeat in other words would still show; it was seen once, with 0.12.1.
 - **Guided tours.** For example "Show me how to book a call": a few steps, each confirmed by the visitor.
-- **Things that are not text**: a map, a picture or a button without words. Today the assistant can only point at words.
+- **Things that are not text**: since 0.13 forms, embedded maps and videos (by their title) and parts a module marks with `data-ligata-ai-part` are known and can be shown whole. Pictures and buttons without words are still out of reach.

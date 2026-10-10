@@ -32,6 +32,12 @@ public sealed class AssistantOptions
     public int ReadsPerTenMinutes { get; set; } = 600;
     /// <summary>Injects the chat bubble into every rendered page with a body tag. Disable to place it manually.</summary>
     public bool AutoInject { get; set; } = true;
+    /// <summary>
+    /// Reads every page as visitors get it (in memory, through the site's own request pipeline, no network request) for what its
+    /// text properties do not hold: forms such as Ligata.Forms renders, embedded maps and videos, and parts marked with
+    /// data-ligata-ai-part. The assistant then knows where the form is and can point at it.
+    /// </summary>
+    public bool ReadRenderedPages { get; set; } = true;
     /// <summary>Address of this CMS for links in team emails, e.g. https://cms.example.ch. Falls back to an absolute PublicApiBase or WebRouting:UmbracoApplicationUrl.</summary>
     public string BackofficeUrl { get; set; } = "";
     /// <summary>What this installation is licensed for. Editors can switch enabled features off, never on.</summary>

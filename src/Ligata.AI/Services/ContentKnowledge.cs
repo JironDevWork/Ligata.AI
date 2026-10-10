@@ -14,9 +14,10 @@ public sealed record SitePage(Guid Key, string Name, string Url, int Level, stri
 
 /// <summary>
 /// A published page in one language (Culture is empty for pages that do not vary by culture), with its text as the assistant
-/// reads it. Updated tells whether a cached text is still current.
+/// reads it. Updated tells whether a cached text is still current. Address is its absolute url when Umbraco knows the domain
+/// (the page reader asks for the page with it, so sites with a domain per language get the right one), else empty.
 /// </summary>
-public sealed record LivePage(Guid Key, string Culture, string Name, string Url, int Level, DateTime Updated, string Text)
+public sealed record LivePage(Guid Key, string Culture, string Name, string Url, int Level, DateTime Updated, string Text, string Address = "")
 {
     public string Id => Key.ToString("N") + "|" + Culture;
 }
@@ -117,16 +118,24 @@ public sealed class ContentKnowledge(IUmbracoContextFactory contexts, IDocumentN
             var name = info?.Name ?? page.Name ?? "Page";
             var updated = info != null && info.Date > page.UpdateDate ? info.Date : page.UpdateDate;
             var id = page.Key.ToString("N") + "|" + culture;
-            if (previous.TryGetValue(id, out var known) && known.Updated == updated && known.Url == url && known.Name == name) { result.Add(known with { Level = page.Level }); continue; }
+            var address = Absolute(page, culture);
+            if (previous.TryGetValue(id, out var known) && known.Updated == updated && known.Url == url && known.Name == name) { result.Add(known with { Level = page.Level, Address = address }); continue; }
             var text = new StringBuilder();
             // Block list and grid items read their values in the variation context: set it to this language while reading.
             var before = variation.VariationContext;
             variation.VariationContext = new VariationContext(culture);
             try { Collect(page, text, 0, culture); }
             finally { variation.VariationContext = before; }
-            result.Add(new LivePage(page.Key, culture, name, url, page.Level, updated, DocumentText.Normalize(text.ToString())));
+            result.Add(new LivePage(page.Key, culture, name, url, page.Level, updated, DocumentText.Normalize(text.ToString()), address));
         }
         return result;
+    }
+
+    // Without a request (at start-up) Umbraco may not know the site's own address: the page reader then uses the path alone.
+    private static string Absolute(IPublishedContent page, string culture)
+    {
+        try { return page.Url(culture == "" ? null : culture, UrlMode.Absolute) is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.ToString() : ""; }
+        catch (Exception) { return ""; }
     }
 
     // Walks text-like property values, including nested block list/grid elements. Pickers, media and

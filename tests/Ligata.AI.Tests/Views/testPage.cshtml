@@ -3,14 +3,29 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@Model.Name</title>
-<style>body{font-family:Georgia,serif;margin:0;background:#faf8f4;color:#222}.site{display:flex;gap:18px;max-width:760px;margin:auto;padding:14px 24px}main{max-width:760px;margin:auto;padding:40px 24px}h1{font-size:44px}.far{margin-top:1400px}footer{max-width:760px;margin:auto;padding:24px;border-top:1px solid #ddd}</style></head>
+<style>body{font-family:Georgia,serif;margin:0;background:#faf8f4;color:#222}.site{display:flex;gap:18px;max-width:760px;margin:auto;padding:14px 24px}main{max-width:760px;margin:auto;padding:40px 24px}h1{font-size:44px}.far{margin-top:1400px}footer{max-width:760px;margin:auto;padding:24px;border-top:1px solid #ddd}.booking{margin-top:80px}.booking form{display:grid;gap:10px;max-width:460px}.field{display:grid;gap:4px}</style></head>
 <body>
   <header class="site"><nav><a href="/">Home</a> · <a href="/prices/">Prices</a> · <a href="/contact/">Contact</a></nav></header>
   <main><header><h1>@Model.Name</h1></header>@Html.Raw(Model.Value<string>("bodyText"))
     @* Layout parts the knowledge index does not read: showing the way finds them on the page itself. *@
     <details><summary>Workshop access</summary><p>The workshop door code is FOLDED-OAK-8.</p></details>
     <section class="far"><h2>Directions</h2><p>Park behind the building and use entrance FAR-AWAY-5.</p></section>
+    @if (Model.Name == "Contact")
+    {
+      @* A form as a form module renders it (the page stores only its id), and an embedded map: read from the page as visitors get it. *@
+      <section class="booking"><div class="form-module"><form novalidate>
+        <h2>Book a visit</h2><p>Tell us when you would like to come by.</p>
+        <div role="status">Checking connection …</div><button type="button" hidden>Try again</button>
+        <div class="trap" aria-hidden="true"><label>Leave empty<input name="website"></label></div>
+        <div class="field"><label for="visit-name">Your name *</label><input id="visit-name" name="name" required></div>
+        <div class="field"><label for="visit-day">Preferred day</label><select id="visit-day" name="day"><option value="">Please choose</option><option value="mon">Monday</option><option value="fri">Friday</option></select></div>
+        <div class="field"><label for="visit-note">Anything we should know?</label><textarea id="visit-note" name="note">PREFILLED-NOTE</textarea></div>
+        <button type="submit">Request a visit</button>
+      </form></div></section>
+      <iframe title="Map to the studio" srcdoc="&lt;p&gt;Map&lt;/p&gt;" height="220" style="border:0;display:block;margin-top:24px;width:100%;max-width:600px"></iframe>
+    }
   </main>
-  <footer><p>Ligata Test Studio · Studio line +41 44 000 00 00 · Dielsdorf</p></footer>
+  <footer><p>Ligata Test Studio · Studio line +41 44 000 00 00 · Dielsdorf</p>
+    <form class="newsletter"><label for="news-mail">Newsletter</label><input id="news-mail" type="email"><button>Subscribe</button></form></footer>
 </body>
 </html>
