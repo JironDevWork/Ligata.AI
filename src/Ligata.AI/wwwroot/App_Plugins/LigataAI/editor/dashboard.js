@@ -1,10 +1,10 @@
 import { LitElement, html, css, nothing } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { aiRequest } from '../api.js?v=0.13.3';
-import { styles } from '../styles.js?v=0.13.3';
-import { icon, controls, number, compact } from '../ui.js?v=0.13.3';
-import { glyph, kindIcon, kindLabel, documentPath, go, diff, when, modeInfo, effortInfo } from './shared.js?v=0.13.3';
+import { aiRequest } from '../api.js?v=0.13.4';
+import { styles } from '../styles.js?v=0.13.4';
+import { icon, controls, number, compact } from '../ui.js?v=0.13.4';
+import { glyph, kindIcon, kindLabel, documentPath, go, diff, when, modeInfo, effortInfo } from './shared.js?v=0.13.4';
 
 const tabs = [['activity', 'Activity', 'history'], ['settings', 'Settings', 'sliders'], ['usage', 'Usage', 'chart'], ['privacy', 'Privacy', 'shield']];
 const actions = [

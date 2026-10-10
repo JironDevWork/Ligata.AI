@@ -1,5 +1,5 @@
 import { html, nothing } from '@umbraco-cms/backoffice/external/lit';
-import { number, compact, icon } from './ui.js?v=0.13.3';
+import { number, compact, icon } from './ui.js?v=0.13.4';
 
 const efforts = [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']];
 const effortHelp = {
@@ -85,13 +85,13 @@ export const behaviourView = {
         <section class="card">
           <header><div><h2>Identity</h2><p class="muted">How the assistant introduces itself.</p></div></header>
           <div class="grid two">
-            ${this.text('identity.name', 'Assistant name', { max: 40 })}
+            ${this.text('identity.name', 'Assistant name', { max: 40, help: 'Kept as “Assistant”, visitors read it in their language (Assistent, Assistente).' })}
             ${this.text('behaviour.siteName', 'Business / website name', { max: 120, placeholder: 'e.g. Ligata', help: 'Used in the instructions so the assistant knows who it speaks for.' })}
             ${this.text('identity.avatarUrl', 'Avatar image URL', { placeholder: '/media/…/avatar.png', help: 'Optional. A square image from your media library or an https URL.' })}
             ${this.select('identity.language', 'Interface language', [['auto', 'Automatic (page or browser)'], ['en', 'English'], ['de', 'Deutsch'], ['fr', 'Français'], ['it', 'Italiano']], 'The assistant always answers in the visitor’s language; this sets buttons and messages.')}
           </div>
           <div class="section">
-            ${this.text('identity.greeting', 'Greeting', { rows: 2, max: 600 })}
+            ${this.text('identity.greeting', 'Greeting', { rows: 2, max: 600, help: 'Keep this text and visitors are greeted in their language (English, German, French or Italian). Your own greeting is shown as you write it, on every page.' })}
             ${this.list('identity.suggestions', 'Suggested questions', { max: 6, placeholder: 'e.g. What does a website cost?', help: 'Shown as buttons before the first question.' })}
             ${this.text('identity.inputPlaceholder', 'Input placeholder', { max: 80, placeholder: 'Ask a question…' })}
           </div>

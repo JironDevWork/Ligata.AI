@@ -2,7 +2,7 @@ import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
 import { UMB_ACTION_EVENT_CONTEXT } from '@umbraco-cms/backoffice/action';
 import { UmbContextConsumerController } from '@umbraco-cms/backoffice/context-api';
 import { UmbEntityUpdatedEvent, UmbRequestReloadStructureForEntityEvent, UmbRequestReloadChildrenOfEntityEvent } from '@umbraco-cms/backoffice/entity-action';
-import './panel.js?v=0.13.3';
+import './panel.js?v=0.13.4';
 
 /**
  * Mounts the content assistant once for the whole backoffice. The panel lives on the page itself (not inside a section), so a

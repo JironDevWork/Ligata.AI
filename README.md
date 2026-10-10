@@ -52,7 +52,7 @@ A new top-level section, **AI Assistant** (or **Support** when no AI is licensed
     - memory bar (off by default), queue position, animations, a chime for team replies and branding.
     - A **live preview** uses unsaved settings, answers real AI questions and simulates team requests.
   - **Behaviour**:
-    - name, avatar, greeting, suggested questions, language;
+    - name, avatar, greeting, suggested questions, language (kept as they are, the name and greeting appear in the visitor's language);
     - AI instructions, tone, answer length and limits;
     - **Showing the way**: on or off, what the assistant may do (highlight only, scroll too, open pages too), when visitors are asked first, the highlight (ring, spotlight or marker, colour, seconds), tried out in the live preview;
     - uploads, fallback contacts, and where the bubble appears.

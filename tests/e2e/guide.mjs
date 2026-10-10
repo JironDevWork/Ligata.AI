@@ -443,6 +443,22 @@ await check('reduced motion: no pulsing, and the page jumps instead of gliding',
   delete pages.calm;
 });
 
+await check('the untouched greeting and name are in the page\'s language (German on a German page)', async () => {
+  const german = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage();
+  pages.german = german;
+  await german.route(base + '/', async route => { const response = await route.fetch(); await route.fulfill({ response, body: (await response.text()).replace('<html lang="en">', '<html lang="de">') }); });
+  await german.goto(base + '/');
+  const w = german.locator('#ligata-ai');
+  await w.locator('.panel').waitFor({ state: 'attached' });
+  if (await w.getAttribute('open') === null) await w.locator('.launcher').click();
+  await sleep(400);
+  const text = (await w.locator('.panel').innerText()).replace(/\s+/g, ' ');
+  assert(text.includes('Hallo! Ich beantworte Fragen zu dieser Website. Wie kann ich dir helfen?') && text.includes('Assistent') && !text.includes('Hi! I can answer'), 'German greeting and name: ' + text.slice(0, 300));
+  await german.screenshot({ path: path.join(out, '12-german-greeting.png') });
+  await german.close();
+  delete pages.german;
+});
+
 await check('no page errors', async () => {
   assert(errors.length === 0, 'page errors: ' + errors.join(' | '));
 });
